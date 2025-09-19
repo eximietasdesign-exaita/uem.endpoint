@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "UEM.Satellite.API": {
+      "commandName": "Project",
+      "commandLineArgs": "--urls \"https://localhost:7200\"",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:7200;http://localhost:5200"
+    }
+  }
+}

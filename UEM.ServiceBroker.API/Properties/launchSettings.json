@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "UEM.ServiceBroker.API": {
+      "commandName": "Project",
+      "commandLineArgs": "--urls \"https://localhost:7201\"",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:7201;http://localhost:5201"
+    }
+  }
+}
