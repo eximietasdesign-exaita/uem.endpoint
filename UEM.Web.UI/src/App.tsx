@@ -1,35 +1,31 @@
-import { Route, Routes, NavLink } from 'react-router-dom'
-import DashboardPage from '@/pages/Dashboard'
-import EndpointsPage from '@/pages/Endpoints'
-import EndpointDetailsPage from '@/pages/EndpointDetails'
-import SettingsPage from '@/pages/Settings'
-import StreamDrawer from '@/components/StreamDrawer'
+import { Route, Routes } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { Layout } from '@/components/layout/Layout';
+import DashboardPage from '@/pages/Dashboard';
+import EndpointsPage from '@/pages/Endpoints';
+import EndpointDetailsPage from '@/pages/EndpointDetails';
+import SettingsPage from '@/pages/Settings';
+import AnalyticsPage from '@/pages/Analytics';
+import SecurityPage from '@/pages/Security';
+import AuditPage from '@/pages/AuditLogs';
+import StreamDrawer from '@/components/StreamDrawer';
 
-const NavItem = ({ to, label }:{ to:string; label:string }) => (
-  <NavLink to={to} className={({isActive}) =>
-    `px-3 py-2 rounded ${isActive ? 'bg-gray-200' : 'hover:bg-gray-100'}`}>{label}</NavLink>
-)
-
-export default function App(){
+export default function App() {
   return (
-    <div>
-      <header className="h-12 border-b flex items-center gap-3 px-3">
-        <strong>UEM Console</strong>
-        <nav className="flex gap-2">
-          <NavItem to="/" label="Dashboard" />
-          <NavItem to="/endpoints" label="Endpoints" />
-          <NavItem to="/settings" label="Settings" />
-        </nav>
-      </header>
-      <main className="p-3">
+    <>
+      <Layout>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/endpoints" element={<EndpointsPage />} />
           <Route path="/endpoints/:agentId" element={<EndpointDetailsPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/security" element={<SecurityPage />} />
+          <Route path="/audit" element={<AuditPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
-      </main>
-      <StreamDrawer />
-    </div>
-  )
+        <StreamDrawer />
+      </Layout>
+      <Toaster position="top-right" />
+    </>
+  );
 }
