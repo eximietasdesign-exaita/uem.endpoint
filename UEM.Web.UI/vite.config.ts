@@ -8,16 +8,16 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5000,
     proxy: {
-      // If Satellite runs on HTTPS:
+      // Satellite API on HTTP:
       '/sat': {
-        target: 'https://localhost:7200',
+        target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
         rewrite: (p) => p.replace(/^\/sat/, '')
       },
-      // If ServiceBroker runs on HTTPS:
+      // ServiceBroker API on HTTP:
       '/broker': {
-        target: 'https://localhost:7201',
+        target: 'http://localhost:8001',
         changeOrigin: true,
         secure: false,
         rewrite: (p) => p.replace(/^\/broker/, '')
