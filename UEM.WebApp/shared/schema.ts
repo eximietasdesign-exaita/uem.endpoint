@@ -1,10 +1,10 @@
-import { pgTable, text, integer, boolean, timestamp, jsonb, real, uuid, serial, PgTable } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, jsonb, real, uuid, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
 
 // Domains table for multi-domain support
-export const domains: PgTable = pgTable("uem_app_domains", {
+export const domains = pgTable("uem_app_domains", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
   displayName: text("display_name").notNull(),
@@ -1515,7 +1515,7 @@ export const assetAuditLogs = pgTable("uem_app_asset_audit_logs", {
 // ===== COMPREHENSIVE SETTINGS MANAGEMENT SYSTEM =====
 
 // Settings Categories for organizing configuration options
-export const settingsCategories: PgTable = pgTable("uem_app_settings_categories", {
+export const settingsCategories = pgTable("uem_app_settings_categories", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
   displayName: text("display_name").notNull(),
