@@ -1,0 +1,60 @@
+**Prompt for Code Review and Optimization**
+
+---
+
+**Objective:** Conduct a comprehensive review of the entire application code to identify and fix issues related to hard-coded values, configuration file retrieval settings, coding standards, SonarLint standards, code reusability, modularization, and multi-language support across all screens.
+
+**Instructions:**
+
+1. **Code Structure Analysis:**
+   - Review the overall architecture of the application.
+   - Identify hard-coded values throughout the codebase. Document their locations and propose solutions for replacing them with configuration-based retrieval.
+
+2. **Configuration File Review:**
+   - Examine all configuration files for retrieval settings.
+   - Ensure that all external configurations are being accessed properly and securely.
+   - Suggest improvements for organizing configuration files for better maintainability.
+
+3. **Coding Standards Compliance:**
+   - Analyze the code against established coding standards (e.g., naming conventions, file organization).
+   - Utilize tools like SonarLint to identify violations and recommend corrections.
+
+4. **SonarLint Standards Check:**
+   - Run SonarLint on the codebase.
+   - Document any issues found and categorize them (e.g., bugs, vulnerabilities, code smells).
+   - Provide specific recommendations to resolve each issue, emphasizing best practices.
+
+5. **Code Reusability Assessment:**
+   - Evaluate the code for reusable components and functions.
+   - Identify areas where duplication occurs and suggest refactoring to enhance reusability.
+
+6. **Modularization Evaluation:**
+   - Review the application for a modular-based approach.
+   - Suggest a structure that encourages separation of concerns and enhances maintainability.
+   - Identify tightly coupled components and propose decoupling strategies.
+
+7. **Multi-Language Support Review:**
+   - Check all screens for multi-language support.
+   - Ensure that text strings are externalized and translated appropriately.
+   - Identify any hard-coded text and propose solutions for localization.
+
+8. **Documentation:**
+   - Provide a summary report of findings, categorized by issue type.
+   - Include specific code snippets where applicable to illustrate issues and solutions.
+
+9. **Action Plan:**
+   - Outline a prioritized action plan for addressing each issue identified, including estimated timeframes for resolution.
+
+**Output Format:**
+- A detailed report structured as follows:
+  - **Section 1: Hard-Coded Values**
+  - **Section 2: Configuration File Issues**
+  - **Section 3: Coding Standards Violations**
+  - **Section 4: SonarLint Issues**
+  - **Section 5: Reusability Assessment**
+  - **Section 6: Modularization Review**
+  - **Section 7: Multi-Language Support**
+  - **Section 8: Summary of Findings**
+  - **Section 9: Action Plan**
+
+**End of Prompt**

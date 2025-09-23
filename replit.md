@@ -1,65 +1,61 @@
-# UEM (Unified Endpoint Management) System
+# Enterprise Endpoint Management Dashboard
 
 ## Overview
-This is a .NET-based UEM system with multiple microservices and a React frontend. The system enables centralized management of endpoints with features like agent registration, heartbeat monitoring, and command execution via Kafka messaging.
+This full-stack TypeScript application provides a comprehensive dashboard for enterprise endpoint management and security monitoring. It enables real-time management of network endpoints, security compliance monitoring, and tracking of system activities. The project aims to deliver an enterprise-grade solution for managing IT assets, automating discovery, and orchestrating agent deployments, ensuring robust security and operational efficiency.
 
-## Project Architecture
+## User Preferences
+Preferred communication style: Simple, everyday language.
+
+## System Architecture
 
 ### Frontend
-- **Technology**: React + TypeScript with Vite
-- **Port**: 5000 (configured for Replit environment)
-- **Location**: `UEM.Web.UI/`
-- **Features**: Agent dashboard, endpoint management, real-time monitoring
+- **Framework**: React 18 with TypeScript
+- **Build Tool**: Vite
+- **Routing**: Wouter
+- **Styling**: Tailwind CSS with shadcn/ui
+- **State Management**: TanStack Query for server state, Context API for global state (theme, language)
 
-### Backend Services
-- **UEM.Satellite.API**: Main API service (typically runs on port 7200)
-- **UEM.ServiceBroker.API**: Message broker service (typically runs on port 7201)
-- **UEM.Endpoint.Agent**: Client agent for endpoint monitoring
-- **UEM.Endpoint.Service**: Windows service wrapper
-- **UEM.Shared.Infrastructure**: Common utilities and services
-- **UEM.ScriptExecLib**: Script execution library
+### Backend
+- **Framework**: Express.js with TypeScript
+- **Data Storage**: PostgreSQL with Drizzle ORM
+- **API**: RESTful API design
+- **Development**: Vite integration for HMR
 
-## Current Configuration
-- **.NET 8.0** SDK installed
-- **Node.js 20** runtime installed
-- **PostgreSQL** database configured with Replit Neon backend
-- **Frontend workflow** configured to run on port 5000 with host 0.0.0.0
-- **Database connection** updated for Replit PostgreSQL environment
-- **Deployment** configured for autoscale with Vite build process
+### Database
+- **Type**: PostgreSQL (Neon Database serverless)
+- **ORM**: Drizzle ORM (schema-first with Zod validation)
+- **Management**: Drizzle Kit for migrations (`npm run db:push`), comprehensive seed data
 
-## Recent Changes (Sept 23, 2025)
-### Enterprise UEM System Implementation Complete ✅
-- **Comprehensive Backend**: Implemented enterprise-grade Dapper repository pattern with error handling, logging, and database fallbacks
-- **Enhanced API Controllers**: Created robust controllers for agent management, asset search, and comprehensive endpoint monitoring
-- **Complete Database Schema**: PostgreSQL schema for agents, hardware, software, processes, network interfaces, and enhanced heartbeats
-- **Agent Simulation Service**: Automated service generating realistic asset data from 3 simulated endpoints every 30 seconds
-- **Enhanced DTOs**: Comprehensive data transfer objects for all enterprise asset types
-- **Enterprise Error Handling**: Graceful degradation with database fallbacks and detailed logging
-- **Asset Management Features**: Real-time hardware tracking, software inventory, process monitoring, network statistics
-- **Search & Filter APIs**: Comprehensive search capabilities across all asset types
+### Key Features & Components
+- **Data Models**: Users, Endpoints, Activities, System Status.
+- **UI Components**: Dashboard, Assets Management, Discovery, Scripts, Policies, Discovery Probes, User Management, Settings.
+- **Authentication & Authorization**: Role-based access control (administrator, operator, viewer) with session management ready for implementation.
+- **Data Flow**: Client (TanStack Query) -> API (Express, validation) -> Storage (PostgreSQL) -> Responses (JSON) -> UI Updates.
+- **Multi-Tenancy**: Universal multi-tenant support across all application screens with data isolation and tenant-aware data fetching.
+- **Internationalization**: Comprehensive i18n framework supporting 7 languages (English, Spanish, French, German, Chinese, Japanese, Arabic) with RTL support.
+- **Asset Management**: Comprehensive asset inventory with dynamic custom fields, table designer, hierarchical views, and reporting.
+- **Agent Deployment**: Complete remote agent deployment platform for Windows, Mac, and Linux, with job management, real-time monitoring, and multi-OS support.
+- **Discovery**: Unified agentless and agent-based discovery with wizard-driven job creation, policy deployment, and detailed asset tracking.
+- **Script Management**: Enhanced script editor with output processing, real-time validation, and code templates.
+- **Policy Management**: Improved execution flow visualization and professional step-card layouts.
+- **System Status**: Enterprise-grade footer displaying internet connectivity, system version, and real-time clock.
 
-### System Status
-- ✅ 3 simulated agents actively sending enhanced heartbeat data
-- ✅ PostgreSQL database storing comprehensive asset information  
-- ✅ HTTP APIs responding successfully (HTTP 200)
-- ✅ Enterprise logging and monitoring operational
-- ✅ Graceful error handling with database fallbacks working
+## External Dependencies
 
-## Previous Changes (Sept 22, 2025)
-- Fixed .NET solution file project paths from `src/` to root directory
-- Updated PostgreSQL connection string to use Replit Neon database
-- Configured Vite dev server for port 5000 with 0.0.0.0 host binding
-- Corrected project references in UEM.Endpoint.Agent
-- Added missing projects to solution file
-- Set up deployment configuration for production
+### UI & Styling
+- **Radix UI**: Headless component primitives
+- **Tailwind CSS**: Utility-first CSS framework
+- **shadcn/ui**: Pre-built component library
+- **Lucide React**: Icon library
 
-## Dependencies
-- **Backend**: Kafka (for messaging), PostgreSQL (for data persistence)
-- **Frontend**: Standard React ecosystem with Tailwind CSS
-- **Monitoring**: Serilog for logging across all services
+### Data & State Management
+- **TanStack Query**: Server state management
+- **React Hook Form**: Form handling with validation
+- **Zod**: Schema validation
+- **date-fns**: Date manipulation
 
-## Development Notes
-- Frontend proxies `/sat` requests to Satellite API and `/broker` requests to ServiceBroker API
-- System designed to fall back to in-memory storage if PostgreSQL is unavailable
-- All services use JWT authentication with SignalR for real-time communication
-- The system is currently configured to run the frontend only in Replit environment
+### Development Tools
+- **Vite**: Build tool and HMR
+- **TypeScript**: Type safety
+- **ESLint**: Code linting
+- **PostCSS**: CSS processing
