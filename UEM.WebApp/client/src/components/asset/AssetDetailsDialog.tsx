@@ -592,6 +592,131 @@ export function AssetDetailsDialog({ asset, customFields }: AssetDetailsDialogPr
           )}
         </TabsContent>
 
+        {/* Software Tab */}
+        <TabsContent value="software" className="space-y-6">
+          {softwareLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin mr-2" />
+              <span>Loading software inventory...</span>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {softwareData && softwareData.length > 0 ? (
+                <>
+                  {/* Software Summary */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2">
+                        <Package className="h-5 w-5" />
+                        <span>Software Inventory Summary</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                        <div>
+                          <p className="text-2xl font-bold text-blue-600">{softwareData.length}</p>
+                          <p className="text-sm text-gray-500">Total Applications</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-green-600">
+                            {softwareData.filter(item => item.softwareType === 'Application').length}
+                          </p>
+                          <p className="text-sm text-gray-500">Applications</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-purple-600">
+                            {softwareData.filter(item => item.softwareType === 'System Component').length}
+                          </p>
+                          <p className="text-sm text-gray-500">System Components</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-orange-600">
+                            {softwareData.filter(item => item.licenseKey).length}
+                          </p>
+                          <p className="text-sm text-gray-500">Licensed Software</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Software List */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Installed Software</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                        {softwareData.map((software, index) => (
+                          <div key={index} className="border rounded-lg p-4 hover:bg-gray-50">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-3">
+                                  <h4 className="font-medium text-lg">{software.name}</h4>
+                                  <Badge variant="outline" className="text-xs">
+                                    {software.softwareType}
+                                  </Badge>
+                                  {software.licenseKey && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      Licensed
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-3 text-sm">
+                                  <div>
+                                    <span className="font-medium text-gray-500">Version:</span>
+                                    <span className="ml-2">{software.version || 'Unknown'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-500">Publisher:</span>
+                                    <span className="ml-2">{software.publisher || 'Unknown'}</span>
+                                  </div>
+                                  {software.sizeBytes && (
+                                    <div>
+                                      <span className="font-medium text-gray-500">Size:</span>
+                                      <span className="ml-2">
+                                        {software.sizeBytes > 1024 * 1024 * 1024 
+                                          ? `${(software.sizeBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+                                          : `${(software.sizeBytes / (1024 * 1024)).toFixed(2)} MB`}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {software.installDate && (
+                                    <div>
+                                      <span className="font-medium text-gray-500">Installed:</span>
+                                      <span className="ml-2">{new Date(software.installDate).toLocaleDateString()}</span>
+                                    </div>
+                                  )}
+                                  {software.installLocation && (
+                                    <div className="md:col-span-2">
+                                      <span className="font-medium text-gray-500">Location:</span>
+                                      <span className="ml-2 font-mono text-xs">{software.installLocation}</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="mt-2 text-xs text-gray-400">
+                                  Discovered: {new Date(software.discoveredAt).toLocaleString()}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              ) : (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500">No software inventory discovered</p>
+                    <p className="text-sm text-gray-400 mt-2">Software discovery may not be configured for this endpoint</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+        </TabsContent>
+
         {/* Security Tab */}
         <TabsContent value="security" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
