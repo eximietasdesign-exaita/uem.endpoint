@@ -218,7 +218,7 @@ public record SecurityPolicyRequest(
 );
 
 public record SecurityDataRequest(
-    TmpStatusRequest? TmpStatus,
+    TpmStatusRequest? TpmStatus,
     BitLockerStatusRequest? BitLockerStatus,
     SecurityPolicyRequest[]? SecurityPolicies,
     string? WindowsDefenderStatus,
