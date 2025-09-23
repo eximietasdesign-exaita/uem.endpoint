@@ -7,12 +7,24 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+// Get the API base URL - use Satellite API running on port 8000
+const getApiBaseUrl = () => {
+  const domain = import.meta.env.VITE_REPLIT_DOMAIN;
+  if (domain) {
+    return `https://${domain.replace('5000', '8000')}`;
+  }
+  return 'http://localhost:8000';
+};
+
 export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  const baseUrl = getApiBaseUrl();
+  const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
+  
+  const res = await fetch(fullUrl, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
@@ -29,7 +41,11 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    const baseUrl = getApiBaseUrl();
+    const url = queryKey.join("/") as string;
+    const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
+    
+    const res = await fetch(fullUrl, {
       credentials: "include",
     });
 
