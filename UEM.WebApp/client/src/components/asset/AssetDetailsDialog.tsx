@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,7 +22,9 @@ import {
   Edit,
   ExternalLink,
   Download,
-  History
+  History,
+  Package,
+  Loader2
 } from 'lucide-react';
 
 interface Asset {
@@ -65,6 +68,65 @@ interface AssetField {
     pattern?: string;
   };
   category: 'basic' | 'location' | 'business' | 'technical' | 'financial' | 'compliance';
+}
+
+// API Response Types
+interface HardwareComponent {
+  id: string;
+  componentType: string;
+  manufacturer: string;
+  model: string;
+  serialNumber?: string;
+  version?: string;
+  capacity?: number;
+  properties?: Record<string, any>;
+  discoveredAt: string;
+  updatedAt: string;
+}
+
+interface SoftwareItem {
+  id: string;
+  name: string;
+  version?: string;
+  publisher?: string;
+  installLocation?: string;
+  sizeBytes?: number;
+  installDate?: string;
+  softwareType: string;
+  licenseKey?: string;
+  discoveredAt: string;
+  updatedAt: string;
+}
+
+interface NetworkInterface {
+  id: string;
+  interfaceName: string;
+  description?: string;
+  macAddress?: string;
+  ipAddress?: string;
+  subnetMask?: string;
+  gateway?: string;
+  dnsServers?: string[];
+  isActive: boolean;
+  interfaceType: string;
+  bytesSent: number;
+  bytesReceived: number;
+  speed: number;
+  timestamp: string;
+}
+
+interface HeartbeatData {
+  id: string;
+  agentId: string;
+  cpuUsage: number;
+  memoryUsedBytes: number;
+  memoryTotalBytes: number;
+  diskUsedBytes: number;
+  diskTotalBytes: number;
+  processCount: number;
+  networkConnectionCount: number;
+  uptimeHours: number;
+  timestamp: string;
 }
 
 interface AssetDetailsDialogProps {
@@ -120,39 +182,47 @@ export function AssetDetailsDialog({ asset, customFields }: AssetDetailsDialogPr
     return acc;
   }, {} as Record<string, AssetField[]>);
 
-  // Mock data for additional tabs
-  const networkInfo = {
-    openPorts: [22, 80, 443, 3389],
-    services: [
-      { name: 'SSH', port: 22, status: 'running' },
-      { name: 'HTTP', port: 80, status: 'running' },
-      { name: 'HTTPS', port: 443, status: 'running' },
-      { name: 'RDP', port: 3389, status: 'stopped' },
-    ],
-    dnsRecords: ['A: 192.168.1.100', 'PTR: server.domain.com']
-  };
+  // Map asset to agentId for API calls (assuming IP address can identify the agent)
+  const agentId = asset.ipAddress ? `uem-${asset.ipAddress.replace(/\./g, '-')}` : null;
 
-  const hardwareInfo = {
-    cpu: { model: 'Intel Xeon E5-2680 v4', cores: 14, frequency: '2.40 GHz' },
-    memory: { total: '32 GB', available: '18 GB', usage: '56%' },
-    storage: [
-      { drive: 'C:', total: '500 GB', free: '120 GB', usage: '76%' },
-      { drive: 'D:', total: '1 TB', free: '450 GB', usage: '55%' }
-    ]
-  };
+  // Fetch discovered hardware data from enhanced agents API
+  const { data: hardwareData = [], isLoading: hardwareLoading } = useQuery<HardwareComponent[]>({
+    queryKey: ['/api/enhanced/agents', agentId, 'hardware'],
+    enabled: !!agentId,
+  });
 
+  // Fetch discovered software data from enhanced agents API
+  const { data: softwareData = [], isLoading: softwareLoading } = useQuery<SoftwareItem[]>({
+    queryKey: ['/api/enhanced/agents', agentId, 'software'],
+    enabled: !!agentId,
+  });
+
+  // Fetch discovered network data from enhanced agents API
+  const { data: networkData = [], isLoading: networkLoading } = useQuery<NetworkInterface[]>({
+    queryKey: ['/api/enhanced/agents', agentId, 'network'],
+    enabled: !!agentId,
+  });
+
+  // Fetch latest heartbeat for performance data
+  const { data: heartbeatData, isLoading: heartbeatLoading } = useQuery<HeartbeatData>({
+    queryKey: ['/api/enhanced/agents', agentId, 'heartbeat/latest'],
+    enabled: !!agentId,
+  });
+
+  // Mock security info (will be replaced when security endpoint is implemented)
   const securityInfo = {
     vulnerabilities: [
       { id: 'CVE-2023-1234', severity: 'High', description: 'Remote Code Execution' },
-      { id: 'CVE-2023-5678', severity: 'Medium', description: 'Privilege Escalation' },
-      { id: 'CVE-2023-9012', severity: 'Low', description: 'Information Disclosure' }
+      { id: 'CVE-2023-5678', severity: 'Medium', description: 'Privilege Escalation' }
     ],
     patches: [
       { id: 'KB5028166', installed: true, date: '2023-07-15' },
       { id: 'KB5028167', installed: false, date: 'Pending' }
     ],
     antivirusStatus: 'Active',
-    firewallStatus: 'Enabled'
+    firewallStatus: 'Enabled',
+    tpmEnabled: true,
+    bitLockerEnabled: true
   };
 
   const auditLog = [
@@ -198,10 +268,11 @@ export function AssetDetailsDialog({ asset, customFields }: AssetDetailsDialogPr
 
       {/* Content Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="network">Network</TabsTrigger>
           <TabsTrigger value="hardware">Hardware</TabsTrigger>
+          <TabsTrigger value="software">Software</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="custom">Custom Fields</TabsTrigger>
           <TabsTrigger value="audit">Audit Log</TabsTrigger>
@@ -360,87 +431,165 @@ export function AssetDetailsDialog({ asset, customFields }: AssetDetailsDialogPr
 
         {/* Network Tab */}
         <TabsContent value="network" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Open Ports</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {networkInfo.openPorts.map((port) => (
-                    <Badge key={port} variant="outline">{port}</Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Services</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {networkInfo.services.map((service, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <span>{service.name} (:{service.port})</span>
-                      <Badge className={service.status === 'running' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
-                        {service.status}
-                      </Badge>
+          {networkLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin mr-2" />
+              <span>Loading network information...</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Network className="h-5 w-5" />
+                    <span>Network Interfaces</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {networkData && networkData.length > 0 ? (
+                    <div className="space-y-3">
+                      {networkData.map((iface: any, index: number) => (
+                        <div key={index} className="border-l-4 border-blue-500 pl-4">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium">{iface.interfaceName}</h4>
+                            <Badge variant={iface.isActive ? "default" : "secondary"}>
+                              {iface.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-gray-600">{iface.description || 'No description'}</p>
+                          <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
+                            <span><strong>IP:</strong> {iface.ipAddress || 'N/A'}</span>
+                            <span><strong>MAC:</strong> {iface.macAddress || 'N/A'}</span>
+                            <span><strong>Gateway:</strong> {iface.gateway || 'N/A'}</span>
+                            <span><strong>Speed:</strong> {iface.speed ? `${iface.speed} Mbps` : 'N/A'}</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">No network interfaces discovered</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Activity className="h-5 w-5" />
+                    <span>Network Statistics</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {networkData && networkData.length > 0 ? (
+                    <div className="space-y-3">
+                      {networkData.map((iface: any, index: number) => (
+                        iface.isActive && (
+                          <div key={index} className="text-sm">
+                            <h4 className="font-medium">{iface.interfaceName}</h4>
+                            <div className="grid grid-cols-2 gap-2 mt-1">
+                              <span>Sent: {iface.bytesSent ? `${(iface.bytesSent / 1024 / 1024).toFixed(2)} MB` : '0 MB'}</span>
+                              <span>Received: {iface.bytesReceived ? `${(iface.bytesReceived / 1024 / 1024).toFixed(2)} MB` : '0 MB'}</span>
+                            </div>
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">No network statistics available</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </TabsContent>
 
         {/* Hardware Tab */}
         <TabsContent value="hardware" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Cpu className="h-5 w-5" />
-                  <span>CPU</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <p className="text-sm"><strong>Model:</strong> {hardwareInfo.cpu.model}</p>
-                <p className="text-sm"><strong>Cores:</strong> {hardwareInfo.cpu.cores}</p>
-                <p className="text-sm"><strong>Frequency:</strong> {hardwareInfo.cpu.frequency}</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Monitor className="h-5 w-5" />
-                  <span>Memory</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <p className="text-sm"><strong>Total:</strong> {hardwareInfo.memory.total}</p>
-                <p className="text-sm"><strong>Available:</strong> {hardwareInfo.memory.available}</p>
-                <p className="text-sm"><strong>Usage:</strong> {hardwareInfo.memory.usage}</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <HardDrive className="h-5 w-5" />
-                  <span>Storage</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {hardwareInfo.storage.map((drive, index) => (
-                  <div key={index} className="text-sm">
-                    <strong>{drive.drive}</strong> {drive.free} free of {drive.total} ({drive.usage})
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
+          {hardwareLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin mr-2" />
+              <span>Loading hardware information...</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {hardwareData && hardwareData.length > 0 ? (
+                hardwareData.map((component: any, index: number) => (
+                  <Card key={index}>
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2">
+                        {component.componentType === 'CPU' && <Cpu className="h-5 w-5" />}
+                        {component.componentType === 'Memory' && <Monitor className="h-5 w-5" />}
+                        {component.componentType === 'Storage' && <HardDrive className="h-5 w-5" />}
+                        {!['CPU', 'Memory', 'Storage'].includes(component.componentType) && <Building2 className="h-5 w-5" />}
+                        <span>{component.componentType}</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <p className="text-sm"><strong>Manufacturer:</strong> {component.manufacturer || 'Unknown'}</p>
+                      <p className="text-sm"><strong>Model:</strong> {component.model || 'Unknown'}</p>
+                      {component.serialNumber && (
+                        <p className="text-sm"><strong>Serial:</strong> {component.serialNumber}</p>
+                      )}
+                      {component.capacity && (
+                        <p className="text-sm"><strong>Capacity:</strong> {component.capacity > 1024 * 1024 * 1024 ? `${(component.capacity / (1024 * 1024 * 1024)).toFixed(2)} GB` : `${(component.capacity / (1024 * 1024)).toFixed(2)} MB`}</p>
+                      )}
+                      {component.version && (
+                        <p className="text-sm"><strong>Version:</strong> {component.version}</p>
+                      )}
+                      <p className="text-xs text-gray-500">Discovered: {new Date(component.discoveredAt).toLocaleString()}</p>
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                <div className="col-span-2">
+                  <Card>
+                    <CardContent className="text-center py-8">
+                      <p className="text-gray-500">No hardware components discovered</p>
+                      <p className="text-sm text-gray-400 mt-2">Hardware discovery may not be configured for this endpoint</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+              
+              {/* Performance metrics from heartbeat */}
+              {heartbeatData && (
+                <Card className="lg:col-span-2">
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <Activity className="h-5 w-5" />
+                      <span>Performance Metrics</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <p className="font-medium text-gray-500">CPU Usage</p>
+                        <p className="text-lg font-semibold">{heartbeatData.cpuUsage?.toFixed(1)}%</p>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-500">Memory</p>
+                        <p className="text-lg font-semibold">
+                          {heartbeatData.memoryUsedBytes && heartbeatData.memoryTotalBytes ? 
+                            `${((heartbeatData.memoryUsedBytes / heartbeatData.memoryTotalBytes) * 100).toFixed(1)}%` : 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-500">Disk Usage</p>
+                        <p className="text-lg font-semibold">
+                          {heartbeatData.diskUsedBytes && heartbeatData.diskTotalBytes ? 
+                            `${((heartbeatData.diskUsedBytes / heartbeatData.diskTotalBytes) * 100).toFixed(1)}%` : 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-500">Processes</p>
+                        <p className="text-lg font-semibold">{heartbeatData.processCount || 0}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
         </TabsContent>
 
         {/* Security Tab */}
