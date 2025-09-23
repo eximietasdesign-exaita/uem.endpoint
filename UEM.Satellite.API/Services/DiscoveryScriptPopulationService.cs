@@ -2332,17 +2332,1939 @@ echo '}'",
         Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
         ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
     };
+
+    // macOS Bash Scripts
+    private DiscoveryScriptTemplate CreateMacOSHardwareDiscoveryScript() => new()
+    {
+        Name = "macOS Hardware Discovery - Bash", 
+        Description = "Comprehensive hardware discovery for macOS systems using system_profiler and native commands",
+        Category = "Hardware Discovery",
+        Type = "bash",
+        TargetOS = "macos",
+        EstimatedRunTimeSeconds = 45,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"#!/bin/bash
+# macOS Hardware Discovery Script
+# Outputs comprehensive hardware information in JSON format
+
+set -e
+
+echo '{'
+
+# Hardware Overview
+echo '""HardwareOverview"": {'
+if command -v system_profiler >/dev/null 2>&1; then
+    HARDWARE_OVERVIEW=$(system_profiler SPHardwareDataType -json 2>/dev/null)
+    if [ $? -eq 0 ] && [ ""$HARDWARE_OVERVIEW"" != """" ]; then
+        MODEL_NAME=$(echo ""$HARDWARE_OVERVIEW"" | grep -o '""machine_name"": ""[^""]*""' | cut -d'""' -f4)
+        MODEL_ID=$(echo ""$HARDWARE_OVERVIEW"" | grep -o '""machine_model"": ""[^""]*""' | cut -d'""' -f4)
+        PROCESSOR_NAME=$(echo ""$HARDWARE_OVERVIEW"" | grep -o '""processor_name"": ""[^""]*""' | cut -d'""' -f4)
+        PROCESSOR_SPEED=$(echo ""$HARDWARE_OVERVIEW"" | grep -o '""processor_speed"": ""[^""]*""' | cut -d'""' -f4)
+        NUMBER_PROCESSORS=$(echo ""$HARDWARE_OVERVIEW"" | grep -o '""number_processors"": [0-9]*' | cut -d':' -f2 | tr -d ' ')
+        TOTAL_CORES=$(echo ""$HARDWARE_OVERVIEW"" | grep -o '""packages"": [0-9]*' | cut -d':' -f2 | tr -d ' ')
+        MEMORY=$(echo ""$HARDWARE_OVERVIEW"" | grep -o '""physical_memory"": ""[^""]*""' | cut -d'""' -f4)
+        SERIAL_NUMBER=$(echo ""$HARDWARE_OVERVIEW"" | grep -o '""serial_number"": ""[^""]*""' | cut -d'""' -f4)
+        
+        echo ""  \""ModelName\"": \""$MODEL_NAME\"",""
+        echo ""  \""ModelIdentifier\"": \""$MODEL_ID\"",""
+        echo ""  \""ProcessorName\"": \""$PROCESSOR_NAME\"",""
+        echo ""  \""ProcessorSpeed\"": \""$PROCESSOR_SPEED\"",""
+        echo ""  \""NumberOfProcessors\"": $NUMBER_PROCESSORS,""
+        echo ""  \""TotalCores\"": $TOTAL_CORES,""
+        echo ""  \""PhysicalMemory\"": \""$MEMORY\"",""
+        echo ""  \""SerialNumber\"": \""$SERIAL_NUMBER\""""
+    else
+        echo '""  \""Error\"": \""Unable to read hardware information\""""'
+    fi
+else
+    echo '""  \""Error\"": \""system_profiler not available\""""'
+fi
+echo '},'
+
+# Storage Information
+echo '""Storage"": ['
+FIRST_STORAGE=true
+if command -v system_profiler >/dev/null 2>&1; then
+    STORAGE_INFO=$(system_profiler SPStorageDataType -json 2>/dev/null)
+    if [ $? -eq 0 ] && [ ""$STORAGE_INFO"" != """" ]; then
+        # Extract storage devices using more robust parsing
+        echo ""$STORAGE_INFO"" | grep -A 20 '""_name""' | while IFS= read -r line; do
+            if [[ ""$line"" =~ \""_name\"": ]]; then
+                if [ ""$FIRST_STORAGE"" = false ]; then
+                    echo ','
+                fi
+                FIRST_STORAGE=false
+                
+                VOLUME_NAME=$(echo ""$line"" | cut -d'""' -f4)
+                # This is simplified - in practice you'd parse more fields
+                echo ""    {""
+                echo ""      \""VolumeName\"": \""$VOLUME_NAME\""""
+                echo ""    }""
+            fi
+        done
+    fi
+fi
+echo '],'
+
+# Memory Information
+echo '""Memory"": ['
+FIRST_MEMORY=true
+if command -v system_profiler >/dev/null 2>&1; then
+    MEMORY_INFO=$(system_profiler SPMemoryDataType -json 2>/dev/null)
+    if [ $? -eq 0 ] && [ ""$MEMORY_INFO"" != """" ]; then
+        # Parse memory slots
+        echo ""$MEMORY_INFO"" | grep -E '""_name""|""dimm_size""|""dimm_speed""|""dimm_type""' | while IFS= read -r line; do
+            if [[ ""$line"" =~ \""_name\"": ]]; then
+                if [ ""$FIRST_MEMORY"" = false ]; then
+                    echo ','
+                fi
+                FIRST_MEMORY=false
+                
+                SLOT_NAME=$(echo ""$line"" | cut -d'""' -f4)
+                echo ""    {""
+                echo ""      \""SlotName\"": \""$SLOT_NAME\""""
+                echo ""    }""
+            fi
+        done
+    fi
+fi
+echo '],'
+
+# Graphics Information
+echo '""Graphics"": ['
+FIRST_GRAPHICS=true
+if command -v system_profiler >/dev/null 2>&1; then
+    GRAPHICS_INFO=$(system_profiler SPDisplaysDataType -json 2>/dev/null)
+    if [ $? -eq 0 ] && [ ""$GRAPHICS_INFO"" != """" ]; then
+        echo ""$GRAPHICS_INFO"" | grep -E '""_name""|""sppci_model""' | while IFS= read -r line; do
+            if [[ ""$line"" =~ \""_name\"": ]]; then
+                if [ ""$FIRST_GRAPHICS"" = false ]; then
+                    echo ','
+                fi
+                FIRST_GRAPHICS=false
+                
+                GPU_NAME=$(echo ""$line"" | cut -d'""' -f4)
+                echo ""    {""
+                echo ""      \""GPUName\"": \""$GPU_NAME\""""
+                echo ""    }""
+            fi
+        done
+    fi
+fi
+echo '],'
+
+# System Information using sysctl
+echo '""SystemInfo"": {'
+HOSTNAME=$(hostname 2>/dev/null || echo ""unknown"")
+KERNEL_VERSION=$(uname -r 2>/dev/null || echo ""unknown"")
+OS_VERSION=$(sw_vers -productVersion 2>/dev/null || echo ""unknown"")
+OS_BUILD=$(sw_vers -buildVersion 2>/dev/null || echo ""unknown"")
+HARDWARE_MODEL=$(sysctl -n hw.model 2>/dev/null || echo ""unknown"")
+CPU_BRAND=$(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo ""unknown"")
+CPU_CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo ""unknown"")
+PHYSICAL_MEMORY=$(sysctl -n hw.memsize 2>/dev/null || echo ""unknown"")
+
+# Convert memory to GB
+if [ ""$PHYSICAL_MEMORY"" != ""unknown"" ] && [ ""$PHYSICAL_MEMORY"" -gt 0 ]; then
+    MEMORY_GB=$(echo ""scale=2; $PHYSICAL_MEMORY/1024/1024/1024"" | bc 2>/dev/null || echo ""0"")
+else
+    MEMORY_GB=""0""
+fi
+
+echo ""  \""Hostname\"": \""$HOSTNAME\"",""
+echo ""  \""KernelVersion\"": \""$KERNEL_VERSION\"",""
+echo ""  \""OSVersion\"": \""$OS_VERSION\"",""
+echo ""  \""OSBuild\"": \""$OS_BUILD\"",""
+echo ""  \""HardwareModel\"": \""$HARDWARE_MODEL\"",""
+echo ""  \""CPUBrand\"": \""$CPU_BRAND\"",""
+echo ""  \""CPUCores\"": $CPU_CORES,""
+echo ""  \""PhysicalMemoryBytes\"": $PHYSICAL_MEMORY,""
+echo ""  \""PhysicalMemoryGB\"": $MEMORY_GB""
+echo '},'
+
+# Add metadata
+echo '""DiscoveryTimestamp"": ""'$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)'"",""ScriptVersion"": ""1.0.0"",'
+echo '""ComputerName"": ""'$(hostname)'"",""Platform"": ""macOS""'
+
+echo '}'",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", true },
+            { "extractFields", new[] { "HardwareOverview", "Storage", "Memory", "Graphics", "SystemInfo" } },
+            { "validateRequired", new[] { "ComputerName", "DiscoveryTimestamp", "Platform" } }
+        },
+        Tags = new List<string> { "hardware", "discovery", "macos", "system_profiler", "sysctl", "bash" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
+    private DiscoveryScriptTemplate CreateMacOSSoftwareDiscoveryScript() => new()
+    {
+        Name = "macOS Software Discovery - Bash",
+        Description = "Comprehensive software discovery for macOS including installed applications and system software",
+        Category = "Software Discovery",
+        Type = "bash",
+        TargetOS = "macos",
+        EstimatedRunTimeSeconds = 40,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"#!/bin/bash
+# macOS Software Discovery Script
+# Outputs comprehensive software information in JSON format
+
+set -e
+
+echo '{'
+
+# Installed Applications
+echo '""InstalledApplications"": ['
+FIRST_APP=true
+if [ -d ""/Applications"" ]; then
+    find /Applications -name ""*.app"" -maxdepth 2 | while IFS= read -r app_path; do
+        if [ ""$FIRST_APP"" = false ]; then
+            echo ','
+        fi
+        FIRST_APP=false
+        
+        APP_NAME=$(basename ""$app_path"" .app)
+        INFO_PLIST=""$app_path/Contents/Info.plist""
+        
+        VERSION=""unknown""
+        BUNDLE_ID=""unknown""
+        if [ -f ""$INFO_PLIST"" ]; then
+            if command -v plutil >/dev/null 2>&1; then
+                VERSION=$(plutil -extract CFBundleShortVersionString raw ""$INFO_PLIST"" 2>/dev/null || echo ""unknown"")
+                BUNDLE_ID=$(plutil -extract CFBundleIdentifier raw ""$INFO_PLIST"" 2>/dev/null || echo ""unknown"")
+            fi
+        fi
+        
+        echo ""    {""
+        echo ""      \""Name\"": \""$APP_NAME\"",""
+        echo ""      \""Version\"": \""$VERSION\"",""
+        echo ""      \""BundleIdentifier\"": \""$BUNDLE_ID\"",""
+        echo ""      \""Path\"": \""$app_path\""""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# System Software using system_profiler
+echo '""SystemSoftware"": ['
+FIRST_SOFTWARE=true
+if command -v system_profiler >/dev/null 2>&1; then
+    SOFTWARE_INFO=$(system_profiler SPSoftwareDataType -json 2>/dev/null)
+    if [ $? -eq 0 ] && [ ""$SOFTWARE_INFO"" != """" ]; then
+        SYSTEM_VERSION=$(echo ""$SOFTWARE_INFO"" | grep -o '""os_version"": ""[^""]*""' | cut -d'""' -f4)
+        KERNEL_VERSION=$(echo ""$SOFTWARE_INFO"" | grep -o '""kernel_version"": ""[^""]*""' | cut -d'""' -f4)
+        BOOT_VOLUME=$(echo ""$SOFTWARE_INFO"" | grep -o '""boot_volume"": ""[^""]*""' | cut -d'""' -f4)
+        BOOT_MODE=$(echo ""$SOFTWARE_INFO"" | grep -o '""boot_mode"": ""[^""]*""' | cut -d'""' -f4)
+        COMPUTER_NAME=$(echo ""$SOFTWARE_INFO"" | grep -o '""local_host_name"": ""[^""]*""' | cut -d'""' -f4)
+        USER_NAME=$(echo ""$SOFTWARE_INFO"" | grep -o '""user_name"": ""[^""]*""' | cut -d'""' -f4)
+        
+        echo ""    {""
+        echo ""      \""Type\"": \""System\"",""
+        echo ""      \""OSVersion\"": \""$SYSTEM_VERSION\"",""
+        echo ""      \""KernelVersion\"": \""$KERNEL_VERSION\"",""
+        echo ""      \""BootVolume\"": \""$BOOT_VOLUME\"",""
+        echo ""      \""BootMode\"": \""$BOOT_MODE\"",""
+        echo ""      \""ComputerName\"": \""$COMPUTER_NAME\"",""
+        echo ""      \""UserName\"": \""$USER_NAME\""""
+        echo ""    }""
+    fi
+fi
+echo '],'
+
+# Homebrew Packages (if available)
+echo '""HomebrewPackages"": ['
+FIRST_BREW=true
+if command -v brew >/dev/null 2>&1; then
+    brew list --formula 2>/dev/null | while IFS= read -r package; do
+        if [ ""$FIRST_BREW"" = false ]; then
+            echo ','
+        fi
+        FIRST_BREW=false
+        
+        VERSION=$(brew list --versions ""$package"" 2>/dev/null | awk '{print $2}')
+        
+        echo ""    {""
+        echo ""      \""Name\"": \""$package\"",""
+        echo ""      \""Version\"": \""$VERSION\"",""
+        echo ""      \""Type\"": \""Homebrew Formula\""""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# Launch Agents and Daemons
+echo '""LaunchItems"": ['
+FIRST_LAUNCH=true
+
+# System Launch Agents
+if [ -d ""/System/Library/LaunchAgents"" ]; then
+    find /System/Library/LaunchAgents -name ""*.plist"" | while IFS= read -r plist_file; do
+        if [ ""$FIRST_LAUNCH"" = false ]; then
+            echo ','
+        fi
+        FIRST_LAUNCH=false
+        
+        LABEL=$(basename ""$plist_file"" .plist)
+        
+        echo ""    {""
+        echo ""      \""Label\"": \""$LABEL\"",""
+        echo ""      \""Type\"": \""System Launch Agent\"",""
+        echo ""      \""Path\"": \""$plist_file\""""
+        echo ""    }""
+    done
+fi
+
+# System Launch Daemons
+if [ -d ""/System/Library/LaunchDaemons"" ]; then
+    find /System/Library/LaunchDaemons -name ""*.plist"" | head -10 | while IFS= read -r plist_file; do
+        if [ ""$FIRST_LAUNCH"" = false ]; then
+            echo ','
+        fi
+        FIRST_LAUNCH=false
+        
+        LABEL=$(basename ""$plist_file"" .plist)
+        
+        echo ""    {""
+        echo ""      \""Label\"": \""$LABEL\"",""
+        echo ""      \""Type\"": \""System Launch Daemon\"",""
+        echo ""      \""Path\"": \""$plist_file\""""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# System Extensions
+echo '""SystemExtensions"": ['
+FIRST_EXT=true
+if command -v systemextensionsctl >/dev/null 2>&1; then
+    systemextensionsctl list 2>/dev/null | tail -n +2 | while IFS= read -r line; do
+        if [ ""$line"" != """" ]; then
+            if [ ""$FIRST_EXT"" = false ]; then
+                echo ','
+            fi
+            FIRST_EXT=false
+            
+            BUNDLE_ID=$(echo ""$line"" | awk '{print $2}')
+            VERSION=$(echo ""$line"" | awk '{print $3}')
+            STATE=$(echo ""$line"" | awk '{print $4}')
+            
+            echo ""    {""
+            echo ""      \""BundleIdentifier\"": \""$BUNDLE_ID\"",""
+            echo ""      \""Version\"": \""$VERSION\"",""
+            echo ""      \""State\"": \""$STATE\""""
+            echo ""    }""
+        fi
+    done
+fi
+echo '],'
+
+# Software Statistics
+TOTAL_APPLICATIONS=$(find /Applications -name ""*.app"" -maxdepth 2 | wc -l | tr -d ' ')
+TOTAL_HOMEBREW=0
+if command -v brew >/dev/null 2>&1; then
+    TOTAL_HOMEBREW=$(brew list --formula 2>/dev/null | wc -l | tr -d ' ')
+fi
+
+echo '""SoftwareStatistics"": {'
+echo ""  \""TotalApplications\"": $TOTAL_APPLICATIONS,""
+echo ""  \""TotalHomebrewPackages\"": $TOTAL_HOMEBREW""
+echo '},'
+
+# Add metadata
+echo '""DiscoveryTimestamp"": ""'$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)'"",""ScriptVersion"": ""1.0.0"",'
+echo '""ComputerName"": ""'$(hostname)'"",""Platform"": ""macOS""'
+
+echo '}'",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", true },
+            { "extractFields", new[] { "InstalledApplications", "SystemSoftware", "HomebrewPackages", "LaunchItems", "SoftwareStatistics" } },
+            { "validateRequired", new[] { "ComputerName", "DiscoveryTimestamp", "SoftwareStatistics.TotalApplications" } }
+        },
+        Tags = new List<string> { "software", "discovery", "macos", "applications", "homebrew", "launch", "extensions", "bash" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
+    private DiscoveryScriptTemplate CreateMacOSNetworkDiscoveryScript() => new()
+    {
+        Name = "macOS Network Discovery - Bash",
+        Description = "Comprehensive network discovery for macOS including interfaces, WiFi, and network services",
+        Category = "Network Discovery",
+        Type = "bash",
+        TargetOS = "macos",
+        EstimatedRunTimeSeconds = 30,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"#!/bin/bash
+# macOS Network Discovery Script
+# Outputs comprehensive network information in JSON format
+
+set -e
+
+echo '{'
+
+# Network Interfaces
+echo '""NetworkInterfaces"": ['
+FIRST_INTERFACE=true
+if command -v ifconfig >/dev/null 2>&1; then
+    ifconfig -a | grep -E '^[a-z]' | while IFS= read -r line; do
+        if [ ""$FIRST_INTERFACE"" = false ]; then
+            echo ','
+        fi
+        FIRST_INTERFACE=false
+        
+        INTERFACE=$(echo ""$line"" | awk '{print $1}' | tr -d ':')
+        FLAGS=$(echo ""$line"" | grep -o 'flags=[^>]*>' | cut -d'=' -f2 | tr -d '>')
+        
+        # Get interface details
+        INTERFACE_INFO=$(ifconfig ""$INTERFACE"" 2>/dev/null)
+        INET_ADDR=$(echo ""$INTERFACE_INFO"" | grep 'inet ' | awk '{print $2}')
+        NETMASK=$(echo ""$INTERFACE_INFO"" | grep 'inet ' | awk '{print $4}')
+        ETHER_ADDR=$(echo ""$INTERFACE_INFO"" | grep 'ether ' | awk '{print $2}')
+        STATUS=$(echo ""$INTERFACE_INFO"" | grep 'status: ' | cut -d' ' -f2)
+        
+        echo ""    {""
+        echo ""      \""Interface\"": \""$INTERFACE\"",""
+        echo ""      \""Flags\"": \""$FLAGS\"",""
+        echo ""      \""IPAddress\"": \""$INET_ADDR\"",""
+        echo ""      \""Netmask\"": \""$NETMASK\"",""
+        echo ""      \""MACAddress\"": \""$ETHER_ADDR\"",""
+        echo ""      \""Status\"": \""$STATUS\""""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# WiFi Information
+echo '""WiFiInformation"": {'
+if command -v networksetup >/dev/null 2>&1; then
+    WIFI_DEVICE=$(networksetup -listallhardwareports | grep -A 1 'Wi-Fi' | grep 'Device:' | awk '{print $2}')
+    if [ ""$WIFI_DEVICE"" != """" ]; then
+        WIFI_POWER=$(networksetup -getairportpower ""$WIFI_DEVICE"" 2>/dev/null | awk '{print $4}')
+        
+        # Get current WiFi network
+        CURRENT_NETWORK=""unknown""
+        if command -v /System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport >/dev/null 2>&1; then
+            CURRENT_NETWORK=$(/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I | grep ' SSID:' | awk '{print $2}')
+        fi
+        
+        echo ""  \""Device\"": \""$WIFI_DEVICE\"",""
+        echo ""  \""Power\"": \""$WIFI_POWER\"",""
+        echo ""  \""CurrentNetwork\"": \""$CURRENT_NETWORK\""""
+    else
+        echo '""  \""Error\"": \""WiFi device not found\""""'
+    fi
+else
+    echo '""  \""Error\"": \""networksetup not available\""""'
+fi
+echo '},'
+
+# Network Services
+echo '""NetworkServices"": ['
+FIRST_SERVICE=true
+if command -v networksetup >/dev/null 2>&1; then
+    networksetup -listallnetworkservices | tail -n +2 | while IFS= read -r service; do
+        if [ ""$FIRST_SERVICE"" = false ]; then
+            echo ','
+        fi
+        FIRST_SERVICE=false
+        
+        # Get service configuration
+        DHCP_INFO=$(networksetup -getinfo ""$service"" 2>/dev/null | grep 'DHCP Configuration')
+        IP_ADDRESS=$(networksetup -getinfo ""$service"" 2>/dev/null | grep 'IP address:' | awk '{print $3}')
+        SUBNET_MASK=$(networksetup -getinfo ""$service"" 2>/dev/null | grep 'Subnet mask:' | awk '{print $3}')
+        ROUTER=$(networksetup -getinfo ""$service"" 2>/dev/null | grep 'Router:' | awk '{print $2}')
+        
+        echo ""    {""
+        echo ""      \""ServiceName\"": \""$service\"",""
+        echo ""      \""IPAddress\"": \""$IP_ADDRESS\"",""
+        echo ""      \""SubnetMask\"": \""$SUBNET_MASK\"",""
+        echo ""      \""Router\"": \""$ROUTER\"",""
+        echo ""      \""UsesDHCP\"": ""$(if [ ""$DHCP_INFO"" != """" ]; then echo ""true""; else echo ""false""; fi)\""""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# DNS Configuration
+echo '""DNSConfiguration"": {'
+if command -v scutil >/dev/null 2>&1; then
+    DNS_SERVERS=$(scutil --dns | grep 'nameserver' | awk '{print $3}' | tr '\n' ',' | sed 's/,$//')
+    SEARCH_DOMAINS=$(scutil --dns | grep 'search domain' | awk '{print $4}' | tr '\n' ',' | sed 's/,$//')
     
-    private DiscoveryScriptTemplate CreateMacOSHardwareDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateMacOSSoftwareDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateMacOSNetworkDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateMacOSSecurityDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateMacOSServicesDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateMacOSProcessDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateMacOSSystemInfoDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateMacOSUserAccountDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateMacOSPerformanceDiscoveryScript() => throw new NotImplementedException();
+    echo ""  \""DNSServers\"": \""$DNS_SERVERS\"",""
+    echo ""  \""SearchDomains\"": \""$SEARCH_DOMAINS\""""
+else
+    echo '""  \""Error\"": \""scutil not available\""""'
+fi
+echo '},'
+
+# Active Network Connections
+echo '""ActiveConnections"": ['
+FIRST_CONNECTION=true
+if command -v lsof >/dev/null 2>&1; then
+    lsof -i -n | grep ESTABLISHED | head -20 | while IFS= read -r line; do
+        if [ ""$FIRST_CONNECTION"" = false ]; then
+            echo ','
+        fi
+        FIRST_CONNECTION=false
+        
+        PROCESS=$(echo ""$line"" | awk '{print $1}')
+        PID=$(echo ""$line"" | awk '{print $2}')
+        PROTOCOL=$(echo ""$line"" | awk '{print $5}' | cut -d'*' -f1)
+        LOCAL_ADDRESS=$(echo ""$line"" | awk '{print $9}' | cut -d'-' -f1)
+        REMOTE_ADDRESS=$(echo ""$line"" | awk '{print $9}' | cut -d'>' -f2)
+        
+        echo ""    {""
+        echo ""      \""Process\"": \""$PROCESS\"",""
+        echo ""      \""PID\"": $PID,""
+        echo ""      \""Protocol\"": \""$PROTOCOL\"",""
+        echo ""      \""LocalAddress\"": \""$LOCAL_ADDRESS\"",""
+        echo ""      \""RemoteAddress\"": \""$REMOTE_ADDRESS\""""
+        echo ""    }""
+    done
+elif command -v netstat >/dev/null 2>&1; then
+    netstat -an | grep ESTABLISHED | head -20 | while IFS= read -r line; do
+        if [ ""$FIRST_CONNECTION"" = false ]; then
+            echo ','
+        fi
+        FIRST_CONNECTION=false
+        
+        PROTOCOL=$(echo ""$line"" | awk '{print $1}')
+        LOCAL_ADDRESS=$(echo ""$line"" | awk '{print $4}')
+        REMOTE_ADDRESS=$(echo ""$line"" | awk '{print $5}')
+        STATE=$(echo ""$line"" | awk '{print $6}')
+        
+        echo ""    {""
+        echo ""      \""Protocol\"": \""$PROTOCOL\"",""
+        echo ""      \""LocalAddress\"": \""$LOCAL_ADDRESS\"",""
+        echo ""      \""RemoteAddress\"": \""$REMOTE_ADDRESS\"",""
+        echo ""      \""State\"": \""$STATE\""""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# Firewall Status
+echo '""FirewallStatus"": {'
+if command -v /usr/libexec/ApplicationFirewall/socketfilterfw >/dev/null 2>&1; then
+    FIREWALL_STATE=$(/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate 2>/dev/null | awk '{print $3}')
+    STEALTH_MODE=$(/usr/libexec/ApplicationFirewall/socketfilterfw --getstealthmode 2>/dev/null | awk '{print $3}')
     
+    echo ""  \""GlobalState\"": \""$FIREWALL_STATE\"",""
+    echo ""  \""StealthMode\"": \""$STEALTH_MODE\""""
+else
+    echo '""  \""Error\"": \""Firewall information not accessible\""""'
+fi
+echo '},'
+
+# Network Statistics
+HOSTNAME=$(hostname)
+COMPUTER_NAME=$(scutil --get ComputerName 2>/dev/null || echo ""unknown"")
+LOCAL_HOSTNAME=$(scutil --get LocalHostName 2>/dev/null || echo ""unknown"")
+
+echo '""NetworkStatistics"": {'
+echo ""  \""Hostname\"": \""$HOSTNAME\"",""
+echo ""  \""ComputerName\"": \""$COMPUTER_NAME\"",""
+echo ""  \""LocalHostName\"": \""$LOCAL_HOSTNAME\""""
+echo '},'
+
+# Add metadata
+echo '""DiscoveryTimestamp"": ""'$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)'"",""ScriptVersion"": ""1.0.0"",'
+echo '""ComputerName"": ""'$(hostname)'"",""Platform"": ""macOS""'
+
+echo '}'",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", true },
+            { "extractFields", new[] { "NetworkInterfaces", "WiFiInformation", "NetworkServices", "DNSConfiguration", "ActiveConnections" } },
+            { "validateRequired", new[] { "ComputerName", "DiscoveryTimestamp", "Platform" } }
+        },
+        Tags = new List<string> { "network", "discovery", "macos", "wifi", "dns", "interfaces", "connections", "bash" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
+    private DiscoveryScriptTemplate CreateMacOSSecurityDiscoveryScript() => new()
+    {
+        Name = "macOS Security Discovery - Bash",
+        Description = "Comprehensive security discovery for macOS including firewall, Gatekeeper, and system integrity",
+        Category = "Security Discovery",
+        Type = "bash",
+        TargetOS = "macos",
+        EstimatedRunTimeSeconds = 35,
+        RequiresElevation = true,
+        RequiresNetwork = false,
+        Template = @"#!/bin/bash
+# macOS Security Discovery Script
+# Outputs comprehensive security information in JSON format
+# Requires elevated privileges for complete security assessment
+
+set -e
+
+echo '{'
+
+# Gatekeeper Status
+echo '""GatekeeperStatus"": {'
+if command -v spctl >/dev/null 2>&1; then
+    GATEKEEPER_STATUS=$(spctl --status 2>/dev/null | awk '{print $2}')
+    
+    echo ""  \""Status\"": \""$GATEKEEPER_STATUS\""""
+else
+    echo '""  \""Error\"": \""spctl not available\""""'
+fi
+echo '},'
+
+# System Integrity Protection (SIP)
+echo '""SystemIntegrityProtection"": {'
+if command -v csrutil >/dev/null 2>&1; then
+    SIP_STATUS=$(csrutil status 2>/dev/null | awk '{print $5}' | tr -d '.')
+    
+    echo ""  \""Status\"": \""$SIP_STATUS\""""
+else
+    echo '""  \""Error\"": \""csrutil not available\""""'
+fi
+echo '},'
+
+# FileVault Status
+echo '""FileVaultStatus"": {'
+if command -v fdesetup >/dev/null 2>&1; then
+    FILEVAULT_STATUS=$(fdesetup status 2>/dev/null | head -1)
+    
+    echo ""  \""Status\"": \""$FILEVAULT_STATUS\""""
+else
+    echo '""  \""Error\"": \""fdesetup not available\""""'
+fi
+echo '},'
+
+# User Accounts
+echo '""UserAccounts"": ['
+FIRST_USER=true
+if command -v dscl >/dev/null 2>&1; then
+    dscl . list /Users | grep -v '^_' | while IFS= read -r username; do
+        if [ ""$FIRST_USER"" = false ]; then
+            echo ','
+        fi
+        FIRST_USER=false
+        
+        USER_ID=$(dscl . read /Users/""$username"" UniqueID 2>/dev/null | awk '{print $2}')
+        REAL_NAME=$(dscl . read /Users/""$username"" RealName 2>/dev/null | cut -d':' -f2 | sed 's/^ *//')
+        USER_SHELL=$(dscl . read /Users/""$username"" UserShell 2>/dev/null | awk '{print $2}')
+        HOME_DIR=$(dscl . read /Users/""$username"" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+        
+        # Check if user is admin
+        IS_ADMIN=""false""
+        if dscl . read /Groups/admin GroupMembership 2>/dev/null | grep -q ""$username""; then
+            IS_ADMIN=""true""
+        fi
+        
+        echo ""    {""
+        echo ""      \""Username\"": \""$username\"",""
+        echo ""      \""UserID\"": $USER_ID,""
+        echo ""      \""RealName\"": \""$REAL_NAME\"",""
+        echo ""      \""Shell\"": \""$USER_SHELL\"",""
+        echo ""      \""HomeDirectory\"": \""$HOME_DIR\"",""
+        echo ""      \""IsAdmin\"": $IS_ADMIN""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# Security Updates
+echo '""SecurityUpdates"": ['
+FIRST_UPDATE=true
+if command -v softwareupdate >/dev/null 2>&1; then
+    softwareupdate -l 2>/dev/null | grep -E '^\s*\*.*recommended' | head -10 | while IFS= read -r line; do
+        if [ ""$FIRST_UPDATE"" = false ]; then
+            echo ','
+        fi
+        FIRST_UPDATE=false
+        
+        UPDATE_NAME=$(echo ""$line"" | sed 's/^\s*\* //' | sed 's/-.*//')
+        UPDATE_SIZE=$(echo ""$line"" | grep -o '[0-9]*K\|[0-9]*M\|[0-9]*G' | head -1)
+        
+        echo ""    {""
+        echo ""      \""UpdateName\"": \""$UPDATE_NAME\"",""
+        echo ""      \""Size\"": \""$UPDATE_SIZE\""""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# Running Processes (Security-relevant)
+echo '""SecurityProcesses"": ['
+FIRST_PROC=true
+ps aux | grep -E '(SecurityAgent|authd|securityd|trustd)' | grep -v grep | while IFS= read -r line; do
+    if [ ""$FIRST_PROC"" = false ]; then
+        echo ','
+    fi
+    FIRST_PROC=false
+    
+    USER=$(echo ""$line"" | awk '{print $1}')
+    PID=$(echo ""$line"" | awk '{print $2}')
+    COMMAND=$(echo ""$line"" | awk '{print $11}')
+    
+    echo ""    {""
+    echo ""      \""User\"": \""$USER\"",""
+    echo ""      \""PID\"": $PID,""
+    echo ""      \""Command\"": \""$COMMAND\""""
+    echo ""    }""
+done
+echo '],'
+
+# Installed Security Software
+echo '""SecuritySoftware"": ['
+FIRST_SECURITY=true
+
+# Check for common security applications
+SECURITY_APPS=(""CrowdStrike Falcon"" ""Carbon Black"" ""Sophos"" ""Trend Micro"" ""Symantec"" ""McAfee"" ""Bitdefender"" ""ESET"" ""Kaspersky"")
+for app in ""${SECURITY_APPS[@]}""; do
+    if find /Applications -name ""*$app*"" -type d 2>/dev/null | grep -q ""$app""; then
+        if [ ""$FIRST_SECURITY"" = false ]; then
+            echo ','
+        fi
+        FIRST_SECURITY=false
+        
+        APP_PATH=$(find /Applications -name ""*$app*"" -type d | head -1)
+        
+        echo ""    {""
+        echo ""      \""Name\"": \""$app\"",""
+        echo ""      \""Path\"": \""$APP_PATH\"",""
+        echo ""      \""Type\"": \""Endpoint Security\""""
+        echo ""    }""
+    fi
+done
+echo '],'
+
+# Keychain Information
+echo '""KeychainInfo"": ['
+FIRST_KEYCHAIN=true
+if command -v security >/dev/null 2>&1; then
+    security list-keychains 2>/dev/null | while IFS= read -r keychain; do
+        if [ ""$FIRST_KEYCHAIN"" = false ]; then
+            echo ','
+        fi
+        FIRST_KEYCHAIN=false
+        
+        KEYCHAIN_PATH=$(echo ""$keychain"" | tr -d '""' | sed 's/^[ \t]*//')
+        KEYCHAIN_NAME=$(basename ""$KEYCHAIN_PATH"")
+        
+        echo ""    {""
+        echo ""      \""Name\"": \""$KEYCHAIN_NAME\"",""
+        echo ""      \""Path\"": \""$KEYCHAIN_PATH\""""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# Privacy and Security Settings
+echo '""PrivacySettings"": {'
+# Check some basic privacy settings using defaults
+ANALYTICS_ENABLED=$(defaults read com.apple.SubmitDiagInfo AutoSubmit 2>/dev/null || echo ""unknown"")
+LOCATION_SERVICES=$(defaults read com.apple.MCX DisableLocationServices 2>/dev/null || echo ""unknown"")
+
+echo ""  \""AnalyticsEnabled\"": \""$ANALYTICS_ENABLED\"",""
+echo ""  \""LocationServicesDisabled\"": \""$LOCATION_SERVICES\""""
+echo '},'
+
+# Security Statistics
+TOTAL_USERS=$(dscl . list /Users | grep -v '^_' | wc -l | tr -d ' ')
+ADMIN_USERS=0
+if command -v dscl >/dev/null 2>&1; then
+    ADMIN_USERS=$(dscl . read /Groups/admin GroupMembership 2>/dev/null | wc -w | tr -d ' ')
+fi
+
+echo '""SecurityStatistics"": {'
+echo ""  \""TotalUsers\"": $TOTAL_USERS,""
+echo ""  \""AdminUsers\"": $ADMIN_USERS""
+echo '},'
+
+# Add metadata
+echo '""DiscoveryTimestamp"": ""'$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)'"",""ScriptVersion"": ""1.0.0"",'
+echo '""ComputerName"": ""'$(hostname)'"",""Platform"": ""macOS"",""RequiredElevation"": true'
+
+echo '}'",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", true },
+            { "extractFields", new[] { "GatekeeperStatus", "SystemIntegrityProtection", "FileVaultStatus", "UserAccounts", "SecuritySoftware" } },
+            { "validateRequired", new[] { "ComputerName", "DiscoveryTimestamp", "RequiredElevation" } }
+        },
+        Tags = new List<string> { "security", "discovery", "macos", "gatekeeper", "sip", "filevault", "users", "keychain", "bash" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST", "PCI DSS", "GDPR" }
+    };
+
+    private DiscoveryScriptTemplate CreateMacOSServicesDiscoveryScript() => new()
+    {
+        Name = "macOS Services Discovery - Bash",
+        Description = "Comprehensive discovery of macOS services including Launch Agents, Launch Daemons, and running processes",
+        Category = "Services Discovery", 
+        Type = "bash",
+        TargetOS = "macos",
+        EstimatedRunTimeSeconds = 30,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"#!/bin/bash
+# macOS Services Discovery Script
+# Outputs comprehensive service information in JSON format
+
+set -e
+
+echo '{'
+
+# Launch Agents (User)
+echo '""LaunchAgents"": ['
+FIRST_AGENT=true
+if [ -d ""$HOME/Library/LaunchAgents"" ]; then
+    find ""$HOME/Library/LaunchAgents"" -name ""*.plist"" | while IFS= read -r plist_file; do
+        if [ ""$FIRST_AGENT"" = false ]; then
+            echo ','
+        fi
+        FIRST_AGENT=false
+        
+        LABEL=$(basename ""$plist_file"" .plist)
+        
+        # Check if loaded
+        LOADED=""false""
+        if launchctl list | grep -q ""$LABEL""; then
+            LOADED=""true""
+        fi
+        
+        echo ""    {""
+        echo ""      \""Label\"": \""$LABEL\"",""
+        echo ""      \""Path\"": \""$plist_file\"",""
+        echo ""      \""Type\"": \""User Launch Agent\"",""
+        echo ""      \""Loaded\"": $LOADED""
+        echo ""    }""
+    done
+fi
+
+# System Launch Agents
+if [ -d ""/Library/LaunchAgents"" ]; then
+    find ""/Library/LaunchAgents"" -name ""*.plist"" | while IFS= read -r plist_file; do
+        if [ ""$FIRST_AGENT"" = false ]; then
+            echo ','
+        fi
+        FIRST_AGENT=false
+        
+        LABEL=$(basename ""$plist_file"" .plist)
+        
+        # Check if loaded
+        LOADED=""false""
+        if launchctl list | grep -q ""$LABEL""; then
+            LOADED=""true""
+        fi
+        
+        echo ""    {""
+        echo ""      \""Label\"": \""$LABEL\"",""
+        echo ""      \""Path\"": \""$plist_file\"",""
+        echo ""      \""Type\"": \""System Launch Agent\"",""
+        echo ""      \""Loaded\"": $LOADED""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# Launch Daemons
+echo '""LaunchDaemons"": ['
+FIRST_DAEMON=true
+if [ -d ""/Library/LaunchDaemons"" ]; then
+    find ""/Library/LaunchDaemons"" -name ""*.plist"" | head -20 | while IFS= read -r plist_file; do
+        if [ ""$FIRST_DAEMON"" = false ]; then
+            echo ','
+        fi
+        FIRST_DAEMON=false
+        
+        LABEL=$(basename ""$plist_file"" .plist)
+        
+        # Check if loaded
+        LOADED=""false""
+        if sudo launchctl list 2>/dev/null | grep -q ""$LABEL""; then
+            LOADED=""true""
+        fi
+        
+        echo ""    {""
+        echo ""      \""Label\"": \""$LABEL\"",""
+        echo ""      \""Path\"": \""$plist_file\"",""
+        echo ""      \""Type\"": \""Launch Daemon\"",""
+        echo ""      \""Loaded\"": $LOADED""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# Running Processes
+echo '""RunningProcesses"": ['
+FIRST_PROCESS=true
+ps aux | head -31 | tail -30 | while IFS= read -r line; do
+    if [ ""$FIRST_PROCESS"" = false ]; then
+        echo ','
+    fi
+    FIRST_PROCESS=false
+    
+    USER=$(echo ""$line"" | awk '{print $1}')
+    PID=$(echo ""$line"" | awk '{print $2}')
+    CPU=$(echo ""$line"" | awk '{print $3}')
+    MEM=$(echo ""$line"" | awk '{print $4}')
+    COMMAND=$(echo ""$line"" | awk '{print $11}' | sed 's/""/\\\\""/g')
+    
+    echo ""    {""
+    echo ""      \""User\"": \""$USER\"",""
+    echo ""      \""PID\"": $PID,""
+    echo ""      \""CPUPercent\"": \""$CPU\"",""
+    echo ""      \""MemoryPercent\"": \""$MEM\"",""
+    echo ""      \""Command\"": \""$COMMAND\""""
+    echo ""    }""
+done
+echo '],'
+
+# Loaded Launch Services
+echo '""LoadedServices"": ['
+FIRST_LOADED=true
+launchctl list | tail -n +2 | head -20 | while IFS= read -r line; do
+    if [ ""$FIRST_LOADED"" = false ]; then
+        echo ','
+    fi
+    FIRST_LOADED=false
+    
+    PID=$(echo ""$line"" | awk '{print $1}')
+    STATUS=$(echo ""$line"" | awk '{print $2}')
+    LABEL=$(echo ""$line"" | awk '{print $3}')
+    
+    echo ""    {""
+    echo ""      \""PID\"": \""$PID\"",""
+    echo ""      \""Status\"": \""$STATUS\"",""
+    echo ""      \""Label\"": \""$LABEL\""""
+    echo ""    }""
+done
+echo '],'
+
+# System Services Status
+echo '""SystemServices"": ['
+FIRST_SYSTEM=true
+
+# Check some common system services
+SYSTEM_SERVICES=(""com.apple.loginwindow"" ""com.apple.WindowServer"" ""com.apple.Finder"" ""com.apple.Dock"" ""com.apple.SystemUIServer"")
+for service in ""${SYSTEM_SERVICES[@]}""; do
+    if [ ""$FIRST_SYSTEM"" = false ]; then
+        echo ','
+    fi
+    FIRST_SYSTEM=false
+    
+    # Check if service is running
+    RUNNING=""false""
+    SERVICE_PID=""""
+    if launchctl list | grep -q ""$service""; then
+        RUNNING=""true""
+        SERVICE_PID=$(launchctl list | grep ""$service"" | awk '{print $1}')
+    fi
+    
+    echo ""    {""
+    echo ""      \""ServiceName\"": \""$service\"",""
+    echo ""      \""Running\"": $RUNNING,""
+    echo ""      \""PID\"": \""$SERVICE_PID\""""
+    echo ""    }""
+done
+echo '],'
+
+# Network Services
+echo '""NetworkServices"": ['
+FIRST_NET=true
+if command -v lsof >/dev/null 2>&1; then
+    lsof -i -P | grep LISTEN | head -10 | while IFS= read -r line; do
+        if [ ""$FIRST_NET"" = false ]; then
+            echo ','
+        fi
+        FIRST_NET=false
+        
+        PROCESS=$(echo ""$line"" | awk '{print $1}')
+        PID=$(echo ""$line"" | awk '{print $2}')
+        PROTOCOL=$(echo ""$line"" | awk '{print $5}')
+        ADDRESS=$(echo ""$line"" | awk '{print $9}')
+        
+        echo ""    {""
+        echo ""      \""Process\"": \""$PROCESS\"",""
+        echo ""      \""PID\"": $PID,""
+        echo ""      \""Protocol\"": \""$PROTOCOL\"",""
+        echo ""      \""Address\"": \""$ADDRESS\""""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# Service Statistics
+TOTAL_PROCESSES=$(ps aux | wc -l)
+TOTAL_LAUNCH_AGENTS=0
+TOTAL_LAUNCH_DAEMONS=0
+LOADED_SERVICES=$(launchctl list | wc -l)
+
+if [ -d ""$HOME/Library/LaunchAgents"" ]; then
+    USER_AGENTS=$(find ""$HOME/Library/LaunchAgents"" -name ""*.plist"" | wc -l)
+    TOTAL_LAUNCH_AGENTS=$((TOTAL_LAUNCH_AGENTS + USER_AGENTS))
+fi
+
+if [ -d ""/Library/LaunchAgents"" ]; then
+    SYSTEM_AGENTS=$(find ""/Library/LaunchAgents"" -name ""*.plist"" | wc -l)
+    TOTAL_LAUNCH_AGENTS=$((TOTAL_LAUNCH_AGENTS + SYSTEM_AGENTS))
+fi
+
+if [ -d ""/Library/LaunchDaemons"" ]; then
+    TOTAL_LAUNCH_DAEMONS=$(find ""/Library/LaunchDaemons"" -name ""*.plist"" | wc -l)
+fi
+
+echo '""ServiceStatistics"": {'
+echo ""  \""TotalProcesses\"": $TOTAL_PROCESSES,""
+echo ""  \""TotalLaunchAgents\"": $TOTAL_LAUNCH_AGENTS,""
+echo ""  \""TotalLaunchDaemons\"": $TOTAL_LAUNCH_DAEMONS,""
+echo ""  \""LoadedServices\"": $LOADED_SERVICES""
+echo '},'
+
+# Add metadata
+echo '""DiscoveryTimestamp"": ""'$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)'"",""ScriptVersion"": ""1.0.0"",'
+echo '""ComputerName"": ""'$(hostname)'"",""Platform"": ""macOS""'
+
+echo '}'",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", true },
+            { "extractFields", new[] { "LaunchAgents", "LaunchDaemons", "RunningProcesses", "LoadedServices", "ServiceStatistics" } },
+            { "validateRequired", new[] { "ComputerName", "DiscoveryTimestamp", "ServiceStatistics.TotalProcesses" } }
+        },
+        Tags = new List<string> { "services", "discovery", "macos", "launch", "daemons", "agents", "processes", "bash" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
+    private DiscoveryScriptTemplate CreateMacOSProcessDiscoveryScript() => new()
+    {
+        Name = "macOS Process Discovery - Bash",
+        Description = "Comprehensive discovery of running processes including resource usage and process hierarchy",
+        Category = "Process Discovery",
+        Type = "bash",
+        TargetOS = "macos",
+        EstimatedRunTimeSeconds = 30,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"#!/bin/bash
+# macOS Process Discovery Script
+# Outputs comprehensive process information in JSON format
+
+set -e
+
+echo '{'
+
+# Running Processes (detailed)
+echo '""RunningProcesses"": ['
+FIRST_PROCESS=true
+ps aux | head -51 | tail -50 | while IFS= read -r line; do
+    if [ ""$FIRST_PROCESS"" = false ]; then
+        echo ','
+    fi
+    FIRST_PROCESS=false
+    
+    USER=$(echo ""$line"" | awk '{print $1}')
+    PID=$(echo ""$line"" | awk '{print $2}')
+    CPU=$(echo ""$line"" | awk '{print $3}')
+    MEM=$(echo ""$line"" | awk '{print $4}')
+    VSZ=$(echo ""$line"" | awk '{print $5}')
+    RSS=$(echo ""$line"" | awk '{print $6}')
+    TT=$(echo ""$line"" | awk '{print $7}')
+    STAT=$(echo ""$line"" | awk '{print $8}')
+    STARTED=$(echo ""$line"" | awk '{print $9}')
+    TIME=$(echo ""$line"" | awk '{print $10}')
+    COMMAND=$(echo ""$line"" | cut -d' ' -f11- | sed 's/""/\\\\""/g')
+    
+    echo ""    {""
+    echo ""      \""User\"": \""$USER\"",""
+    echo ""      \""PID\"": $PID,""
+    echo ""      \""CPUPercent\"": \""$CPU\"",""
+    echo ""      \""MemoryPercent\"": \""$MEM\"",""
+    echo ""      \""VirtualMemoryKB\"": $VSZ,""
+    echo ""      \""ResidentMemoryKB\"": $RSS,""
+    echo ""      \""Terminal\"": \""$TT\"",""
+    echo ""      \""Status\"": \""$STAT\"",""
+    echo ""      \""Started\"": \""$STARTED\"",""
+    echo ""      \""CPUTime\"": \""$TIME\"",""
+    echo ""      \""Command\"": \""$COMMAND\""""
+    echo ""    }""
+done
+echo '],'
+
+# Top Processes by CPU
+echo '""TopProcessesByCPU"": ['
+FIRST_CPU=true
+ps aux | sort -k3 -nr | head -11 | tail -10 | while IFS= read -r line; do
+    if [ ""$FIRST_CPU"" = false ]; then
+        echo ','
+    fi
+    FIRST_CPU=false
+    
+    USER=$(echo ""$line"" | awk '{print $1}')
+    PID=$(echo ""$line"" | awk '{print $2}')
+    CPU=$(echo ""$line"" | awk '{print $3}')
+    COMMAND=$(echo ""$line"" | awk '{print $11}' | sed 's/""/\\\\""/g')
+    
+    echo ""    {""
+    echo ""      \""User\"": \""$USER\"",""
+    echo ""      \""PID\"": $PID,""
+    echo ""      \""CPUPercent\"": \""$CPU\"",""
+    echo ""      \""Command\"": \""$COMMAND\""""
+    echo ""    }""
+done
+echo '],'
+
+# Top Processes by Memory
+echo '""TopProcessesByMemory"": ['
+FIRST_MEM=true
+ps aux | sort -k4 -nr | head -11 | tail -10 | while IFS= read -r line; do
+    if [ ""$FIRST_MEM"" = false ]; then
+        echo ','
+    fi
+    FIRST_MEM=false
+    
+    USER=$(echo ""$line"" | awk '{print $1}')
+    PID=$(echo ""$line"" | awk '{print $2}')
+    MEM=$(echo ""$line"" | awk '{print $4}')
+    RSS=$(echo ""$line"" | awk '{print $6}')
+    COMMAND=$(echo ""$line"" | awk '{print $11}' | sed 's/""/\\\\""/g')
+    
+    RSS_MB=$(echo ""scale=2; $RSS/1024"" | bc 2>/dev/null || echo ""0"")
+    
+    echo ""    {""
+    echo ""      \""User\"": \""$USER\"",""
+    echo ""      \""PID\"": $PID,""
+    echo ""      \""MemoryPercent\"": \""$MEM\"",""
+    echo ""      \""ResidentMemoryMB\"": $RSS_MB,""
+    echo ""      \""Command\"": \""$COMMAND\""""
+    echo ""    }""
+done
+echo '],'
+
+# Process Tree (using pstree if available, otherwise ps)
+echo '""ProcessTree"": ['
+FIRST_TREE=true
+if command -v pstree >/dev/null 2>&1; then
+    pstree -p | head -20 | while IFS= read -r line; do
+        if [ ""$FIRST_TREE"" = false ]; then
+            echo ','
+        fi
+        FIRST_TREE=false
+        
+        # Extract PID and process name from pstree output
+        PROCESS=$(echo ""$line"" | sed 's/.*├─\|.*└─\|.*─//' | sed 's/(.*//')
+        PID=$(echo ""$line"" | grep -o '([0-9]*)' | tr -d '()')
+        
+        echo ""    {""
+        echo ""      \""Process\"": \""$PROCESS\"",""
+        echo ""      \""PID\"": \""$PID\"",""
+        echo ""      \""TreeLine\"": \""$line\""""
+        echo ""    }""
+    done
+else
+    # Fallback to ps hierarchy
+    ps -eo pid,ppid,comm | head -21 | tail -20 | while IFS= read -r line; do
+        if [ ""$FIRST_TREE"" = false ]; then
+            echo ','
+        fi
+        FIRST_TREE=false
+        
+        PID=$(echo ""$line"" | awk '{print $1}')
+        PPID=$(echo ""$line"" | awk '{print $2}')
+        COMMAND=$(echo ""$line"" | awk '{print $3}')
+        
+        echo ""    {""
+        echo ""      \""PID\"": $PID,""
+        echo ""      \""PPID\"": $PPID,""
+        echo ""      \""Command\"": \""$COMMAND\""""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# System Load and Performance
+echo '""SystemLoad"": {'
+LOAD_AVG=$(uptime | awk -F'load averages:' '{print $2}' | tr -d ' ')
+LOAD_1MIN=$(echo ""$LOAD_AVG"" | cut -d',' -f1)
+LOAD_5MIN=$(echo ""$LOAD_AVG"" | cut -d',' -f2)
+LOAD_15MIN=$(echo ""$LOAD_AVG"" | cut -d',' -f3)
+
+# Get CPU count
+CPU_COUNT=$(sysctl -n hw.ncpu 2>/dev/null || echo ""unknown"")
+
+echo ""  \""Load1Min\"": \""$LOAD_1MIN\"",""
+echo ""  \""Load5Min\"": \""$LOAD_5MIN\"",""
+echo ""  \""Load15Min\"": \""$LOAD_15MIN\"",""
+echo ""  \""CPUCount\"": $CPU_COUNT""
+echo '},'
+
+# Memory Usage
+echo '""MemoryUsage"": {'
+if command -v vm_stat >/dev/null 2>&1; then
+    VM_STAT=$(vm_stat)
+    
+    PAGE_SIZE=$(vm_stat | grep ""page size"" | awk '{print $8}')
+    PAGES_FREE=$(echo ""$VM_STAT"" | grep ""Pages free"" | awk '{print $3}' | tr -d '.')
+    PAGES_ACTIVE=$(echo ""$VM_STAT"" | grep ""Pages active"" | awk '{print $3}' | tr -d '.')
+    PAGES_INACTIVE=$(echo ""$VM_STAT"" | grep ""Pages inactive"" | awk '{print $3}' | tr -d '.')
+    PAGES_WIRED=$(echo ""$VM_STAT"" | grep ""Pages wired down"" | awk '{print $4}' | tr -d '.')
+    PAGES_COMPRESSED=$(echo ""$VM_STAT"" | grep ""Pages stored in compressor"" | awk '{print $5}' | tr -d '.')
+    
+    # Calculate memory in bytes
+    if [ ""$PAGE_SIZE"" != """" ] && [ ""$PAGES_FREE"" != """" ]; then
+        FREE_BYTES=$((PAGES_FREE * PAGE_SIZE))
+        ACTIVE_BYTES=$((PAGES_ACTIVE * PAGE_SIZE))
+        INACTIVE_BYTES=$((PAGES_INACTIVE * PAGE_SIZE))
+        WIRED_BYTES=$((PAGES_WIRED * PAGE_SIZE))
+        COMPRESSED_BYTES=$((PAGES_COMPRESSED * PAGE_SIZE))
+        
+        FREE_MB=$(echo ""scale=2; $FREE_BYTES/1024/1024"" | bc 2>/dev/null || echo ""0"")
+        ACTIVE_MB=$(echo ""scale=2; $ACTIVE_BYTES/1024/1024"" | bc 2>/dev/null || echo ""0"")
+        INACTIVE_MB=$(echo ""scale=2; $INACTIVE_BYTES/1024/1024"" | bc 2>/dev/null || echo ""0"")
+        WIRED_MB=$(echo ""scale=2; $WIRED_BYTES/1024/1024"" | bc 2>/dev/null || echo ""0"")
+        COMPRESSED_MB=$(echo ""scale=2; $COMPRESSED_BYTES/1024/1024"" | bc 2>/dev/null || echo ""0"")
+        
+        echo ""  \""PageSize\"": $PAGE_SIZE,""
+        echo ""  \""FreeMemoryMB\"": $FREE_MB,""
+        echo ""  \""ActiveMemoryMB\"": $ACTIVE_MB,""
+        echo ""  \""InactiveMemoryMB\"": $INACTIVE_MB,""
+        echo ""  \""WiredMemoryMB\"": $WIRED_MB,""
+        echo ""  \""CompressedMemoryMB\"": $COMPRESSED_MB""
+    else
+        echo '""  \""Error\"": \""Unable to calculate memory usage\""""'
+    fi
+else
+    echo '""  \""Error\"": \""vm_stat not available\""""'
+fi
+echo '},'
+
+# Process Statistics
+TOTAL_PROCESSES=$(ps aux | wc -l | tr -d ' ')
+USER_PROCESSES=$(ps aux | grep -v ""^root"" | wc -l | tr -d ' ')
+ROOT_PROCESSES=$(ps aux | grep ""^root"" | wc -l | tr -d ' ')
+
+echo '""ProcessStatistics"": {'
+echo ""  \""TotalProcesses\"": $TOTAL_PROCESSES,""
+echo ""  \""UserProcesses\"": $USER_PROCESSES,""
+echo ""  \""RootProcesses\"": $ROOT_PROCESSES""
+echo '},'
+
+# Add metadata
+echo '""DiscoveryTimestamp"": ""'$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)'"",""ScriptVersion"": ""1.0.0"",'
+echo '""ComputerName"": ""'$(hostname)'"",""Platform"": ""macOS""'
+
+echo '}'",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", true },
+            { "extractFields", new[] { "RunningProcesses", "TopProcessesByCPU", "TopProcessesByMemory", "SystemLoad", "ProcessStatistics" } },
+            { "validateRequired", new[] { "ComputerName", "DiscoveryTimestamp", "ProcessStatistics.TotalProcesses" } }
+        },
+        Tags = new List<string> { "processes", "discovery", "macos", "memory", "cpu", "performance", "bash" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
+    private DiscoveryScriptTemplate CreateMacOSSystemInfoDiscoveryScript() => new()
+    {
+        Name = "macOS System Information Discovery - Bash",
+        Description = "Comprehensive system information discovery for macOS including OS details, hardware, and environment",
+        Category = "System Discovery",
+        Type = "bash",
+        TargetOS = "macos",
+        EstimatedRunTimeSeconds = 25,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"#!/bin/bash
+# macOS System Information Discovery Script
+# Outputs comprehensive system information in JSON format
+
+set -e
+
+echo '{'
+
+# System Overview
+echo '""SystemOverview"": {'
+HOSTNAME=$(hostname)
+OS_VERSION=$(sw_vers -productVersion 2>/dev/null || echo ""unknown"")
+OS_BUILD=$(sw_vers -buildVersion 2>/dev/null || echo ""unknown"")
+OS_NAME=$(sw_vers -productName 2>/dev/null || echo ""unknown"")
+KERNEL_VERSION=$(uname -r)
+ARCHITECTURE=$(uname -m)
+UPTIME=$(uptime | awk '{print $3"" ""$4}' | tr -d ',')
+
+echo ""  \""Hostname\"": \""$HOSTNAME\"",""
+echo ""  \""OSName\"": \""$OS_NAME\"",""
+echo ""  \""OSVersion\"": \""$OS_VERSION\"",""
+echo ""  \""OSBuild\"": \""$OS_BUILD\"",""
+echo ""  \""KernelVersion\"": \""$KERNEL_VERSION\"",""
+echo ""  \""Architecture\"": \""$ARCHITECTURE\"",""
+echo ""  \""Uptime\"": \""$UPTIME\""""
+echo '},'
+
+# Hardware Information
+echo '""HardwareInfo"": {'
+MODEL_NAME=$(system_profiler SPHardwareDataType | grep ""Model Name"" | awk -F': ' '{print $2}')
+MODEL_ID=$(system_profiler SPHardwareDataType | grep ""Model Identifier"" | awk -F': ' '{print $2}')
+PROCESSOR=$(system_profiler SPHardwareDataType | grep ""Processor Name"" | awk -F': ' '{print $2}')
+PROCESSOR_SPEED=$(system_profiler SPHardwareDataType | grep ""Processor Speed"" | awk -F': ' '{print $2}')
+NUMBER_PROCESSORS=$(system_profiler SPHardwareDataType | grep ""Number of Processors"" | awk -F': ' '{print $2}')
+TOTAL_CORES=$(system_profiler SPHardwareDataType | grep ""Total Number of Cores"" | awk -F': ' '{print $2}')
+MEMORY=$(system_profiler SPHardwareDataType | grep ""Memory"" | awk -F': ' '{print $2}')
+SERIAL_NUMBER=$(system_profiler SPHardwareDataType | grep ""Serial Number"" | awk -F': ' '{print $2}')
+
+echo ""  \""ModelName\"": \""$MODEL_NAME\"",""
+echo ""  \""ModelIdentifier\"": \""$MODEL_ID\"",""
+echo ""  \""Processor\"": \""$PROCESSOR\"",""
+echo ""  \""ProcessorSpeed\"": \""$PROCESSOR_SPEED\"",""
+echo ""  \""NumberOfProcessors\"": \""$NUMBER_PROCESSORS\"",""
+echo ""  \""TotalCores\"": \""$TOTAL_CORES\"",""
+echo ""  \""Memory\"": \""$MEMORY\"",""
+echo ""  \""SerialNumber\"": \""$SERIAL_NUMBER\""""
+echo '},'
+
+# Environment Variables
+echo '""Environment"": {'
+USER_NAME=""$USER""
+HOME_DIR=""$HOME""
+SHELL_VAR=""$SHELL""
+PATH_VAR=""$PATH""
+LANG_VAR=""$LANG""
+TERM_VAR=""$TERM""
+
+echo ""  \""User\"": \""$USER_NAME\"",""
+echo ""  \""Home\"": \""$HOME_DIR\"",""
+echo ""  \""Shell\"": \""$SHELL_VAR\"",""
+echo ""  \""Language\"": \""$LANG_VAR\"",""
+echo ""  \""Terminal\"": \""$TERM_VAR\"",""
+echo ""  \""Path\"": \""$PATH_VAR\""""
+echo '},'
+
+# Disk Information
+echo '""DiskInfo"": ['
+FIRST_DISK=true
+df -h | tail -n +2 | while IFS= read -r line; do
+    if [[ ""$line"" =~ ^/dev/ ]]; then
+        if [ ""$FIRST_DISK"" = false ]; then
+            echo ','
+        fi
+        FIRST_DISK=false
+        
+        FILESYSTEM=$(echo ""$line"" | awk '{print $1}')
+        SIZE=$(echo ""$line"" | awk '{print $2}')
+        USED=$(echo ""$line"" | awk '{print $3}')
+        AVAILABLE=$(echo ""$line"" | awk '{print $4}')
+        USE_PERCENT=$(echo ""$line"" | awk '{print $5}')
+        MOUNTPOINT=$(echo ""$line"" | awk '{print $9}')
+        
+        echo ""    {""
+        echo ""      \""Filesystem\"": \""$FILESYSTEM\"",""
+        echo ""      \""Size\"": \""$SIZE\"",""
+        echo ""      \""Used\"": \""$USED\"",""
+        echo ""      \""Available\"": \""$AVAILABLE\"",""
+        echo ""      \""UsePercent\"": \""$USE_PERCENT\"",""
+        echo ""      \""Mountpoint\"": \""$MOUNTPOINT\""""
+        echo ""    }""
+    fi
+done
+echo '],'
+
+# Network Configuration
+echo '""NetworkConfig"": {'
+COMPUTER_NAME=$(scutil --get ComputerName 2>/dev/null || echo ""unknown"")
+LOCAL_HOSTNAME=$(scutil --get LocalHostName 2>/dev/null || echo ""unknown"")
+PRIMARY_INTERFACE=$(route get default | grep interface | awk '{print $2}')
+PRIMARY_IP=$(ifconfig ""$PRIMARY_INTERFACE"" 2>/dev/null | grep 'inet ' | awk '{print $2}')
+
+echo ""  \""ComputerName\"": \""$COMPUTER_NAME\"",""
+echo ""  \""LocalHostName\"": \""$LOCAL_HOSTNAME\"",""
+echo ""  \""PrimaryInterface\"": \""$PRIMARY_INTERFACE\"",""
+echo ""  \""PrimaryIPAddress\"": \""$PRIMARY_IP\""""
+echo '},'
+
+# System Preferences
+echo '""SystemPreferences"": {'
+TIMEZONE=$(systemsetup -gettimezone 2>/dev/null | awk -F': ' '{print $2}')
+SLEEP_SETTINGS=$(pmset -g | grep -E ""sleep|standby"" | head -3 | tr '\n' '; ')
+ENERGY_SAVER=$(pmset -g ps | head -1)
+
+echo ""  \""Timezone\"": \""$TIMEZONE\"",""
+echo ""  \""SleepSettings\"": \""$SLEEP_SETTINGS\"",""
+echo ""  \""PowerSource\"": \""$ENERGY_SAVER\""""
+echo '},'
+
+# Boot Information
+echo '""BootInfo"": {'
+BOOT_VOLUME=$(diskutil info / | grep ""Volume Name"" | awk -F': ' '{print $2}' | sed 's/^[ \t]*//')
+BOOT_TIME=$(sysctl kern.boottime | awk '{print $5}' | tr -d ',')
+SYSTEM_UPTIME=$(uptime | awk '{print $3"" ""$4}' | tr -d ',')
+
+echo ""  \""BootVolume\"": \""$BOOT_VOLUME\"",""
+echo ""  \""BootTime\"": \""$BOOT_TIME\"",""
+echo ""  \""SystemUptime\"": \""$SYSTEM_UPTIME\""""
+echo '},'
+
+# System Performance
+echo '""SystemPerformance"": {'
+CPU_USAGE=$(ps aux | awk '{sum += $3} END {print sum""%""}')
+MEMORY_PRESSURE=$(memory_pressure | grep ""System-wide memory free percentage"" | awk '{print $5}' | tr -d '%')
+LOAD_AVERAGE=$(uptime | awk -F'load averages:' '{print $2}' | tr -d ' ')
+
+echo ""  \""CPUUsage\"": \""$CPU_USAGE\"",""
+echo ""  \""MemoryFreePercent\"": \""$MEMORY_PRESSURE\"",""
+echo ""  \""LoadAverage\"": \""$LOAD_AVERAGE\""""
+echo '},'
+
+# System Configuration
+echo '""SystemConfiguration"": {'
+SIP_STATUS=$(csrutil status 2>/dev/null | awk '{print $5}' | tr -d '.' || echo ""unknown"")
+GATEKEEPER_STATUS=$(spctl --status 2>/dev/null | awk '{print $2}' || echo ""unknown"")
+FILEVAULT_STATUS=$(fdesetup status 2>/dev/null || echo ""unknown"")
+
+echo ""  \""SIPStatus\"": \""$SIP_STATUS\"",""
+echo ""  \""GatekeeperStatus\"": \""$GATEKEEPER_STATUS\"",""
+echo ""  \""FileVaultStatus\"": \""$FILEVAULT_STATUS\""""
+echo '},'
+
+# Add metadata
+echo '""DiscoveryTimestamp"": ""'$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)'"",""ScriptVersion"": ""1.0.0"",'
+echo '""ComputerName"": ""'$(hostname)'"",""Platform"": ""macOS""'
+
+echo '}'",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", true },
+            { "extractFields", new[] { "SystemOverview", "HardwareInfo", "Environment", "DiskInfo", "NetworkConfig", "SystemConfiguration" } },
+            { "validateRequired", new[] { "ComputerName", "DiscoveryTimestamp", "SystemOverview.OSVersion" } }
+        },
+        Tags = new List<string> { "system", "discovery", "macos", "hardware", "environment", "configuration", "bash" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
+    private DiscoveryScriptTemplate CreateMacOSUserAccountDiscoveryScript() => new()
+    {
+        Name = "macOS User Account Discovery - Bash",
+        Description = "Comprehensive discovery of macOS user accounts, groups, and login information",
+        Category = "User Account Discovery",
+        Type = "bash",
+        TargetOS = "macos",
+        EstimatedRunTimeSeconds = 25,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"#!/bin/bash
+# macOS User Account Discovery Script
+# Outputs comprehensive user account information in JSON format
+
+set -e
+
+echo '{'
+
+# User Accounts
+echo '""UserAccounts"": ['
+FIRST_USER=true
+if command -v dscl >/dev/null 2>&1; then
+    dscl . list /Users | grep -v '^_' | while IFS= read -r username; do
+        if [ ""$FIRST_USER"" = false ]; then
+            echo ','
+        fi
+        FIRST_USER=false
+        
+        USER_ID=$(dscl . read /Users/""$username"" UniqueID 2>/dev/null | awk '{print $2}')
+        REAL_NAME=$(dscl . read /Users/""$username"" RealName 2>/dev/null | cut -d':' -f2 | sed 's/^ *//' | tr -d '\n')
+        USER_SHELL=$(dscl . read /Users/""$username"" UserShell 2>/dev/null | awk '{print $2}')
+        HOME_DIR=$(dscl . read /Users/""$username"" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+        GENERATED_UID=$(dscl . read /Users/""$username"" GeneratedUID 2>/dev/null | awk '{print $2}')
+        
+        # Check if user is admin
+        IS_ADMIN=""false""
+        if dscl . read /Groups/admin GroupMembership 2>/dev/null | grep -q ""$username""; then
+            IS_ADMIN=""true""
+        fi
+        
+        # Check if user can login
+        CAN_LOGIN=""true""
+        if [[ ""$USER_SHELL"" == ""/usr/bin/false"" ]] || [[ ""$USER_SHELL"" == ""/dev/null"" ]]; then
+            CAN_LOGIN=""false""
+        fi
+        
+        # Get last login time if available
+        LAST_LOGIN=""unknown""
+        if command -v last >/dev/null 2>&1; then
+            LAST_LOGIN=$(last ""$username"" | head -1 | awk '{print $4"" ""$5"" ""$6"" ""$7}' 2>/dev/null || echo ""unknown"")
+        fi
+        
+        echo ""    {""
+        echo ""      \""Username\"": \""$username\"",""
+        echo ""      \""UserID\"": $USER_ID,""
+        echo ""      \""RealName\"": \""$REAL_NAME\"",""
+        echo ""      \""Shell\"": \""$USER_SHELL\"",""
+        echo ""      \""HomeDirectory\"": \""$HOME_DIR\"",""
+        echo ""      \""GeneratedUID\"": \""$GENERATED_UID\"",""
+        echo ""      \""IsAdmin\"": $IS_ADMIN,""
+        echo ""      \""CanLogin\"": $CAN_LOGIN,""
+        echo ""      \""LastLogin\"": \""$LAST_LOGIN\""""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# Groups
+echo '""Groups"": ['
+FIRST_GROUP=true
+if command -v dscl >/dev/null 2>&1; then
+    dscl . list /Groups | head -20 | while IFS= read -r groupname; do
+        if [ ""$FIRST_GROUP"" = false ]; then
+            echo ','
+        fi
+        FIRST_GROUP=false
+        
+        GROUP_ID=$(dscl . read /Groups/""$groupname"" PrimaryGroupID 2>/dev/null | awk '{print $2}')
+        REAL_NAME=$(dscl . read /Groups/""$groupname"" RealName 2>/dev/null | cut -d':' -f2 | sed 's/^ *//' | tr -d '\n')
+        MEMBERS=$(dscl . read /Groups/""$groupname"" GroupMembership 2>/dev/null | cut -d':' -f2 | sed 's/^ *//' | tr '\n' ',' | sed 's/,$//')
+        
+        echo ""    {""
+        echo ""      \""GroupName\"": \""$groupname\"",""
+        echo ""      \""GroupID\"": $GROUP_ID,""
+        echo ""      \""RealName\"": \""$REAL_NAME\"",""
+        echo ""      \""Members\"": \""$MEMBERS\""""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# Current User Information
+echo '""CurrentUser"": {'
+CURRENT_USER=$(whoami)
+CURRENT_UID=$(id -u)
+CURRENT_GID=$(id -g)
+CURRENT_GROUPS=$(groups | tr ' ' ',')
+CURRENT_HOME=""$HOME""
+CURRENT_SHELL=""$SHELL""
+
+echo ""  \""Username\"": \""$CURRENT_USER\"",""
+echo ""  \""UID\"": $CURRENT_UID,""
+echo ""  \""GID\"": $CURRENT_GID,""
+echo ""  \""Groups\"": \""$CURRENT_GROUPS\"",""
+echo ""  \""HomeDirectory\"": \""$CURRENT_HOME\"",""
+echo ""  \""Shell\"": \""$CURRENT_SHELL\""""
+echo '},'
+
+# Logged In Users
+echo '""LoggedInUsers"": ['
+FIRST_LOGIN=true
+if command -v who >/dev/null 2>&1; then
+    who | while IFS= read -r line; do
+        if [ ""$FIRST_LOGIN"" = false ]; then
+            echo ','
+        fi
+        FIRST_LOGIN=false
+        
+        USERNAME=$(echo ""$line"" | awk '{print $1}')
+        TERMINAL=$(echo ""$line"" | awk '{print $2}')
+        LOGIN_TIME=$(echo ""$line"" | awk '{print $3"" ""$4}')
+        
+        echo ""    {""
+        echo ""      \""Username\"": \""$USERNAME\"",""
+        echo ""      \""Terminal\"": \""$TERMINAL\"",""
+        echo ""      \""LoginTime\"": \""$LOGIN_TIME\""""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# Fast User Switching Information
+echo '""FastUserSwitching"": {'
+if command -v defaults >/dev/null 2>&1; then
+    FUS_ENABLED=$(defaults read /Library/Preferences/com.apple.loginwindow.plist MultipleSessionEnabled 2>/dev/null || echo ""false"")
+    DISPLAY_USERS=$(defaults read /Library/Preferences/com.apple.loginwindow.plist SHOWOTHERUSERS_MANAGED 2>/dev/null || echo ""unknown"")
+    
+    echo ""  \""Enabled\"": $FUS_ENABLED,""
+    echo ""  \""ShowOtherUsers\"": \""$DISPLAY_USERS\""""
+else
+    echo '""  \""Error\"": \""Unable to read Fast User Switching settings\""""'
+fi
+echo '},'
+
+# Login Items (for current user)
+echo '""LoginItems"": ['
+FIRST_LOGIN_ITEM=true
+if command -v osascript >/dev/null 2>&1; then
+    osascript -e 'tell application ""System Events"" to get the name of every login item' 2>/dev/null | tr ',' '\n' | while IFS= read -r item; do
+        if [ ""$item"" != """" ]; then
+            if [ ""$FIRST_LOGIN_ITEM"" = false ]; then
+                echo ','
+            fi
+            FIRST_LOGIN_ITEM=false
+            
+            ITEM_NAME=$(echo ""$item"" | sed 's/^[ \t]*//' | sed 's/[ \t]*$//')
+            
+            echo ""    {""
+            echo ""      \""Name\"": \""$ITEM_NAME\"",""
+            echo ""      \""Type\"": \""Login Item\""""
+            echo ""    }""
+        fi
+    done
+fi
+echo '],'
+
+# SSH Keys (for current user)
+echo '""SSHKeys"": ['
+FIRST_KEY=true
+if [ -d ""$HOME/.ssh"" ]; then
+    for key_file in ""$HOME/.ssh""/*.pub; do
+        if [ -f ""$key_file"" ]; then
+            if [ ""$FIRST_KEY"" = false ]; then
+                echo ','
+            fi
+            FIRST_KEY=false
+            
+            KEY_TYPE=$(head -1 ""$key_file"" | awk '{print $1}')
+            KEY_COMMENT=$(head -1 ""$key_file"" | awk '{print $3}')
+            KEY_FILENAME=$(basename ""$key_file"")
+            KEY_SIZE=$(ssh-keygen -lf ""$key_file"" 2>/dev/null | awk '{print $1}')
+            
+            echo ""    {""
+            echo ""      \""Filename\"": \""$KEY_FILENAME\"",""
+            echo ""      \""Type\"": \""$KEY_TYPE\"",""
+            echo ""      \""Size\"": \""$KEY_SIZE\"",""
+            echo ""      \""Comment\"": \""$KEY_COMMENT\""""
+            echo ""    }""
+        fi
+    done
+fi
+echo '],'
+
+# User Statistics
+TOTAL_USERS=0
+ADMIN_USERS=0
+SYSTEM_USERS=0
+REGULAR_USERS=0
+CURRENTLY_LOGGED_IN=0
+
+if command -v dscl >/dev/null 2>&1; then
+    TOTAL_USERS=$(dscl . list /Users | grep -v '^_' | wc -l | tr -d ' ')
+    ADMIN_USERS=$(dscl . read /Groups/admin GroupMembership 2>/dev/null | wc -w | tr -d ' ')
+    SYSTEM_USERS=$(dscl . list /Users | grep '^_' | wc -l | tr -d ' ')
+    REGULAR_USERS=$((TOTAL_USERS - ADMIN_USERS))
+fi
+
+if command -v who >/dev/null 2>&1; then
+    CURRENTLY_LOGGED_IN=$(who | wc -l | tr -d ' ')
+fi
+
+echo '""UserStatistics"": {'
+echo ""  \""TotalUsers\"": $TOTAL_USERS,""
+echo ""  \""AdminUsers\"": $ADMIN_USERS,""
+echo ""  \""RegularUsers\"": $REGULAR_USERS,""
+echo ""  \""SystemUsers\"": $SYSTEM_USERS,""
+echo ""  \""CurrentlyLoggedIn\"": $CURRENTLY_LOGGED_IN""
+echo '},'
+
+# Add metadata
+echo '""DiscoveryTimestamp"": ""'$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)'"",""ScriptVersion"": ""1.0.0"",'
+echo '""ComputerName"": ""'$(hostname)'"",""Platform"": ""macOS""'
+
+echo '}'",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", true },
+            { "extractFields", new[] { "UserAccounts", "Groups", "CurrentUser", "LoggedInUsers", "UserStatistics" } },
+            { "validateRequired", new[] { "ComputerName", "DiscoveryTimestamp", "UserStatistics.TotalUsers" } }
+        },
+        Tags = new List<string> { "users", "discovery", "macos", "accounts", "groups", "login", "ssh", "bash" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST", "PCI DSS" }
+    };
+
+    private DiscoveryScriptTemplate CreateMacOSPerformanceDiscoveryScript() => new()
+    {
+        Name = "macOS Performance Discovery - Bash",
+        Description = "Comprehensive performance monitoring including CPU, memory, disk, and network statistics for macOS",
+        Category = "Performance Discovery",
+        Type = "bash",
+        TargetOS = "macos",
+        EstimatedRunTimeSeconds = 35,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"#!/bin/bash
+# macOS Performance Discovery Script
+# Outputs comprehensive performance metrics in JSON format
+
+set -e
+
+echo '{'
+
+# CPU Performance
+echo '""CPUPerformance"": {'
+CPU_COUNT=$(sysctl -n hw.ncpu)
+CPU_BRAND=$(sysctl -n machdep.cpu.brand_string)
+CPU_FREQ=$(sysctl -n hw.cpufrequency 2>/dev/null || echo ""unknown"")
+
+# Get CPU usage using iostat (1 second sample)
+if command -v iostat >/dev/null 2>&1; then
+    CPU_STATS=$(iostat -c 1 2 | tail -1)
+    USER_CPU=$(echo ""$CPU_STATS"" | awk '{print $1}')
+    SYSTEM_CPU=$(echo ""$CPU_STATS"" | awk '{print $2}')
+    IDLE_CPU=$(echo ""$CPU_STATS"" | awk '{print $3}')
+else
+    USER_CPU=""unknown""
+    SYSTEM_CPU=""unknown""
+    IDLE_CPU=""unknown""
+fi
+
+# Load averages
+LOAD_AVG=$(uptime | awk -F'load averages:' '{print $2}' | tr -d ' ')
+LOAD_1MIN=$(echo ""$LOAD_AVG"" | cut -d',' -f1)
+LOAD_5MIN=$(echo ""$LOAD_AVG"" | cut -d',' -f2)
+LOAD_15MIN=$(echo ""$LOAD_AVG"" | cut -d',' -f3)
+
+echo ""  \""CPUCount\"": $CPU_COUNT,""
+echo ""  \""CPUBrand\"": \""$CPU_BRAND\"",""
+echo ""  \""CPUFrequency\"": \""$CPU_FREQ\"",""
+echo ""  \""UserCPUPercent\"": \""$USER_CPU\"",""
+echo ""  \""SystemCPUPercent\"": \""$SYSTEM_CPU\"",""
+echo ""  \""IdleCPUPercent\"": \""$IDLE_CPU\"",""
+echo ""  \""Load1Min\"": \""$LOAD_1MIN\"",""
+echo ""  \""Load5Min\"": \""$LOAD_5MIN\"",""
+echo ""  \""Load15Min\"": \""$LOAD_15MIN\""""
+echo '},'
+
+# Memory Performance
+echo '""MemoryPerformance"": {'
+PHYSICAL_MEMORY=$(sysctl -n hw.memsize)
+PHYSICAL_MEMORY_GB=$(echo ""scale=2; $PHYSICAL_MEMORY/1024/1024/1024"" | bc 2>/dev/null || echo ""0"")
+
+if command -v vm_stat >/dev/null 2>&1; then
+    VM_STAT=$(vm_stat)
+    
+    PAGE_SIZE=$(vm_stat | grep ""page size"" | awk '{print $8}')
+    PAGES_FREE=$(echo ""$VM_STAT"" | grep ""Pages free"" | awk '{print $3}' | tr -d '.')
+    PAGES_ACTIVE=$(echo ""$VM_STAT"" | grep ""Pages active"" | awk '{print $3}' | tr -d '.')
+    PAGES_INACTIVE=$(echo ""$VM_STAT"" | grep ""Pages inactive"" | awk '{print $3}' | tr -d '.')
+    PAGES_WIRED=$(echo ""$VM_STAT"" | grep ""Pages wired down"" | awk '{print $4}' | tr -d '.')
+    PAGES_COMPRESSED=$(echo ""$VM_STAT"" | grep ""Pages stored in compressor"" | awk '{print $5}' | tr -d '.')
+    PAGES_SWAPINS=$(echo ""$VM_STAT"" | grep ""Swapins"" | awk '{print $2}' | tr -d '.')
+    PAGES_SWAPOUTS=$(echo ""$VM_STAT"" | grep ""Swapouts"" | awk '{print $2}' | tr -d '.')
+    
+    # Calculate memory in bytes and convert to GB
+    if [ ""$PAGE_SIZE"" != """" ] && [ ""$PAGES_FREE"" != """" ]; then
+        FREE_BYTES=$((PAGES_FREE * PAGE_SIZE))
+        ACTIVE_BYTES=$((PAGES_ACTIVE * PAGE_SIZE))
+        INACTIVE_BYTES=$((PAGES_INACTIVE * PAGE_SIZE))
+        WIRED_BYTES=$((PAGES_WIRED * PAGE_SIZE))
+        COMPRESSED_BYTES=$((PAGES_COMPRESSED * PAGE_SIZE))
+        
+        FREE_GB=$(echo ""scale=2; $FREE_BYTES/1024/1024/1024"" | bc 2>/dev/null || echo ""0"")
+        ACTIVE_GB=$(echo ""scale=2; $ACTIVE_BYTES/1024/1024/1024"" | bc 2>/dev/null || echo ""0"")
+        INACTIVE_GB=$(echo ""scale=2; $INACTIVE_BYTES/1024/1024/1024"" | bc 2>/dev/null || echo ""0"")
+        WIRED_GB=$(echo ""scale=2; $WIRED_BYTES/1024/1024/1024"" | bc 2>/dev/null || echo ""0"")
+        COMPRESSED_GB=$(echo ""scale=2; $COMPRESSED_BYTES/1024/1024/1024"" | bc 2>/dev/null || echo ""0"")
+        
+        # Calculate memory pressure
+        USED_MEMORY=$((ACTIVE_BYTES + INACTIVE_BYTES + WIRED_BYTES))
+        MEMORY_PRESSURE=$(echo ""scale=2; $USED_MEMORY * 100 / $PHYSICAL_MEMORY"" | bc 2>/dev/null || echo ""0"")
+        
+        echo ""  \""PhysicalMemoryGB\"": $PHYSICAL_MEMORY_GB,""
+        echo ""  \""FreeMemoryGB\"": $FREE_GB,""
+        echo ""  \""ActiveMemoryGB\"": $ACTIVE_GB,""
+        echo ""  \""InactiveMemoryGB\"": $INACTIVE_GB,""
+        echo ""  \""WiredMemoryGB\"": $WIRED_GB,""
+        echo ""  \""CompressedMemoryGB\"": $COMPRESSED_GB,""
+        echo ""  \""MemoryPressurePercent\"": $MEMORY_PRESSURE,""
+        echo ""  \""SwapIns\"": $PAGES_SWAPINS,""
+        echo ""  \""SwapOuts\"": $PAGES_SWAPOUTS""
+    else
+        echo '""  \""Error\"": \""Unable to calculate memory statistics\""""'
+    fi
+else
+    echo '""  \""Error\"": \""vm_stat not available\""""'
+fi
+echo '},'
+
+# Disk I/O Performance
+echo '""DiskIOPerformance"": ['
+FIRST_DISK=true
+if command -v iostat >/dev/null 2>&1; then
+    iostat -d 1 2 | tail -n +3 | grep -E '^disk[0-9]' | while IFS= read -r line; do
+        if [ ""$FIRST_DISK"" = false ]; then
+            echo ','
+        fi
+        FIRST_DISK=false
+        
+        DEVICE=$(echo ""$line"" | awk '{print $1}')
+        KB_READ=$(echo ""$line"" | awk '{print $2}')
+        KB_WRITTEN=$(echo ""$line"" | awk '{print $3}')
+        
+        echo ""    {""
+        echo ""      \""Device\"": \""$DEVICE\"",""
+        echo ""      \""KBytesRead\"": \""$KB_READ\"",""
+        echo ""      \""KBytesWritten\"": \""$KB_WRITTEN\""""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# Disk Space Usage
+echo '""DiskSpaceUsage"": ['
+FIRST_MOUNT=true
+df -h | tail -n +2 | while IFS= read -r line; do
+    if [[ ""$line"" =~ ^/dev/ ]]; then
+        if [ ""$FIRST_MOUNT"" = false ]; then
+            echo ','
+        fi
+        FIRST_MOUNT=false
+        
+        FILESYSTEM=$(echo ""$line"" | awk '{print $1}')
+        SIZE=$(echo ""$line"" | awk '{print $2}')
+        USED=$(echo ""$line"" | awk '{print $3}')
+        AVAILABLE=$(echo ""$line"" | awk '{print $4}')
+        USE_PERCENT=$(echo ""$line"" | awk '{print $5}' | tr -d '%')
+        MOUNTPOINT=$(echo ""$line"" | awk '{print $9}')
+        
+        echo ""    {""
+        echo ""      \""Filesystem\"": \""$FILESYSTEM\"",""
+        echo ""      \""Size\"": \""$SIZE\"",""
+        echo ""      \""Used\"": \""$USED\"",""
+        echo ""      \""Available\"": \""$AVAILABLE\"",""
+        echo ""      \""UsePercent\"": $USE_PERCENT,""
+        echo ""      \""Mountpoint\"": \""$MOUNTPOINT\""""
+        echo ""    }""
+    fi
+done
+echo '],'
+
+# Network Performance
+echo '""NetworkPerformance"": ['
+FIRST_NET=true
+if command -v netstat >/dev/null 2>&1; then
+    netstat -i | tail -n +2 | grep -v lo0 | while IFS= read -r line; do
+        if [ ""$FIRST_NET"" = false ]; then
+            echo ','
+        fi
+        FIRST_NET=false
+        
+        INTERFACE=$(echo ""$line"" | awk '{print $1}')
+        MTU=$(echo ""$line"" | awk '{print $2}')
+        NETWORK=$(echo ""$line"" | awk '{print $3}')
+        ADDRESS=$(echo ""$line"" | awk '{print $4}')
+        IPKTS=$(echo ""$line"" | awk '{print $5}')
+        IERRS=$(echo ""$line"" | awk '{print $6}')
+        OPKTS=$(echo ""$line"" | awk '{print $7}')
+        OERRS=$(echo ""$line"" | awk '{print $8}')
+        COLLS=$(echo ""$line"" | awk '{print $9}')
+        
+        echo ""    {""
+        echo ""      \""Interface\"": \""$INTERFACE\"",""
+        echo ""      \""MTU\"": $MTU,""
+        echo ""      \""Network\"": \""$NETWORK\"",""
+        echo ""      \""Address\"": \""$ADDRESS\"",""
+        echo ""      \""InputPackets\"": $IPKTS,""
+        echo ""      \""InputErrors\"": $IERRS,""
+        echo ""      \""OutputPackets\"": $OPKTS,""
+        echo ""      \""OutputErrors\"": $OERRS,""
+        echo ""      \""Collisions\"": $COLLS""
+        echo ""    }""
+    done
+fi
+echo '],'
+
+# Top Processes by CPU
+echo '""TopProcessesByCPU"": ['
+FIRST_CPU_PROC=true
+ps aux | sort -k3 -nr | head -11 | tail -10 | while IFS= read -r line; do
+    if [ ""$FIRST_CPU_PROC"" = false ]; then
+        echo ','
+    fi
+    FIRST_CPU_PROC=false
+    
+    USER=$(echo ""$line"" | awk '{print $1}')
+    PID=$(echo ""$line"" | awk '{print $2}')
+    CPU=$(echo ""$line"" | awk '{print $3}')
+    MEM=$(echo ""$line"" | awk '{print $4}')
+    COMMAND=$(echo ""$line"" | awk '{print $11}' | sed 's/""/\\\\""/g')
+    
+    echo ""    {""
+    echo ""      \""User\"": \""$USER\"",""
+    echo ""      \""PID\"": $PID,""
+    echo ""      \""CPUPercent\"": \""$CPU\"",""
+    echo ""      \""MemoryPercent\"": \""$MEM\"",""
+    echo ""      \""Command\"": \""$COMMAND\""""
+    echo ""    }""
+done
+echo '],'
+
+# Top Processes by Memory
+echo '""TopProcessesByMemory"": ['
+FIRST_MEM_PROC=true
+ps aux | sort -k4 -nr | head -11 | tail -10 | while IFS= read -r line; do
+    if [ ""$FIRST_MEM_PROC"" = false ]; then
+        echo ','
+    fi
+    FIRST_MEM_PROC=false
+    
+    USER=$(echo ""$line"" | awk '{print $1}')
+    PID=$(echo ""$line"" | awk '{print $2}')
+    CPU=$(echo ""$line"" | awk '{print $3}')
+    MEM=$(echo ""$line"" | awk '{print $4}')
+    RSS=$(echo ""$line"" | awk '{print $6}')
+    COMMAND=$(echo ""$line"" | awk '{print $11}' | sed 's/""/\\\\""/g')
+    
+    RSS_MB=$(echo ""scale=2; $RSS/1024"" | bc 2>/dev/null || echo ""0"")
+    
+    echo ""    {""
+    echo ""      \""User\"": \""$USER\"",""
+    echo ""      \""PID\"": $PID,""
+    echo ""      \""CPUPercent\"": \""$CPU\"",""
+    echo ""      \""MemoryPercent\"": \""$MEM\"",""
+    echo ""      \""ResidentMemoryMB\"": $RSS_MB,""
+    echo ""      \""Command\"": \""$COMMAND\""""
+    echo ""    }""
+done
+echo '],'
+
+# System Performance Summary
+UPTIME_INFO=$(uptime)
+BOOT_TIME=$(sysctl kern.boottime | awk '{print $5}' | tr -d ',')
+TOTAL_PROCESSES=$(ps aux | wc -l | tr -d ' ')
+
+echo '""PerformanceSummary"": {'
+echo ""  \""UptimeInfo\"": \""$UPTIME_INFO\"",""
+echo ""  \""BootTime\"": \""$BOOT_TIME\"",""
+echo ""  \""TotalProcesses\"": $TOTAL_PROCESSES,""
+echo ""  \""SampleDuration\"": ""1-2 seconds\""""
+echo '},'
+
+# Add metadata
+echo '""DiscoveryTimestamp"": ""'$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)'"",""ScriptVersion"": ""1.0.0"",'
+echo '""ComputerName"": ""'$(hostname)'"",""Platform"": ""macOS""'
+
+echo '}'",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", true },
+            { "extractFields", new[] { "CPUPerformance", "MemoryPerformance", "DiskIOPerformance", "NetworkPerformance", "TopProcessesByCPU" } },
+            { "validateRequired", new[] { "ComputerName", "DiscoveryTimestamp", "PerformanceSummary.TotalProcesses" } }
+        },
+        Tags = new List<string> { "performance", "discovery", "macos", "cpu", "memory", "disk", "network", "monitoring", "bash" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
     private DiscoveryScriptTemplate CreatePythonSystemInfoDiscoveryScript() => throw new NotImplementedException();
     private DiscoveryScriptTemplate CreatePythonNetworkDiscoveryScript() => throw new NotImplementedException();
     private DiscoveryScriptTemplate CreatePythonProcessDiscoveryScript() => throw new NotImplementedException();
