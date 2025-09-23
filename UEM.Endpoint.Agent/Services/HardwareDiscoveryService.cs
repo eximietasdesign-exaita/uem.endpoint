@@ -1,3 +1,7 @@
+// Legacy HardwareDiscoveryService - Replaced by EnterpriseHardwareDiscoveryService
+// This file is kept for reference only
+
+/*
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -196,4 +200,5 @@ public class NetworkAdapterInfo
     public string? Name { get; set; }
     public string? Type { get; set; }
     public string? Speed { get; set; }
-}               
+}
+*/
