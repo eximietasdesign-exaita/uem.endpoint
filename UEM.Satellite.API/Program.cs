@@ -1,12 +1,75 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using UEM.Satellite.API.Data;
+using UEM.Satellite.API.Data.Repositories;
+using UEM.Satellite.API.Services;
+using UEM.Satellite.API.Store;
+using Serilog;
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure Serilog
+builder.Host.UseSerilog((context, configuration) =>
+{
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .WriteTo.Console()
+        .WriteTo.File("logs/satellite-api-.log", rollingInterval: RollingInterval.Day)
+        .Enrich.FromLogContext();
+});
 
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new() { Title = "UEM Satellite API", Version = "v1" });
+    c.SwaggerDoc("v1", new() { 
+        Title = "UEM Satellite API", 
+        Version = "v1",
+        Description = "Enterprise-grade Unified Endpoint Management Satellite API"
+    });
+    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme",
+        Name = "Authorization",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey
+    });
 });
+
+// Database configuration
+var connectionString = builder.Configuration.GetConnectionString("Postgres") 
+    ?? Environment.GetEnvironmentVariable("DATABASE_URL") 
+    ?? throw new InvalidOperationException("Database connection string not found");
+
+// Database repositories with Dapper
+builder.Services.AddScoped<IAgentRepository, AgentRepository>();
+builder.Services.AddScoped<IHardwareRepository, HardwareRepository>();
+builder.Services.AddScoped<ISoftwareRepository, SoftwareRepository>();
+builder.Services.AddScoped<IProcessRepository, ProcessRepository>();
+builder.Services.AddScoped<INetworkRepository, NetworkRepository>();
+builder.Services.AddScoped<IEnhancedHeartbeatRepository, EnhancedHeartbeatRepository>();
+
+// Agent simulation service for testing
+builder.Services.AddHostedService<UEM.Satellite.API.Services.AgentSimulationService>();
+
+// Dapper factory for legacy repository compatibility
+builder.Services.AddSingleton<IDbFactory>(provider => new DbFactory(builder.Configuration));
+
+// Authentication
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SecretKey"] ?? "your-super-secret-jwt-key-here")),
+            ValidateIssuer = false,
+            ValidateAudience = false
+        };
+    });
 
 // CORS for UI
 builder.Services.AddCors(opt => {
@@ -16,24 +79,60 @@ builder.Services.AddCors(opt => {
         .AllowAnyMethod());
 });
 
+// Register services
+builder.Services.AddScoped<AgentRegistry>();
+builder.Services.AddScoped<TokenService>();
+builder.Services.AddScoped<HeartbeatRepository>();
+builder.Services.AddScoped<AgentStore>();
+
+// Health checks
+builder.Services.AddHealthChecks();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-app.UseSwagger();
-app.UseSwaggerUI(c => 
+if (app.Environment.IsDevelopment())
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "UEM Satellite API v1");
-    c.RoutePrefix = "swagger";
-});
+    app.UseSwagger();
+    app.UseSwaggerUI(c => 
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "UEM Satellite API v1");
+        c.RoutePrefix = "swagger";
+    });
+}
 
+app.UseSerilogRequestLogging();
 app.UseCors("AllowAll");
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health");
 
 app.MapGet("/", () => "UEM Satellite API is running!");
-app.MapGet("/health", () => new { status = "healthy", timestamp = DateTime.UtcNow });
+app.MapGet("/api/status", () => new { 
+    status = "healthy", 
+    timestamp = DateTime.UtcNow,
+    version = "v1.0.0",
+    environment = app.Environment.EnvironmentName
+});
 
 // Additional Swagger endpoints
 app.MapGet("/swagger", () => Results.Redirect("/swagger/index.html"));
+
+// Initialize database tables through repositories if needed
+try
+{
+    using var scope = app.Services.CreateScope();
+    var agentRepo = scope.ServiceProvider.GetRequiredService<IAgentRepository>();
+    // Tables will be created on first use
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    logger.LogInformation("Database repositories initialized successfully");
+}
+catch (Exception ex)
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogWarning(ex, "Could not initialize database repositories, continuing with fallback storage");
+}
 
 app.Run();
