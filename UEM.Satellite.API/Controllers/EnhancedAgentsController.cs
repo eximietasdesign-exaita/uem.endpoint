@@ -208,4 +208,67 @@ public class EnhancedAgentsController : ControllerBase
             return StatusCode(500, "Failed to retrieve network interfaces");
         }
     }
+
+    [HttpPost("{agentId}/enterprise-discovery")]
+    public async Task<ActionResult> SubmitEnterpriseDiscovery(string agentId, [FromBody] EnterpriseDiscoveryData discoveryData, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Verify agent exists
+            if (!await _agentRepository.AgentExistsAsync(agentId, cancellationToken))
+            {
+                return NotFound($"Agent {agentId} not found");
+            }
+
+            // Store hardware discovery data
+            if (discoveryData.HardwareData?.Any() == true)
+            {
+                await _hardwareRepository.BulkUpsertHardwareAsync(agentId, discoveryData.HardwareData, cancellationToken);
+                _logger.LogInformation("Stored {Count} hardware components for agent {AgentId}", 
+                    discoveryData.HardwareData.Count, agentId);
+            }
+
+            // Store software discovery data
+            if (discoveryData.SoftwareData?.Any() == true)
+            {
+                await _softwareRepository.BulkUpsertSoftwareAsync(agentId, discoveryData.SoftwareData, cancellationToken);
+                _logger.LogInformation("Stored {Count} software items for agent {AgentId}", 
+                    discoveryData.SoftwareData.Count, agentId);
+            }
+
+            // Store network discovery data
+            if (discoveryData.NetworkData?.Any() == true)
+            {
+                await _networkRepository.BulkUpsertNetworkInterfacesAsync(agentId, discoveryData.NetworkData, cancellationToken);
+                _logger.LogInformation("Stored {Count} network interfaces for agent {AgentId}", 
+                    discoveryData.NetworkData.Count, agentId);
+            }
+
+            // Store security data (TPM, BitLocker, etc.)
+            if (discoveryData.SecurityData != null)
+            {
+                // TODO: Implement security repository and store security data
+                _logger.LogInformation("Received security data for agent {AgentId}: TPM={TpmEnabled}, BitLocker={BitLockerEnabled}", 
+                    agentId, discoveryData.SecurityData.TpmStatus?.IsEnabled, discoveryData.SecurityData.BitLockerStatus?.IsEnabled);
+            }
+
+            // Update agent's last discovery timestamp
+            await _agentRepository.UpdateAgentLastDiscoveryAsync(agentId, DateTime.UtcNow, cancellationToken);
+
+            _logger.LogInformation("Enterprise discovery data processed successfully for agent {AgentId}", agentId);
+            return Ok(new { 
+                Message = "Enterprise discovery data processed successfully",
+                Timestamp = DateTime.UtcNow,
+                HardwareCount = discoveryData.HardwareData?.Count ?? 0,
+                SoftwareCount = discoveryData.SoftwareData?.Count ?? 0,
+                NetworkCount = discoveryData.NetworkData?.Count ?? 0,
+                SecurityDataReceived = discoveryData.SecurityData != null
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process enterprise discovery data for agent {AgentId}", agentId);
+            return StatusCode(500, "Failed to process enterprise discovery data");
+        }
+    }
 }

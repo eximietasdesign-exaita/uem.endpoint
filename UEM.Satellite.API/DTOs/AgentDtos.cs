@@ -186,3 +186,66 @@ public record EndpointDetailsResponse(
     ProcessInfoResponse[] ActiveProcesses,
     NetworkInterfaceResponse[] NetworkInterfaces
 );
+
+// Security DTOs for enterprise discovery
+public record TpmStatusRequest(
+    bool IsEnabled,
+    bool IsActivated,
+    bool IsOwned,
+    string? TpmVersion,
+    string? ManufacturerVersion,
+    string? SpecVersion,
+    bool IsReadyInformation,
+    bool IsOwnedAllowed
+);
+
+public record BitLockerStatusRequest(
+    bool IsEnabled,
+    string? ProtectionStatus,
+    string? EncryptionMethod,
+    string[]? KeyProtectors,
+    double? EncryptionPercentage,
+    string? VolumeStatus,
+    string? ConversionStatus
+);
+
+public record SecurityPolicyRequest(
+    string PolicyName,
+    string PolicyValue,
+    string PolicyCategory,
+    string? Description,
+    bool IsCompliant
+);
+
+public record SecurityDataRequest(
+    TmpStatusRequest? TmpStatus,
+    BitLockerStatusRequest? BitLockerStatus,
+    SecurityPolicyRequest[]? SecurityPolicies,
+    string? WindowsDefenderStatus,
+    string? FirewallStatus,
+    string? AntivirusStatus,
+    bool? SecureBootEnabled,
+    string? UacLevel
+);
+
+// Enterprise Discovery DTO
+public record EnterpriseDiscoveryData(
+    HardwareComponentRequest[]? HardwareData,
+    SoftwareItemRequest[]? SoftwareData,
+    NetworkInterfaceRequest[]? NetworkData,
+    SecurityDataRequest? SecurityData,
+    DateTime DiscoveryTimestamp,
+    string? DiscoveryVersion
+);
+
+// Asset Summary for dashboard
+public record AssetSummaryResponse(
+    int TotalEndpoints,
+    int OnlineEndpoints,
+    int OfflineEndpoints,
+    int TotalHardwareComponents,
+    int TotalSoftwareItems,
+    int TotalProcesses,
+    int TotalNetworkInterfaces,
+    DateTime LastUpdated
+);
