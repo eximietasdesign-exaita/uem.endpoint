@@ -26,7 +26,7 @@ public class TenantsController : ControllerBase
             using var connection = _dbFactory.Open();
             var query = @"
                 SELECT t.id, t.name, t.display_name as displayName, t.description, t.domain_id as domainId,
-                       t.parent_tenant_id as parentTenantId, t.is_active as isActive, t.is_default as isDefault,
+                       t.type, t.status, t.is_active as isActive, t.created_by as createdBy,
                        t.created_at as createdAt, t.updated_at as updatedAt,
                        d.name as domainName, d.display_name as domainDisplayName
                 FROM uem_app_tenants t
@@ -60,7 +60,7 @@ public class TenantsController : ControllerBase
             using var connection = _dbFactory.Open();
             var tenant = await connection.QueryFirstOrDefaultAsync<object>(@"
                 SELECT t.id, t.name, t.display_name as displayName, t.description, t.domain_id as domainId,
-                       t.parent_tenant_id as parentTenantId, t.is_active as isActive, t.is_default as isDefault,
+                       t.type, t.status, t.is_active as isActive, t.created_by as createdBy,
                        t.created_at as createdAt, t.updated_at as updatedAt,
                        d.name as domainName, d.display_name as domainDisplayName
                 FROM uem_app_tenants t
@@ -88,13 +88,13 @@ public class TenantsController : ControllerBase
         {
             using var connection = _dbFactory.Open();
             var id = await connection.QuerySingleAsync<int>(@"
-                INSERT INTO uem_app_tenants (name, display_name, description, domain_id, parent_tenant_id, is_active, is_default)
-                VALUES (@Name, @DisplayName, @Description, @DomainId, @ParentTenantId, @IsActive, @IsDefault)
+                INSERT INTO uem_app_tenants (name, display_name, description, domain_id, type, status, is_active, created_by)
+                VALUES (@Name, @DisplayName, @Description, @DomainId, @Type, @Status, @IsActive, @CreatedBy)
                 RETURNING id", request);
             
             var tenant = await connection.QueryFirstAsync<object>(@"
                 SELECT t.id, t.name, t.display_name as displayName, t.description, t.domain_id as domainId,
-                       t.parent_tenant_id as parentTenantId, t.is_active as isActive, t.is_default as isDefault,
+                       t.type, t.status, t.is_active as isActive, t.created_by as createdBy,
                        t.created_at as createdAt, t.updated_at as updatedAt,
                        d.name as domainName, d.display_name as domainDisplayName
                 FROM uem_app_tenants t
@@ -119,14 +119,14 @@ public class TenantsController : ControllerBase
             await connection.ExecuteAsync(@"
                 UPDATE uem_app_tenants 
                 SET name = @Name, display_name = @DisplayName, description = @Description, 
-                    domain_id = @DomainId, parent_tenant_id = @ParentTenantId, 
-                    is_active = @IsActive, is_default = @IsDefault, updated_at = CURRENT_TIMESTAMP
+                    domain_id = @DomainId, type = @Type, status = @Status,
+                    is_active = @IsActive, updated_at = CURRENT_TIMESTAMP
                 WHERE id = @Id", new { Id = id, request.Name, request.DisplayName, request.Description, 
-                                     request.DomainId, request.ParentTenantId, request.IsActive, request.IsDefault });
+                                     request.DomainId, request.Type, request.Status, request.IsActive });
             
             var tenant = await connection.QueryFirstOrDefaultAsync<object>(@"
                 SELECT t.id, t.name, t.display_name as displayName, t.description, t.domain_id as domainId,
-                       t.parent_tenant_id as parentTenantId, t.is_active as isActive, t.is_default as isDefault,
+                       t.type, t.status, t.is_active as isActive, t.created_by as createdBy,
                        t.created_at as createdAt, t.updated_at as updatedAt,
                        d.name as domainName, d.display_name as domainDisplayName
                 FROM uem_app_tenants t
@@ -176,17 +176,18 @@ public record CreateTenantRequest(
     [Required] string DisplayName,
     string? Description,
     [Required] int DomainId,
-    int? ParentTenantId,
+    string? Type = "standard",
+    string? Status = "active",
     bool IsActive = true,
-    bool IsDefault = false
+    int? CreatedBy = null
 );
 
 public record UpdateTenantRequest(
-    string Name,
-    string DisplayName,
+    string? Name,
+    string? DisplayName,
     string? Description,
     int? DomainId,
-    int? ParentTenantId,
-    bool? IsActive,
-    bool? IsDefault
+    string? Type,
+    string? Status,
+    bool? IsActive
 );
