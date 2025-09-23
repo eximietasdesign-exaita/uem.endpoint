@@ -84,6 +84,7 @@ builder.Services.AddScoped<AgentRegistry>();
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<HeartbeatRepository>();
 builder.Services.AddScoped<AgentStore>();
+builder.Services.AddScoped<DiscoveryScriptPopulationService>();
 
 // Health checks
 builder.Services.AddHealthChecks();
