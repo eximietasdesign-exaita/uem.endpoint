@@ -46,32 +46,17 @@ export function DomainTenantProvider({ children }: DomainTenantProviderProps) {
     isLoading: tenantsLoading, 
     error: tenantsError 
   } = useQuery<Tenant[]>({
-    queryKey: [`/api/tenants/${selectedDomain?.id}`],
+    queryKey: ['/api/tenants', { domainId: selectedDomain?.id }],
+    queryFn: async () => {
+      const response = await fetch(`/api/tenants?domainId=${selectedDomain?.id}`);
+      if (!response.ok) throw new Error('Failed to fetch tenants');
+      return response.json();
+    },
     enabled: !!selectedDomain,
   });
 
   const isLoading = domainsLoading || tenantsLoading;
   const error = domainsError?.message || tenantsError?.message || null;
-
-  // Auto-select first domain and tenant when data loads
-  useEffect(() => {
-    if (Array.isArray(domains) && domains.length > 0 && !selectedDomain) {
-      const defaultDomain = domains.find((d: Domain) => d.name === 'global-enterprise') || domains[0];
-      setSelectedDomain(defaultDomain);
-    }
-  }, [domains, selectedDomain]);
-
-  useEffect(() => {
-    if (Array.isArray(tenants) && tenants.length > 0 && !selectedTenant) {
-      const defaultTenant = tenants.find((t: Tenant) => t.name === 'headquarters') || tenants[0];
-      setSelectedTenant(defaultTenant);
-    }
-  }, [tenants, selectedTenant]);
-
-  // Clear tenant selection when domain changes
-  useEffect(() => {
-    setSelectedTenant(null);
-  }, [selectedDomain]);
 
   // Store selections in localStorage for persistence
   useEffect(() => {
@@ -86,25 +71,60 @@ export function DomainTenantProvider({ children }: DomainTenantProviderProps) {
     }
   }, [selectedTenant]);
 
-  // Restore selections from localStorage
+  // Clear tenant selection when domain changes
   useEffect(() => {
+    if (selectedDomain) {
+      setSelectedTenant(null);
+    }
+  }, [selectedDomain?.id]);
+
+  // Initialize selections (restore from localStorage or auto-select defaults)
+  useEffect(() => {
+    if (!Array.isArray(domains) || domains.length === 0) return;
+    
+    // Don't override if already selected
+    if (selectedDomain) return;
+    
     const savedDomainId = localStorage.getItem('selectedDomainId');
+    let domainToSelect: Domain | null = null;
+    
+    if (savedDomainId) {
+      domainToSelect = domains.find((d: Domain) => d.id.toString() === savedDomainId) || null;
+    }
+    
+    // If no saved domain or saved domain not found, use default
+    if (!domainToSelect) {
+      domainToSelect = domains.find((d: Domain) => d.name === 'global-enterprise') || domains[0];
+    }
+    
+    if (domainToSelect) {
+      setSelectedDomain(domainToSelect);
+    }
+  }, [domains, selectedDomain]);
+
+  // Initialize tenant selection
+  useEffect(() => {
+    if (!Array.isArray(tenants) || tenants.length === 0) return;
+    
+    // Don't override if already selected
+    if (selectedTenant) return;
+    
     const savedTenantId = localStorage.getItem('selectedTenantId');
+    let tenantToSelect: Tenant | null = null;
     
-    if (savedDomainId && Array.isArray(domains) && domains.length > 0) {
-      const domain = domains.find((d: Domain) => d.id.toString() === savedDomainId);
-      if (domain && !selectedDomain) {
-        setSelectedDomain(domain);
-      }
+    if (savedTenantId) {
+      tenantToSelect = tenants.find((t: Tenant) => t.id.toString() === savedTenantId) || null;
     }
     
-    if (savedTenantId && Array.isArray(tenants) && tenants.length > 0) {
-      const tenant = tenants.find((t: Tenant) => t.id.toString() === savedTenantId);
-      if (tenant && !selectedTenant) {
-        setSelectedTenant(tenant);
-      }
+    // If no saved tenant or saved tenant not found, use default
+    if (!tenantToSelect) {
+      tenantToSelect = tenants.find((t: Tenant) => t.name === 'headquarters') || tenants[0];
     }
-  }, [domains, tenants, selectedDomain, selectedTenant]);
+    
+    if (tenantToSelect) {
+      setSelectedTenant(tenantToSelect);
+    }
+  }, [tenants, selectedTenant]);
 
   const value: DomainTenantContextType = {
     selectedDomain,
