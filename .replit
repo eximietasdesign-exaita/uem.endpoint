@@ -24,7 +24,7 @@ args = "ServiceBroker API"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "EndpointMaster"
+args = "UEM WebApp + API"
 
 [[workflows.workflow]]
 name = "Satellite API"
@@ -51,12 +51,12 @@ args = "cd UEM.ServiceBroker.API && dotnet run --no-launch-profile --urls \"http
 waitForPort = 8099
 
 [[workflows.workflow]]
-name = "EndpointMaster"
+name = "UEM WebApp + API"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd UEM.WebApp && npm run dev"
+args = "cd UEM.Satellite.API && dotnet run --no-launch-profile --urls \"http://0.0.0.0:5000\""
 waitForPort = 5000
 
 [workflows.workflow.metadata]
@@ -65,10 +65,6 @@ outputType = "webview"
 [[ports]]
 localPort = 5000
 externalPort = 80
-
-[[ports]]
-localPort = 8099
-externalPort = 8099
 
 [deployment]
 deploymentTarget = "autoscale"

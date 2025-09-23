@@ -9,10 +9,14 @@ async function throwIfResNotOk(res: Response) {
 
 // Get the API base URL - use Satellite API running on port 8000
 const getApiBaseUrl = () => {
-  const domain = import.meta.env.VITE_REPLIT_DOMAIN;
-  if (domain) {
-    return `https://${domain.replace('5000', '8000')}`;
+  if (typeof window !== 'undefined') {
+    // For browser environment, use window location to determine the host
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const port = '8000';
+    return `${protocol}//${hostname}:${port}`;
   }
+  // For Node.js environment (unlikely but safe)
   return 'http://localhost:8000';
 };
 

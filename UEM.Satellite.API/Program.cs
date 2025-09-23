@@ -106,10 +106,33 @@ app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Serve static files from built frontend
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(
+        Path.Combine(Directory.GetCurrentDirectory(), "../UEM.WebApp/dist/public")),
+    RequestPath = ""
+});
+
 app.MapControllers();
 app.MapHealthChecks("/health");
 
-app.MapGet("/", () => "UEM Satellite API is running!");
+// Serve index.html for SPA routes (everything that's not API or static files)
+app.MapFallback(async (HttpContext context) =>
+{
+    var indexPath = Path.Combine(Directory.GetCurrentDirectory(), "../UEM.WebApp/dist/public/index.html");
+    if (File.Exists(indexPath))
+    {
+        context.Response.ContentType = "text/html";
+        await context.Response.SendFileAsync(indexPath);
+    }
+    else
+    {
+        context.Response.StatusCode = 404;
+        await context.Response.WriteAsync("Frontend files not found. Please build the frontend first.");
+    }
+});
+
 app.MapGet("/api/status", () => new { 
     status = "healthy", 
     timestamp = DateTime.UtcNow,

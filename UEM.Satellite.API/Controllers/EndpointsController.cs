@@ -216,24 +216,24 @@ public record CreateEndpointRequest(
     [Required] string Name,
     [Required] string Hostname,
     [Required] string IpAddress,
-    string? MacAddress,
     [Required] string OperatingSystem,
-    string? OsVersion,
+    string? MacAddress = null,
+    string? OsVersion = null,
     string Status = "offline",
-    string? AgentVersion,
-    int? TenantId,
-    int? DomainId
+    string? AgentVersion = null,
+    int? TenantId = null,
+    int? DomainId = null
 );
 
 public record UpdateEndpointRequest(
-    string? Name,
-    string? Hostname,
-    string? IpAddress,
-    string? MacAddress,
-    string? OperatingSystem,
-    string? OsVersion,
-    string? Status,
-    string? AgentVersion,
-    int? TenantId,
-    int? DomainId
+    string? Name = null,
+    string? Hostname = null,
+    string? IpAddress = null,
+    string? MacAddress = null,
+    string? OperatingSystem = null,
+    string? OsVersion = null,
+    string? Status = null,
+    string? AgentVersion = null,
+    int? TenantId = null,
+    int? DomainId = null
 );
