@@ -18,7 +18,7 @@ export default defineConfig({
       },
       // ServiceBroker API on HTTP:
       '/broker': {
-        target: 'http://localhost:8001',
+        target: 'http://localhost:8099',
         changeOrigin: true,
         secure: false,
         rewrite: (p) => p.replace(/^\/broker/, '')

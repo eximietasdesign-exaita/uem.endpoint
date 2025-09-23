@@ -21,6 +21,10 @@ args = "Frontend"
 task = "workflow.run"
 args = "Satellite API"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "ServiceBroker API"
+
 [[workflows.workflow]]
 name = "Frontend"
 author = "agent"
@@ -45,6 +49,18 @@ task = "shell.exec"
 args = "cd UEM.Satellite.API && dotnet run --no-launch-profile --urls \"http://0.0.0.0:8000\""
 waitForPort = 8000
 
+[[workflows.workflow]]
+name = "ServiceBroker API"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd UEM.ServiceBroker.API && dotnet run --no-launch-profile --urls \"http://0.0.0.0:8099\""
+waitForPort = 8099
+
 [[ports]]
 localPort = 5000
 externalPort = 80
@@ -54,8 +70,8 @@ localPort = 8000
 externalPort = 8000
 
 [[ports]]
-localPort = 46163
-externalPort = 3000
+localPort = 8099
+externalPort = 8099
 
 [deployment]
 deploymentTarget = "autoscale"
