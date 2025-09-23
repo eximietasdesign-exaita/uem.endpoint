@@ -16,27 +16,15 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Frontend"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "Satellite API"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "ServiceBroker API"
 
-[[workflows.workflow]]
-name = "Frontend"
-author = "agent"
-
 [[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd UEM.Web.UI && npm run dev"
-waitForPort = 5000
-
-[workflows.workflow.metadata]
-outputType = "webview"
+task = "workflow.run"
+args = "EndpointMaster"
 
 [[workflows.workflow]]
 name = "Satellite API"
@@ -62,17 +50,29 @@ task = "shell.exec"
 args = "cd UEM.ServiceBroker.API && dotnet run --no-launch-profile --urls \"http://0.0.0.0:8099\""
 waitForPort = 8099
 
+[[workflows.workflow]]
+name = "EndpointMaster"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[ports]]
 localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 8000
-externalPort = 8000
-
-[[ports]]
 localPort = 8099
 externalPort = 8099
+
+[[ports]]
+localPort = 38579
+externalPort = 3000
 
 [deployment]
 deploymentTarget = "autoscale"
