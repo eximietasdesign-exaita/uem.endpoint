@@ -1,17 +1,18 @@
-# Dual Enterprise Management Platform
+# Unified Enterprise Management Platform
 
 ## Overview
-This workspace contains two comprehensive enterprise management systems:
+This is a comprehensive enterprise UEM (Unified Endpoint Management) solution with unified C# backend architecture.
 
-### 1. UEM (Unified Endpoint Management) - .NET Microservices
-A robust .NET-based enterprise UEM system with PostgreSQL backend, featuring:
-- **Satellite API** (port 8000): Endpoint data collection and agent management
+**ARCHITECTURAL MILESTONE (September 2025)**: Successfully migrated from dual-server architecture (TypeScript + C#) to unified C#-only backend, achieving complete system integration.
+
+### Unified UEM System - .NET + React Integration
+A robust enterprise UEM system with single-backend architecture, featuring:
+- **Satellite API** (port 8000): Endpoint data collection and agent management  
+- **Integrated Web UI** (port 5000): React frontend served directly by C# API
 - **ServiceBroker API** (port 8099): Centralized service coordination
 - **Agent simulation**: 3 active simulated endpoints sending real-time asset data
 - **Enterprise repositories**: Dapper-based data layer with graceful fallbacks
-
-### 2. EndpointMaster - TypeScript Full-Stack
-A modern TypeScript application providing a comprehensive dashboard for enterprise endpoint management and security monitoring. It enables real-time management of network endpoints, security compliance monitoring, and tracking of system activities. The project aims to deliver an enterprise-grade solution for managing IT assets, automating discovery, and orchestrating agent deployments, ensuring robust security and operational efficiency.
+- **Unified data flow**: React frontend → C# API → PostgreSQL → Real-time updates
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -26,21 +27,21 @@ Preferred communication style: Simple, everyday language.
 - **State Management**: TanStack Query for server state, Context API for global state (theme, language)
 
 ### Backend
-- **Framework**: Express.js with TypeScript
-- **Data Storage**: PostgreSQL with Drizzle ORM
-- **API**: RESTful API design
-- **Development**: Vite integration for HMR
+- **Framework**: ASP.NET Core 8 with C#
+- **Data Storage**: PostgreSQL with Dapper ORM
+- **API**: RESTful API design with comprehensive controllers
+- **Static Files**: Integrated serving of React build assets
 
 ### Database
-- **Type**: PostgreSQL (Neon Database serverless)
-- **ORM**: Drizzle ORM (schema-first with Zod validation)
-- **Management**: Drizzle Kit for migrations (`npm run db:push`), comprehensive seed data
+- **Type**: PostgreSQL (Enterprise-grade with 44+ tables)
+- **ORM**: Dapper with raw SQL for performance
+- **Management**: C# repositories with graceful fallbacks, comprehensive agent data
 
 ### Key Features & Components
 - **Data Models**: Users, Endpoints, Activities, System Status.
 - **UI Components**: Dashboard, Assets Management, Discovery, Scripts, Policies, Discovery Probes, User Management, Settings.
 - **Authentication & Authorization**: Role-based access control (administrator, operator, viewer) with session management ready for implementation.
-- **Data Flow**: Client (TanStack Query) -> API (Express, validation) -> Storage (PostgreSQL) -> Responses (JSON) -> UI Updates.
+- **Data Flow**: Client (TanStack Query) -> C# API Controllers -> Dapper/PostgreSQL -> JSON Responses -> React UI Updates.
 - **Multi-Tenancy**: Universal multi-tenant support across all application screens with data isolation and tenant-aware data fetching.
 - **Internationalization**: Comprehensive i18n framework supporting 7 languages (English, Spanish, French, German, Chinese, Japanese, Arabic) with RTL support.
 - **Asset Management**: Comprehensive asset inventory with dynamic custom fields, table designer, hierarchical views, and reporting.
