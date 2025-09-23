@@ -12,7 +12,15 @@ const getApiBaseUrl = (endpoint?: string) => {
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol;
     const hostname = window.location.hostname;
+    const port = window.location.port;
     
+    // In Replit environment, use the current hostname without specifying ports
+    // since all APIs are served through the main app on port 5000
+    if (hostname.includes('replit.dev') || hostname.includes('replit.app')) {
+      return `${protocol}//${hostname}${port ? ':' + port : ''}`;
+    }
+    
+    // For local development, use specific ports
     // Domain/tenant APIs are on the main web app (port 5000)
     if (endpoint && (endpoint.includes('/api/domains') || endpoint.includes('/api/tenants') || endpoint.includes('/api/users') || endpoint.includes('/api/dashboard') || endpoint.includes('/api/endpoints'))) {
       return `${protocol}//${hostname}:5000`;
