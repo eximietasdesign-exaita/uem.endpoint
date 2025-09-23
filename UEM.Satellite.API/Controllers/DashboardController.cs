@@ -23,45 +23,23 @@ public class DashboardController : ControllerBase
         try
         {
             using var connection = _dbFactory.Open();
-            var stats = await connection.QueryFirstOrDefaultAsync<object>(@"
+            // Calculate dashboard stats from actual data instead of a stats table
+            var stats = await connection.QueryFirstAsync<object>(@"
                 SELECT 
-                    total_endpoints as totalEndpoints,
-                    online_endpoints as onlineEndpoints,
-                    offline_endpoints as offlineEndpoints,
-                    critical_alerts as criticalAlerts,
-                    warning_alerts as warningAlerts,
-                    total_users as totalUsers,
-                    active_policies as activePolicies,
-                    pending_deployments as pendingDeployments,
-                    completed_discoveries as completedDiscoveries,
-                    failed_discoveries as failedDiscoveries,
-                    total_scripts as totalScripts,
-                    successful_script_executions as successfulScriptExecutions,
-                    last_updated as lastUpdated
-                FROM uem_app_dashboard_stats
-                ORDER BY last_updated DESC
-                LIMIT 1");
+                    (SELECT COUNT(*) FROM uem_app_endpoints) as totalEndpoints,
+                    (SELECT COUNT(*) FROM uem_app_endpoints WHERE status = 'online') as onlineEndpoints,
+                    (SELECT COUNT(*) FROM uem_app_endpoints WHERE status = 'offline') as offlineEndpoints,
+                    0 as criticalAlerts,
+                    0 as warningAlerts,
+                    (SELECT COUNT(*) FROM uem_app_users) as totalUsers,
+                    (SELECT COUNT(*) FROM uem_app_policies WHERE is_active = true) as activePolicies,
+                    0 as pendingDeployments,
+                    (SELECT COUNT(*) FROM uem_app_discovery_jobs WHERE status = 'completed') as completedDiscoveries,
+                    (SELECT COUNT(*) FROM uem_app_discovery_jobs WHERE status = 'failed') as failedDiscoveries,
+                    (SELECT COUNT(*) FROM uem_app_scripts) as totalScripts,
+                    0 as successfulScriptExecutions,
+                    NOW() as lastUpdated");
             
-            // If no stats exist, return default values
-            if (stats == null)
-            {
-                stats = new
-                {
-                    totalEndpoints = 0,
-                    onlineEndpoints = 0,
-                    offlineEndpoints = 0,
-                    criticalAlerts = 0,
-                    warningAlerts = 0,
-                    totalUsers = 0,
-                    activePolicies = 0,
-                    pendingDeployments = 0,
-                    completedDiscoveries = 0,
-                    failedDiscoveries = 0,
-                    totalScripts = 0,
-                    successfulScriptExecutions = 0,
-                    lastUpdated = DateTime.UtcNow
-                };
-            }
             
             return Ok(stats);
         }

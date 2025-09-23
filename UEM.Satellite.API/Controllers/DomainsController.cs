@@ -27,8 +27,8 @@ public class DomainsController : ControllerBase
             using var connection = _dbFactory.Open();
             var domains = await connection.QueryAsync<object>(@"
                 SELECT id, name, display_name as displayName, description, parent_domain_id as parentDomainId,
-                       is_active as isActive, is_default as isDefault, created_at as createdAt, 
-                       updated_at as updatedAt 
+                       is_active as isActive, created_at as createdAt, updated_at as updatedAt,
+                       status, type
                 FROM uem_app_domains 
                 ORDER BY display_name");
             
@@ -49,8 +49,8 @@ public class DomainsController : ControllerBase
             using var connection = _dbFactory.Open();
             var domain = await connection.QueryFirstOrDefaultAsync<object>(@"
                 SELECT id, name, display_name as displayName, description, parent_domain_id as parentDomainId,
-                       is_active as isActive, is_default as isDefault, created_at as createdAt, 
-                       updated_at as updatedAt 
+                       is_active as isActive, created_at as createdAt, updated_at as updatedAt,
+                       status, type
                 FROM uem_app_domains 
                 WHERE id = @Id", new { Id = id });
             
@@ -111,8 +111,8 @@ public class DomainsController : ControllerBase
             
             var domain = await connection.QueryFirstOrDefaultAsync<object>(@"
                 SELECT id, name, display_name as displayName, description, parent_domain_id as parentDomainId,
-                       is_active as isActive, is_default as isDefault, created_at as createdAt, 
-                       updated_at as updatedAt 
+                       is_active as isActive, created_at as createdAt, updated_at as updatedAt,
+                       status, type
                 FROM uem_app_domains 
                 WHERE id = @Id", new { Id = id });
             
