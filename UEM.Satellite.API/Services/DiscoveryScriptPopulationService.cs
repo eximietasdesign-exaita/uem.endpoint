@@ -4265,24 +4265,1089 @@ echo '}'",
         ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
     };
 
-    private DiscoveryScriptTemplate CreatePythonSystemInfoDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreatePythonNetworkDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreatePythonProcessDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreatePythonPerformanceDiscoveryScript() => throw new NotImplementedException();
+    // Python Cross-platform Scripts  
+    private DiscoveryScriptTemplate CreatePythonSystemInfoDiscoveryScript() => new()
+    {
+        Name = "Cross-Platform System Discovery - Python",
+        Description = "Comprehensive cross-platform system information discovery using Python standard libraries",
+        Category = "System Discovery",
+        Type = "python",
+        TargetOS = "cross-platform",
+        EstimatedRunTimeSeconds = 30,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"#!/usr/bin/env python3
+import json
+import platform
+import psutil
+import socket
+import os
+import sys
+from datetime import datetime, timezone
+
+def get_system_info():
+    """"""Collect comprehensive cross-platform system information""""""
+    
+    # System Information
+    system_info = {
+        ""hostname"": socket.gethostname(),
+        ""platform"": platform.platform(),
+        ""system"": platform.system(),
+        ""release"": platform.release(),
+        ""version"": platform.version(),
+        ""machine"": platform.machine(),
+        ""processor"": platform.processor(),
+        ""architecture"": platform.architecture(),
+        ""python_version"": platform.python_version(),
+        ""python_build"": platform.python_build(),
+    }
+    
+    # CPU Information
+    cpu_info = {
+        ""physical_cores"": psutil.cpu_count(logical=False),
+        ""total_cores"": psutil.cpu_count(logical=True),
+        ""max_frequency"": psutil.cpu_freq().max if psutil.cpu_freq() else None,
+        ""min_frequency"": psutil.cpu_freq().min if psutil.cpu_freq() else None,
+        ""current_frequency"": psutil.cpu_freq().current if psutil.cpu_freq() else None,
+        ""cpu_usage"": psutil.cpu_percent(interval=1, percpu=True),
+        ""cpu_usage_total"": psutil.cpu_percent(interval=1)
+    }
+    
+    # Memory Information
+    memory = psutil.virtual_memory()
+    swap = psutil.swap_memory()
+    memory_info = {
+        ""total"": memory.total,
+        ""available"": memory.available,
+        ""used"": memory.used,
+        ""free"": memory.free,
+        ""percentage"": memory.percent,
+        ""swap_total"": swap.total,
+        ""swap_used"": swap.used,
+        ""swap_free"": swap.free,
+        ""swap_percentage"": swap.percent
+    }
+    
+    # Disk Information
+    disk_info = []
+    for partition in psutil.disk_partitions():
+        try:
+            partition_usage = psutil.disk_usage(partition.mountpoint)
+            disk_info.append({
+                ""device"": partition.device,
+                ""mountpoint"": partition.mountpoint,
+                ""file_system"": partition.fstype,
+                ""total_size"": partition_usage.total,
+                ""used"": partition_usage.used,
+                ""free"": partition_usage.free,
+                ""percentage"": (partition_usage.used / partition_usage.total) * 100
+            })
+        except PermissionError:
+            continue
+    
+    # Network Information
+    network_info = []
+    for interface_name, interface_addresses in psutil.net_if_addrs().items():
+        interface_stats = psutil.net_if_stats()[interface_name]
+        interface_data = {
+            ""interface"": interface_name,
+            ""is_up"": interface_stats.isup,
+            ""speed"": interface_stats.speed,
+            ""mtu"": interface_stats.mtu,
+            ""addresses"": []
+        }
+        
+        for address in interface_addresses:
+            interface_data[""addresses""].append({
+                ""family"": str(address.family),
+                ""address"": address.address,
+                ""netmask"": address.netmask,
+                ""broadcast"": address.broadcast
+            })
+        
+        network_info.append(interface_data)
+    
+    # Boot Time
+    boot_time = datetime.fromtimestamp(psutil.boot_time(), tz=timezone.utc)
+    
+    # Environment Variables (selected)
+    env_info = {
+        ""PATH"": os.environ.get(""PATH"", """"),
+        ""HOME"": os.environ.get(""HOME"", os.environ.get(""USERPROFILE"", """")),
+        ""USER"": os.environ.get(""USER"", os.environ.get(""USERNAME"", """")),
+        ""SHELL"": os.environ.get(""SHELL"", """"),
+        ""LANG"": os.environ.get(""LANG"", """"),
+        ""TZ"": os.environ.get(""TZ"", """")
+    }
+    
+    # Compile all information
+    discovery_data = {
+        ""DiscoveryTimestamp"": datetime.now(timezone.utc).isoformat(),
+        ""ScriptVersion"": ""1.0.0"",
+        ""ComputerName"": socket.gethostname(),
+        ""Platform"": platform.system(),
+        ""SystemInfo"": system_info,
+        ""CPUInfo"": cpu_info,
+        ""MemoryInfo"": memory_info,
+        ""DiskInfo"": disk_info,
+        ""NetworkInfo"": network_info,
+        ""BootTime"": boot_time.isoformat(),
+        ""Environment"": env_info
+    }
+    
+    return discovery_data
+
+if __name__ == ""__main__"":
+    try:
+        data = get_system_info()
+        print(json.dumps(data, indent=2, default=str))
+    except Exception as e:
+        error_data = {
+            ""error"": str(e),
+            ""error_type"": type(e).__name__,
+            ""DiscoveryTimestamp"": datetime.now(timezone.utc).isoformat(),
+            ""ComputerName"": socket.gethostname(),
+            ""Platform"": platform.system()
+        }
+        print(json.dumps(error_data, indent=2))
+        sys.exit(1)",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", true },
+            { "extractFields", new[] { "SystemInfo", "CPUInfo", "MemoryInfo", "DiskInfo", "NetworkInfo" } },
+            { "validateRequired", new[] { "ComputerName", "DiscoveryTimestamp", "Platform" } }
+        },
+        Tags = new List<string> { "system", "discovery", "python", "cross-platform", "psutil", "hardware", "performance" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
+    private DiscoveryScriptTemplate CreatePythonNetworkDiscoveryScript() => new()
+    {
+        Name = "Cross-Platform Network Discovery - Python",
+        Description = "Comprehensive network discovery using Python psutil for cross-platform compatibility",
+        Category = "Network Discovery",
+        Type = "python",
+        TargetOS = "cross-platform",
+        EstimatedRunTimeSeconds = 25,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"#!/usr/bin/env python3
+import json
+import psutil
+import socket
+import platform
+from datetime import datetime, timezone
+
+def get_network_info():
+    """"""Collect comprehensive network information across platforms""""""
+    
+    # Network Interfaces
+    network_interfaces = []
+    if_addrs = psutil.net_if_addrs()
+    if_stats = psutil.net_if_stats()
+    
+    for interface_name, addresses in if_addrs.items():
+        stats = if_stats.get(interface_name)
+        
+        interface_data = {
+            ""interface_name"": interface_name,
+            ""is_up"": stats.isup if stats else False,
+            ""speed"": stats.speed if stats else 0,
+            ""mtu"": stats.mtu if stats else 0,
+            ""duplex"": str(stats.duplex) if stats else ""unknown"",
+            ""addresses"": []
+        }
+        
+        for addr in addresses:
+            address_info = {
+                ""family"": str(addr.family),
+                ""address"": addr.address,
+                ""netmask"": addr.netmask,
+                ""broadcast"": addr.broadcast,
+                ""ptp"": addr.ptp
+            }
+            interface_data[""addresses""].append(address_info)
+        
+        network_interfaces.append(interface_data)
+    
+    # Network I/O Statistics
+    net_io = psutil.net_io_counters(pernic=True)
+    network_io_stats = []
+    
+    for interface, stats in net_io.items():
+        io_data = {
+            ""interface"": interface,
+            ""bytes_sent"": stats.bytes_sent,
+            ""bytes_recv"": stats.bytes_recv,
+            ""packets_sent"": stats.packets_sent,
+            ""packets_recv"": stats.packets_recv,
+            ""errin"": stats.errin,
+            ""errout"": stats.errout,
+            ""dropin"": stats.dropin,
+            ""dropout"": stats.dropout
+        }
+        network_io_stats.append(io_data)
+    
+    # Active Network Connections
+    connections = []
+    try:
+        for conn in psutil.net_connections(kind=""inet""):
+            connection_data = {
+                ""family"": str(conn.family),
+                ""type"": str(conn.type),
+                ""local_address"": f""{conn.laddr.ip}:{conn.laddr.port}"" if conn.laddr else None,
+                ""remote_address"": f""{conn.raddr.ip}:{conn.raddr.port}"" if conn.raddr else None,
+                ""status"": conn.status,
+                ""pid"": conn.pid
+            }
+            connections.append(connection_data)
+    except (psutil.AccessDenied, OSError):
+        # Some systems require elevated privileges for connection info
+        connections.append({""error"": ""Access denied - elevated privileges required""})
+    
+    # System Network Configuration
+    hostname = socket.gethostname()
+    try:
+        fqdn = socket.getfqdn()
+    except:
+        fqdn = hostname
+    
+    try:
+        local_ip = socket.gethostbyname(hostname)
+    except:
+        local_ip = ""127.0.0.1""
+    
+    # DNS Configuration (platform-specific)
+    dns_servers = []
+    if platform.system() == ""Windows"":
+        try:
+            import winreg
+            reg_key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 
+                r""SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters"")
+            dns_str, _ = winreg.QueryValueEx(reg_key, ""NameServer"")
+            if dns_str:
+                dns_servers = dns_str.split("","")
+            winreg.CloseKey(reg_key)
+        except:
+            pass
+    else:
+        # Unix-like systems
+        try:
+            with open(""/etc/resolv.conf"", ""r"") as f:
+                for line in f:
+                    if line.startswith(""nameserver""):
+                        dns_servers.append(line.split()[1])
+        except:
+            pass
+    
+    # Compile network discovery data
+    discovery_data = {
+        ""DiscoveryTimestamp"": datetime.now(timezone.utc).isoformat(),
+        ""ScriptVersion"": ""1.0.0"",
+        ""ComputerName"": hostname,
+        ""Platform"": platform.system(),
+        ""NetworkInterfaces"": network_interfaces,
+        ""NetworkIOStats"": network_io_stats,
+        ""ActiveConnections"": connections[:50],  # Limit to first 50 connections
+        ""NetworkConfiguration"": {
+            ""hostname"": hostname,
+            ""fqdn"": fqdn,
+            ""local_ip"": local_ip,
+            ""dns_servers"": dns_servers
+        },
+        ""NetworkSummary"": {
+            ""total_interfaces"": len(network_interfaces),
+            ""active_interfaces"": len([i for i in network_interfaces if i[""is_up""]]),
+            ""total_connections"": len(connections),
+            ""total_bytes_sent"": sum(s[""bytes_sent""] for s in network_io_stats),
+            ""total_bytes_recv"": sum(s[""bytes_recv""] for s in network_io_stats)
+        }
+    }
+    
+    return discovery_data
+
+if __name__ == ""__main__"":
+    try:
+        data = get_network_info()
+        print(json.dumps(data, indent=2, default=str))
+    except Exception as e:
+        error_data = {
+            ""error"": str(e),
+            ""error_type"": type(e).__name__,
+            ""DiscoveryTimestamp"": datetime.now(timezone.utc).isoformat(),
+            ""ComputerName"": socket.gethostname(),
+            ""Platform"": platform.system()
+        }
+        print(json.dumps(error_data, indent=2))
+        sys.exit(1)",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", true },
+            { "extractFields", new[] { "NetworkInterfaces", "NetworkIOStats", "ActiveConnections", "NetworkConfiguration" } },
+            { "validateRequired", new[] { "ComputerName", "DiscoveryTimestamp", "NetworkSummary.total_interfaces" } }
+        },
+        Tags = new List<string> { "network", "discovery", "python", "cross-platform", "psutil", "connections", "interfaces" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
+    private DiscoveryScriptTemplate CreatePythonProcessDiscoveryScript() => new()
+    {
+        Name = "Cross-Platform Process Discovery - Python",
+        Description = "Comprehensive process and service discovery using Python psutil across all platforms",
+        Category = "Process Discovery",
+        Type = "python",
+        TargetOS = "cross-platform",
+        EstimatedRunTimeSeconds = 35,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"#!/usr/bin/env python3
+import json
+import psutil
+import socket
+import platform
+import os
+from datetime import datetime, timezone
+
+def get_process_info():
+    """"""Collect comprehensive process and service information""""""
+    
+    # Running Processes
+    processes = []
+    for proc in psutil.process_iter(['pid', 'name', 'username', 'status', 'create_time', 
+                                   'cpu_percent', 'memory_percent', 'memory_info', 'cmdline']):
+        try:
+            process_info = proc.info
+            process_data = {
+                ""pid"": process_info['pid'],
+                ""name"": process_info['name'],
+                ""username"": process_info['username'] or ""unknown"",
+                ""status"": process_info['status'],
+                ""create_time"": datetime.fromtimestamp(process_info['create_time'], 
+                                                      tz=timezone.utc).isoformat(),
+                ""cpu_percent"": process_info['cpu_percent'],
+                ""memory_percent"": process_info['memory_percent'],
+                ""memory_rss"": process_info['memory_info'].rss if process_info['memory_info'] else 0,
+                ""memory_vms"": process_info['memory_info'].vms if process_info['memory_info'] else 0,
+                ""cmdline"": "" "".join(process_info['cmdline']) if process_info['cmdline'] else """"
+            }
+            processes.append(process_data)
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+    
+    # Sort processes by CPU usage
+    processes.sort(key=lambda x: x['cpu_percent'] or 0, reverse=True)
+    
+    # Top processes by CPU and Memory
+    top_cpu_processes = processes[:10]
+    top_memory_processes = sorted(processes, key=lambda x: x['memory_percent'] or 0, reverse=True)[:10]
+    
+    # Process Statistics
+    total_processes = len(processes)
+    running_processes = len([p for p in processes if p['status'] == 'running'])
+    sleeping_processes = len([p for p in processes if p['status'] == 'sleeping'])
+    
+    # System Load and Performance
+    load_avg = os.getloadavg() if hasattr(os, 'getloadavg') else [0, 0, 0]
+    
+    # Platform-specific services
+    services = []
+    if platform.system() == ""Windows"":
+        # Windows Services
+        try:
+            import win32service
+            import win32serviceutil
+            
+            services_list = win32serviceutil.ListServices()
+            for service in services_list[:20]:  # Limit to first 20 services
+                try:
+                    service_status = win32serviceutil.QueryServiceStatus(service[0])
+                    services.append({
+                        ""name"": service[0],
+                        ""display_name"": service[1],
+                        ""status"": service_status[1],
+                        ""type"": ""Windows Service""
+                    })
+                except:
+                    continue
+        except ImportError:
+            services.append({""error"": ""Windows service APIs not available""})
+    
+    elif platform.system() in [""Linux"", ""Darwin""]:
+        # Unix-like systems - check for systemd services on Linux
+        if platform.system() == ""Linux"":
+            try:
+                import subprocess
+                result = subprocess.run(['systemctl', 'list-units', '--type=service', '--no-pager'], 
+                                      capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    lines = result.stdout.split('\n')[1:]  # Skip header
+                    for line in lines[:20]:  # Limit to first 20
+                        if line.strip() and not line.startswith('●'):
+                            parts = line.split()
+                            if len(parts) >= 4:
+                                services.append({
+                                    ""name"": parts[0],
+                                    ""load"": parts[1],
+                                    ""active"": parts[2],
+                                    ""sub"": parts[3],
+                                    ""type"": ""systemd service""
+                                })
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass
+    
+    # Memory Usage Summary
+    memory = psutil.virtual_memory()
+    swap = psutil.swap_memory()
+    
+    # CPU Usage Summary
+    cpu_percent = psutil.cpu_percent(interval=1, percpu=True)
+    cpu_count = psutil.cpu_count()
+    cpu_count_logical = psutil.cpu_count(logical=True)
+    
+    # Compile process discovery data
+    discovery_data = {
+        ""DiscoveryTimestamp"": datetime.now(timezone.utc).isoformat(),
+        ""ScriptVersion"": ""1.0.0"",
+        ""ComputerName"": socket.gethostname(),
+        ""Platform"": platform.system(),
+        ""ProcessSummary"": {
+            ""total_processes"": total_processes,
+            ""running_processes"": running_processes,
+            ""sleeping_processes"": sleeping_processes,
+            ""cpu_count"": cpu_count,
+            ""cpu_count_logical"": cpu_count_logical,
+            ""load_average"": load_avg
+        },
+        ""TopProcessesByCPU"": top_cpu_processes,
+        ""TopProcessesByMemory"": top_memory_processes,
+        ""AllProcesses"": processes[:100],  # Limit to first 100 processes
+        ""Services"": services,
+        ""SystemPerformance"": {
+            ""cpu_percent_per_core"": cpu_percent,
+            ""cpu_percent_total"": sum(cpu_percent) / len(cpu_percent),
+            ""memory_total"": memory.total,
+            ""memory_used"": memory.used,
+            ""memory_percent"": memory.percent,
+            ""swap_total"": swap.total,
+            ""swap_used"": swap.used,
+            ""swap_percent"": swap.percent
+        }
+    }
+    
+    return discovery_data
+
+if __name__ == ""__main__"":
+    try:
+        data = get_process_info()
+        print(json.dumps(data, indent=2, default=str))
+    except Exception as e:
+        error_data = {
+            ""error"": str(e),
+            ""error_type"": type(e).__name__,
+            ""DiscoveryTimestamp"": datetime.now(timezone.utc).isoformat(),
+            ""ComputerName"": socket.gethostname(),
+            ""Platform"": platform.system()
+        }
+        print(json.dumps(error_data, indent=2))
+        sys.exit(1)",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", true },
+            { "extractFields", new[] { "ProcessSummary", "TopProcessesByCPU", "TopProcessesByMemory", "Services", "SystemPerformance" } },
+            { "validateRequired", new[] { "ComputerName", "DiscoveryTimestamp", "ProcessSummary.total_processes" } }
+        },
+        Tags = new List<string> { "processes", "discovery", "python", "cross-platform", "psutil", "services", "performance" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
+    private DiscoveryScriptTemplate CreatePythonPerformanceDiscoveryScript() => new()
+    {
+        Name = "Cross-Platform Performance Discovery - Python",
+        Description = "Comprehensive performance monitoring using Python psutil for CPU, memory, disk, and network metrics",
+        Category = "Performance Discovery",
+        Type = "python",
+        TargetOS = "cross-platform",
+        EstimatedRunTimeSeconds = 40,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"#!/usr/bin/env python3
+import json
+import psutil
+import socket
+import platform
+import time
+from datetime import datetime, timezone
+
+def get_performance_metrics():
+    """"""Collect comprehensive performance metrics across platforms""""""
+    
+    # CPU Performance
+    cpu_percent_per_core = psutil.cpu_percent(interval=1, percpu=True)
+    cpu_times = psutil.cpu_times()
+    cpu_stats = psutil.cpu_stats()
+    cpu_freq = psutil.cpu_freq()
+    
+    cpu_performance = {
+        ""cpu_count_physical"": psutil.cpu_count(logical=False),
+        ""cpu_count_logical"": psutil.cpu_count(logical=True),
+        ""cpu_percent_total"": sum(cpu_percent_per_core) / len(cpu_percent_per_core),
+        ""cpu_percent_per_core"": cpu_percent_per_core,
+        ""cpu_times"": {
+            ""user"": cpu_times.user,
+            ""system"": cpu_times.system,
+            ""idle"": cpu_times.idle,
+            ""interrupt"": getattr(cpu_times, 'interrupt', 0),
+            ""dpc"": getattr(cpu_times, 'dpc', 0),
+            ""iowait"": getattr(cpu_times, 'iowait', 0),
+            ""irq"": getattr(cpu_times, 'irq', 0),
+            ""softirq"": getattr(cpu_times, 'softirq', 0),
+            ""steal"": getattr(cpu_times, 'steal', 0),
+            ""guest"": getattr(cpu_times, 'guest', 0)
+        },
+        ""cpu_stats"": {
+            ""ctx_switches"": cpu_stats.ctx_switches,
+            ""interrupts"": cpu_stats.interrupts,
+            ""soft_interrupts"": cpu_stats.soft_interrupts,
+            ""syscalls"": cpu_stats.syscalls
+        },
+        ""cpu_frequency"": {
+            ""current"": cpu_freq.current if cpu_freq else 0,
+            ""min"": cpu_freq.min if cpu_freq else 0,
+            ""max"": cpu_freq.max if cpu_freq else 0
+        }
+    }
+    
+    # Memory Performance
+    memory = psutil.virtual_memory()
+    swap = psutil.swap_memory()
+    
+    memory_performance = {
+        ""virtual_memory"": {
+            ""total"": memory.total,
+            ""available"": memory.available,
+            ""used"": memory.used,
+            ""free"": memory.free,
+            ""percent"": memory.percent,
+            ""active"": getattr(memory, 'active', 0),
+            ""inactive"": getattr(memory, 'inactive', 0),
+            ""buffers"": getattr(memory, 'buffers', 0),
+            ""cached"": getattr(memory, 'cached', 0),
+            ""shared"": getattr(memory, 'shared', 0),
+            ""slab"": getattr(memory, 'slab', 0)
+        },
+        ""swap_memory"": {
+            ""total"": swap.total,
+            ""used"": swap.used,
+            ""free"": swap.free,
+            ""percent"": swap.percent,
+            ""sin"": swap.sin,
+            ""sout"": swap.sout
+        }
+    }
+    
+    # Disk Performance
+    disk_usage = []
+    disk_io_counters = psutil.disk_io_counters(perdisk=True)
+    
+    for partition in psutil.disk_partitions():
+        try:
+            usage = psutil.disk_usage(partition.mountpoint)
+            partition_data = {
+                ""device"": partition.device,
+                ""mountpoint"": partition.mountpoint,
+                ""fstype"": partition.fstype,
+                ""total"": usage.total,
+                ""used"": usage.used,
+                ""free"": usage.free,
+                ""percent"": (usage.used / usage.total) * 100 if usage.total > 0 else 0
+            }
+            
+            # Add I/O stats if available
+            device_name = partition.device.split('/')[-1] if '/' in partition.device else partition.device
+            if device_name in disk_io_counters:
+                io = disk_io_counters[device_name]
+                partition_data[""io_stats""] = {
+                    ""read_count"": io.read_count,
+                    ""write_count"": io.write_count,
+                    ""read_bytes"": io.read_bytes,
+                    ""write_bytes"": io.write_bytes,
+                    ""read_time"": io.read_time,
+                    ""write_time"": io.write_time
+                }
+            
+            disk_usage.append(partition_data)
+        except PermissionError:
+            continue
+    
+    # Network Performance
+    net_io_start = psutil.net_io_counters(pernic=True)
+    time.sleep(1)  # Wait 1 second for rate calculation
+    net_io_end = psutil.net_io_counters(pernic=True)
+    
+    network_performance = []
+    for interface in net_io_start:
+        if interface in net_io_end:
+            start = net_io_start[interface]
+            end = net_io_end[interface]
+            
+            # Calculate rates (bytes per second)
+            bytes_sent_rate = end.bytes_sent - start.bytes_sent
+            bytes_recv_rate = end.bytes_recv - start.bytes_recv
+            packets_sent_rate = end.packets_sent - start.packets_sent
+            packets_recv_rate = end.packets_recv - start.packets_recv
+            
+            interface_data = {
+                ""interface"": interface,
+                ""bytes_sent"": end.bytes_sent,
+                ""bytes_recv"": end.bytes_recv,
+                ""packets_sent"": end.packets_sent,
+                ""packets_recv"": end.packets_recv,
+                ""errin"": end.errin,
+                ""errout"": end.errout,
+                ""dropin"": end.dropin,
+                ""dropout"": end.dropout,
+                ""rates"": {
+                    ""bytes_sent_per_sec"": bytes_sent_rate,
+                    ""bytes_recv_per_sec"": bytes_recv_rate,
+                    ""packets_sent_per_sec"": packets_sent_rate,
+                    ""packets_recv_per_sec"": packets_recv_rate
+                }
+            }
+            network_performance.append(interface_data)
+    
+    # System Load
+    load_avg = []
+    if hasattr(psutil, 'getloadavg'):
+        try:
+            load_avg = list(psutil.getloadavg())
+        except:
+            pass
+    
+    # Boot time and uptime
+    boot_time = datetime.fromtimestamp(psutil.boot_time(), tz=timezone.utc)
+    current_time = datetime.now(timezone.utc)
+    uptime_seconds = (current_time - boot_time).total_seconds()
+    
+    # Top processes by resource usage
+    processes = []
+    for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent']):
+        try:
+            processes.append(proc.info)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    
+    top_cpu_processes = sorted(processes, key=lambda x: x['cpu_percent'] or 0, reverse=True)[:10]
+    top_memory_processes = sorted(processes, key=lambda x: x['memory_percent'] or 0, reverse=True)[:10]
+    
+    # Compile performance data
+    discovery_data = {
+        ""DiscoveryTimestamp"": datetime.now(timezone.utc).isoformat(),
+        ""ScriptVersion"": ""1.0.0"",
+        ""ComputerName"": socket.gethostname(),
+        ""Platform"": platform.system(),
+        ""CPUPerformance"": cpu_performance,
+        ""MemoryPerformance"": memory_performance,
+        ""DiskPerformance"": disk_usage,
+        ""NetworkPerformance"": network_performance,
+        ""SystemLoad"": {
+            ""load_average"": load_avg,
+            ""boot_time"": boot_time.isoformat(),
+            ""uptime_seconds"": uptime_seconds,
+            ""uptime_days"": uptime_seconds / 86400
+        },
+        ""TopProcesses"": {
+            ""by_cpu"": top_cpu_processes,
+            ""by_memory"": top_memory_processes
+        },
+        ""PerformanceSummary"": {
+            ""cpu_usage_avg"": sum(cpu_percent_per_core) / len(cpu_percent_per_core),
+            ""memory_usage_percent"": memory.percent,
+            ""disk_usage_total"": sum(d['percent'] for d in disk_usage) / len(disk_usage) if disk_usage else 0,
+            ""total_network_bytes_sent"": sum(n['bytes_sent'] for n in network_performance),
+            ""total_network_bytes_recv"": sum(n['bytes_recv'] for n in network_performance),
+            ""sample_duration_seconds"": 1
+        }
+    }
+    
+    return discovery_data
+
+if __name__ == ""__main__"":
+    try:
+        data = get_performance_metrics()
+        print(json.dumps(data, indent=2, default=str))
+    except Exception as e:
+        error_data = {
+            ""error"": str(e),
+            ""error_type"": type(e).__name__,
+            ""DiscoveryTimestamp"": datetime.now(timezone.utc).isoformat(),
+            ""ComputerName"": socket.gethostname(),
+            ""Platform"": platform.system()
+        }
+        print(json.dumps(error_data, indent=2))
+        sys.exit(1)",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", true },
+            { "extractFields", new[] { "CPUPerformance", "MemoryPerformance", "DiskPerformance", "NetworkPerformance", "SystemLoad" } },
+            { "validateRequired", new[] { "ComputerName", "DiscoveryTimestamp", "PerformanceSummary.cpu_usage_avg" } }
+        },
+        Tags = new List<string> { "performance", "discovery", "python", "cross-platform", "psutil", "monitoring", "metrics" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
     private DiscoveryScriptTemplate CreatePythonFileSystemDiscoveryScript() => throw new NotImplementedException();
     private DiscoveryScriptTemplate CreatePythonUserAccountDiscoveryScript() => throw new NotImplementedException();
     private DiscoveryScriptTemplate CreatePythonEnvironmentDiscoveryScript() => throw new NotImplementedException();
     
-    private DiscoveryScriptTemplate CreateWMIHardwareDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateWMISoftwareDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateWMINetworkDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateWMISecurityDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateWMISystemInfoDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateWMIServicesDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateWMIProcessDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateWMIEventLogDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateWMIPerformanceDiscoveryScript() => throw new NotImplementedException();
-    private DiscoveryScriptTemplate CreateWMIStorageDiscoveryScript() => throw new NotImplementedException();
+    // Windows WMI Query Scripts
+    private DiscoveryScriptTemplate CreateWMIHardwareDiscoveryScript() => new()
+    {
+        Name = "Windows Hardware Discovery - WMI",
+        Description = "Comprehensive Windows hardware discovery using WMI queries",
+        Category = "Hardware Discovery",
+        Type = "wmi",
+        TargetOS = "windows",
+        EstimatedRunTimeSeconds = 20,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"SELECT 
+    CS.Name as ComputerName,
+    CS.Manufacturer,
+    CS.Model,
+    CS.TotalPhysicalMemory,
+    CPU.Name as ProcessorName,
+    CPU.MaxClockSpeed,
+    CPU.NumberOfCores,
+    CPU.NumberOfLogicalProcessors,
+    GPU.Name as GraphicsCard,
+    GPU.AdapterRAM as GraphicsMemory,
+    BIOS.SMBIOSBIOSVersion as BIOSVersion
+FROM Win32_ComputerSystem CS
+LEFT JOIN Win32_Processor CPU ON CPU.DeviceID = 'CPU0'
+LEFT JOIN Win32_VideoController GPU ON GPU.PNPDeviceID LIKE 'PCI%'
+LEFT JOIN Win32_BIOS BIOS ON BIOS.PrimaryBIOS = TRUE",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", false },
+            { "convertToJson", true },
+            { "extractFields", new[] { "ComputerName", "Manufacturer", "ProcessorName", "GraphicsCard" } },
+            { "validateRequired", new[] { "ComputerName" } }
+        },
+        Tags = new List<string> { "hardware", "discovery", "windows", "wmi", "cpu", "memory", "gpu" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
+    private DiscoveryScriptTemplate CreateWMISoftwareDiscoveryScript() => new()
+    {
+        Name = "Windows Software Discovery - WMI",
+        Description = "Comprehensive Windows software inventory using WMI",
+        Category = "Software Discovery",
+        Type = "wmi",
+        TargetOS = "windows",
+        EstimatedRunTimeSeconds = 30,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"SELECT 
+    CS.Name as ComputerName,
+    PROD.Name as ProductName,
+    PROD.Version,
+    PROD.Vendor,
+    PROD.InstallDate
+FROM Win32_ComputerSystem CS
+LEFT JOIN Win32_Product PROD ON PROD.Name IS NOT NULL
+WHERE PROD.Name IS NOT NULL",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", false },
+            { "convertToJson", true },
+            { "extractFields", new[] { "ComputerName", "ProductName", "Version" } },
+            { "validateRequired", new[] { "ComputerName" } }
+        },
+        Tags = new List<string> { "software", "discovery", "windows", "wmi", "applications" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
+    private DiscoveryScriptTemplate CreateWMINetworkDiscoveryScript() => new()
+    {
+        Name = "Windows Network Discovery - WMI",
+        Description = "Comprehensive Windows network configuration discovery using WMI",
+        Category = "Network Discovery",
+        Type = "wmi",
+        TargetOS = "windows",
+        EstimatedRunTimeSeconds = 25,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"SELECT 
+    CS.Name as ComputerName,
+    NET.Description as NetworkAdapter,
+    NET.MACAddress,
+    NET.Speed as AdapterSpeed,
+    IP.IPAddress,
+    IP.IPSubnet,
+    IP.DefaultIPGateway,
+    IP.DHCPEnabled
+FROM Win32_ComputerSystem CS
+LEFT JOIN Win32_NetworkAdapter NET ON NET.NetConnectionStatus = 2
+LEFT JOIN Win32_NetworkAdapterConfiguration IP ON IP.Index = NET.Index AND IP.IPEnabled = TRUE
+WHERE NET.Description IS NOT NULL",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", false },
+            { "convertToJson", true },
+            { "extractFields", new[] { "ComputerName", "NetworkAdapter", "IPAddress" } },
+            { "validateRequired", new[] { "ComputerName" } }
+        },
+        Tags = new List<string> { "network", "discovery", "windows", "wmi", "adapters" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
+    private DiscoveryScriptTemplate CreateWMISecurityDiscoveryScript() => new()
+    {
+        Name = "Windows Security Discovery - WMI",
+        Description = "Comprehensive Windows security configuration discovery using WMI",
+        Category = "Security Discovery",
+        Type = "wmi",
+        TargetOS = "windows",
+        EstimatedRunTimeSeconds = 30,
+        RequiresElevation = true,
+        RequiresNetwork = false,
+        Template = @"SELECT 
+    CS.Name as ComputerName,
+    USER.Name as UserName,
+    USER.AccountType,
+    USER.Disabled as UserDisabled,
+    GRP.Name as GroupName
+FROM Win32_ComputerSystem CS
+LEFT JOIN Win32_UserAccount USER ON USER.LocalAccount = TRUE
+LEFT JOIN Win32_Group GRP ON GRP.LocalAccount = TRUE
+WHERE USER.Name IS NOT NULL OR GRP.Name IS NOT NULL",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", false },
+            { "convertToJson", true },
+            { "extractFields", new[] { "ComputerName", "UserName", "GroupName" } },
+            { "validateRequired", new[] { "ComputerName" } }
+        },
+        Tags = new List<string> { "security", "discovery", "windows", "wmi", "users", "groups" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST", "PCI DSS" }
+    };
+
+    private DiscoveryScriptTemplate CreateWMISystemInfoDiscoveryScript() => new()
+    {
+        Name = "Windows System Information Discovery - WMI",
+        Description = "Comprehensive Windows system information discovery using WMI",
+        Category = "System Discovery",
+        Type = "wmi",
+        TargetOS = "windows",
+        EstimatedRunTimeSeconds = 25,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"SELECT 
+    CS.Name as ComputerName,
+    CS.Domain,
+    CS.Manufacturer,
+    CS.Model,
+    OS.Caption as OperatingSystem,
+    OS.Version as OSVersion,
+    OS.BuildNumber,
+    OS.InstallDate as OSInstallDate,
+    OS.LastBootUpTime
+FROM Win32_ComputerSystem CS
+LEFT JOIN Win32_OperatingSystem OS ON OS.Primary = TRUE",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", false },
+            { "convertToJson", true },
+            { "extractFields", new[] { "ComputerName", "OperatingSystem", "OSVersion" } },
+            { "validateRequired", new[] { "ComputerName", "OperatingSystem" } }
+        },
+        Tags = new List<string> { "system", "discovery", "windows", "wmi", "os" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
+    private DiscoveryScriptTemplate CreateWMIServicesDiscoveryScript() => new()
+    {
+        Name = "Windows Services Discovery - WMI",
+        Description = "Comprehensive Windows services discovery using WMI",
+        Category = "Services Discovery",
+        Type = "wmi",
+        TargetOS = "windows",
+        EstimatedRunTimeSeconds = 25,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"SELECT 
+    CS.Name as ComputerName,
+    SVC.Name as ServiceName,
+    SVC.DisplayName,
+    SVC.StartMode,
+    SVC.State,
+    SVC.ProcessId
+FROM Win32_ComputerSystem CS
+LEFT JOIN Win32_Service SVC ON SVC.Name IS NOT NULL",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", false },
+            { "convertToJson", true },
+            { "extractFields", new[] { "ComputerName", "ServiceName", "State" } },
+            { "validateRequired", new[] { "ComputerName" } }
+        },
+        Tags = new List<string> { "services", "discovery", "windows", "wmi" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
+    private DiscoveryScriptTemplate CreateWMIProcessDiscoveryScript() => new()
+    {
+        Name = "Windows Process Discovery - WMI",
+        Description = "Comprehensive Windows process discovery using WMI",
+        Category = "Process Discovery",
+        Type = "wmi",
+        TargetOS = "windows",
+        EstimatedRunTimeSeconds = 30,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"SELECT 
+    CS.Name as ComputerName,
+    PROC.Name as ProcessName,
+    PROC.ProcessId,
+    PROC.CommandLine,
+    PROC.CreationDate,
+    PROC.WorkingSetSize
+FROM Win32_ComputerSystem CS
+LEFT JOIN Win32_Process PROC ON PROC.Name LIKE '%.exe'",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", false },
+            { "convertToJson", true },
+            { "extractFields", new[] { "ComputerName", "ProcessName", "ProcessId" } },
+            { "validateRequired", new[] { "ComputerName" } }
+        },
+        Tags = new List<string> { "processes", "discovery", "windows", "wmi" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
+    private DiscoveryScriptTemplate CreateWMIEventLogDiscoveryScript() => new()
+    {
+        Name = "Windows Event Log Discovery - WMI",
+        Description = "Comprehensive Windows event log discovery using WMI",
+        Category = "Event Log Discovery",
+        Type = "wmi",
+        TargetOS = "windows",
+        EstimatedRunTimeSeconds = 35,
+        RequiresElevation = true,
+        RequiresNetwork = false,
+        Template = @"SELECT 
+    CS.Name as ComputerName,
+    EVT.LogFile,
+    EVT.EventCode,
+    EVT.EventType,
+    EVT.TimeGenerated,
+    EVT.SourceName,
+    EVT.Message
+FROM Win32_ComputerSystem CS
+LEFT JOIN Win32_NTLogEvent EVT ON EVT.LogFile IN ('System', 'Application', 'Security')
+WHERE EVT.TimeGenerated > DATEADD(day, -1, GETDATE())",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", false },
+            { "convertToJson", true },
+            { "extractFields", new[] { "ComputerName", "LogFile", "EventCode" } },
+            { "validateRequired", new[] { "ComputerName" } }
+        },
+        Tags = new List<string> { "eventlogs", "discovery", "windows", "wmi", "security", "audit" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST", "PCI DSS" }
+    };
+
+    private DiscoveryScriptTemplate CreateWMIPerformanceDiscoveryScript() => new()
+    {
+        Name = "Windows Performance Discovery - WMI",
+        Description = "Comprehensive Windows performance metrics discovery using WMI",
+        Category = "Performance Discovery",
+        Type = "wmi",
+        TargetOS = "windows",
+        EstimatedRunTimeSeconds = 30,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"SELECT 
+    CS.Name as ComputerName,
+    CPU.LoadPercentage as CPUUsage,
+    MEM.TotalVisibleMemorySize,
+    MEM.AvailableMemorySize,
+    DISK.Size as DiskSize,
+    DISK.FreeSpace as DiskFreeSpace
+FROM Win32_ComputerSystem CS
+LEFT JOIN Win32_Processor CPU ON CPU.DeviceID = 'CPU0'
+LEFT JOIN Win32_OperatingSystem MEM ON MEM.Primary = TRUE
+LEFT JOIN Win32_LogicalDisk DISK ON DISK.DriveType = 3",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", false },
+            { "convertToJson", true },
+            { "extractFields", new[] { "ComputerName", "CPUUsage", "TotalVisibleMemorySize" } },
+            { "validateRequired", new[] { "ComputerName" } }
+        },
+        Tags = new List<string> { "performance", "discovery", "windows", "wmi", "cpu", "memory", "disk" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
+
+    private DiscoveryScriptTemplate CreateWMIStorageDiscoveryScript() => new()
+    {
+        Name = "Windows Storage Discovery - WMI",
+        Description = "Comprehensive Windows storage discovery using WMI",
+        Category = "Storage Discovery",
+        Type = "wmi",
+        TargetOS = "windows",
+        EstimatedRunTimeSeconds = 25,
+        RequiresElevation = false,
+        RequiresNetwork = false,
+        Template = @"SELECT 
+    CS.Name as ComputerName,
+    DISK.Size as DiskSize,
+    DISK.FreeSpace as DiskFreeSpace,
+    DISK.FileSystem,
+    DISK.VolumeName,
+    DISK.DeviceID,
+    PHYS.MediaType,
+    PHYS.Size as PhysicalDiskSize
+FROM Win32_ComputerSystem CS
+LEFT JOIN Win32_LogicalDisk DISK ON DISK.DriveType = 3
+LEFT JOIN Win32_DiskDrive PHYS ON PHYS.DeviceID IS NOT NULL",
+        OutputFormat = "JSON",
+        OutputProcessing = new Dictionary<string, object>
+        {
+            { "parseAsJson", false },
+            { "convertToJson", true },
+            { "extractFields", new[] { "ComputerName", "DiskSize", "FileSystem" } },
+            { "validateRequired", new[] { "ComputerName" } }
+        },
+        Tags = new List<string> { "storage", "discovery", "windows", "wmi", "disk", "filesystem" },
+        Industries = new List<string> { "Enterprise", "Healthcare", "Finance", "Government", "Education" },
+        ComplianceFrameworks = new List<string> { "SOX", "HIPAA", "ISO 27001", "NIST" }
+    };
 }
 
 public class DiscoveryScriptTemplate
