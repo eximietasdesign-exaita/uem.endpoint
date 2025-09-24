@@ -79,18 +79,28 @@ interface Script {
   description: string;
   category: string;
   type: 'powershell' | 'bash' | 'python' | 'wmi';
-  targetOs: 'windows' | 'linux' | 'macos' | 'any';
-  author?: string;
-  version?: string;
-  isActive: boolean;
-  isFavorite: boolean;
-  executionCount: number;
+  targetOs: string | null;
+  template: string;
+  vendor: string;
+  complexity: string;
+  estimatedRunTimeSeconds: number;
+  requiresElevation: boolean;
+  requiresNetwork: boolean;
+  parameters: string;
+  outputFormat: string;
+  outputProcessing: any;
+  credentialRequirements: any;
   tags: string[];
-  content?: string;
-  parameters?: any[];
-  outputProcessing?: any;
-  createdAt?: string;
-  updatedAt?: string;
+  industries: string[];
+  complianceFrameworks: string[] | null;
+  version: string;
+  isStandard: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  // Optional frontend-only fields
+  executionCount?: number;
+  isFavorite?: boolean;
 }
 
 
@@ -128,39 +138,31 @@ export default function DiscoveryScriptsPage() {
   const { toast } = useToast();
 
   // Use tenant-aware data fetching
-  const { data: scripts = [], isLoading, hasContext } = useTenantData({
-    endpoint: "/api/scripts",
+  const { data: scripts = [], isLoading, hasContext } = useTenantData<Script[]>({
+    endpoint: "/api/discovery-scripts",
   });
 
   // Create script mutation
   const createScriptMutation = useMutation({
-    mutationFn: (scriptData: any) => apiRequest("/api/scripts", {
-      method: "POST",
-      body: JSON.stringify(scriptData)
-    }),
+    mutationFn: (scriptData: any) => apiRequest("POST", "/api/discovery-scripts", scriptData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/scripts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/discovery-scripts"] });
     }
   });
 
   // Update script mutation
   const updateScriptMutation = useMutation({
-    mutationFn: ({ id, ...scriptData }: any) => apiRequest(`/api/scripts/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(scriptData)
-    }),
+    mutationFn: ({ id, ...scriptData }: any) => apiRequest("PATCH", `/api/discovery-scripts/${id}`, scriptData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/scripts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/discovery-scripts"] });
     }
   });
 
   // Delete script mutation
   const deleteScriptMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/scripts/${id}`, {
-      method: "DELETE"
-    }),
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/discovery-scripts/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/scripts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/discovery-scripts"] });
     }
   });
 
@@ -454,7 +456,7 @@ print(f"Release: {platform.release()}")`;
                   Total Executions
                 </p>
                 <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                  {allScripts.reduce((sum, s) => sum + s.executionCount, 0)}
+                  {allScripts.reduce((sum, s) => sum + (s.executionCount || 0), 0)}
                 </p>
               </div>
               <Play className="w-8 h-8 text-orange-600 dark:text-orange-400" />
@@ -619,19 +621,19 @@ print(f"Release: {platform.release()}")`;
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge className={`text-xs ${getOSBadgeColor(script.os)}`}>
-                          {script.os}
+                        <Badge className={`text-xs ${getOSBadgeColor(script.targetOs || 'any')}`}>
+                          {script.targetOs || 'Any'}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <span className="text-sm">{script.version}</span>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm">{script.executionCount}</span>
+                        <span className="text-sm">{script.executionCount || 0}</span>
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-gray-500">
-                          {script.lastModified}
+                          {script.updatedAt}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -691,7 +693,7 @@ print(f"Release: {platform.release()}")`;
             </DialogTitle>
           </DialogHeader>
           <ScriptEditor
-            script={selectedScript}
+            script={selectedScript || undefined}
             onSave={() => setIsEditorOpen(false)}
             onCancel={() => setIsEditorOpen(false)}
           />
