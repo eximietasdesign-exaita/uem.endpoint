@@ -74,10 +74,6 @@ externalPort = 8000
 localPort = 8099
 externalPort = 8099
 
-[[ports]]
-localPort = 38245
-externalPort = 3000
-
 [deployment]
 deploymentTarget = "autoscale"
 run = ["bash", "-c", "cd UEM.Web.UI && npm run preview -- --host=0.0.0.0 --port=5000"]

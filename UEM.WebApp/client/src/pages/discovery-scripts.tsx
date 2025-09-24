@@ -73,7 +73,7 @@ import { Label } from "@/components/ui/label";
 import { TenantContextBanner } from "@/components/TenantContextBanner";
 import { useTenantData, useTenantContext } from "@/hooks/useTenantData";
 
-interface Script {
+interface DiscoveryScript {
   id: number;
   name: string;
   description: string;
@@ -112,7 +112,7 @@ export default function DiscoveryScriptsPage() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [expandedCategories, setExpandedCategories] = useState(new Set(["discovery"]));
   const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [selectedScript, setSelectedScript] = useState<Script | null>(null);
+  const [selectedScript, setSelectedScript] = useState<DiscoveryScript | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   
   // AI Feature states
@@ -123,7 +123,7 @@ export default function DiscoveryScriptsPage() {
   
   // Publish to Marketplace states
   const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
-  const [publishScript, setPublishScript] = useState<Script | null>(null);
+  const [publishScript, setPublishScript] = useState<DiscoveryScript | null>(null);
   const [publishForm, setPublishForm] = useState({
     name: "",
     description: "",
@@ -138,7 +138,7 @@ export default function DiscoveryScriptsPage() {
   const { toast } = useToast();
 
   // Use tenant-aware data fetching
-  const { data: scripts = [], isLoading, hasContext } = useTenantData<Script[]>({
+  const { data: scripts = [], isLoading, hasContext } = useTenantData<DiscoveryScript[]>({
     endpoint: "/api/discovery-scripts",
   });
 
@@ -184,7 +184,7 @@ export default function DiscoveryScriptsPage() {
     }
     acc[category].push(script);
     return acc;
-  }, {} as Record<string, Script[]>);
+  }, {} as Record<string, DiscoveryScript[]>);
 
   // Create dynamic script categories from database
   const scriptCategories = Object.keys(scriptsByCategory).map(categoryName => ({
@@ -257,13 +257,13 @@ export default function DiscoveryScriptsPage() {
     }
   };
 
-  const handleEditScript = (script: Script) => {
+  const handleEditScript = (script: DiscoveryScript) => {
     setSelectedScript(script);
     setIsEditorOpen(true);
   };
 
   // AI Handler Functions
-  const handleAIAnalysis = (script: Script) => {
+  const handleAIAnalysis = (script: DiscoveryScript) => {
     // For demo purposes, use sample script code
     const sampleCode = script.type === 'powershell' 
       ? `# ${script.name}
@@ -290,7 +290,7 @@ print(f"Release: {platform.release()}")`;
     setIsAIAnalyzerOpen(true);
   };
 
-  const handleAIOptimization = (script: Script) => {
+  const handleAIOptimization = (script: DiscoveryScript) => {
     // For demo purposes, use sample script code
     const sampleCode = script.type === 'powershell' 
       ? `# ${script.name}
@@ -322,7 +322,7 @@ print(f"Release: {platform.release()}")`;
     console.log('AI Generated Script:', result);
   };
 
-  const handlePublishToMarketplace = (script: Script) => {
+  const handlePublishToMarketplace = (script: DiscoveryScript) => {
     setPublishScript(script);
     setPublishForm({
       name: script.name,
