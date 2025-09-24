@@ -398,8 +398,9 @@ function ScriptPolicyEditor({ policy, onClose }: ScriptPolicyEditorProps) {
 
   // Remove script search and selection as it's not needed anymore
   
-  const { data: scripts = [] } = useQuery({
-    queryKey: ["/api/scripts"],
+  const { data: scripts = [] } = useTenantData({
+    endpoint: "/api/discovery-scripts",
+    requiresTenantContext: false,
   });
 
   const createMutation = useMutation({
