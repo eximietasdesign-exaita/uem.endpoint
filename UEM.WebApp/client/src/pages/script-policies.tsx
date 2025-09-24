@@ -62,7 +62,7 @@ export default function ScriptPoliciesPage() {
 
   const { data: scripts = [] } = useTenantData({
     endpoint: "/api/discovery-scripts",
-    requiresTenantContext: false,
+    requiresContext: false,
   });
 
   const deleteMutation = useMutation({
@@ -400,7 +400,7 @@ function ScriptPolicyEditor({ policy, onClose }: ScriptPolicyEditorProps) {
   
   const { data: scripts = [] } = useTenantData({
     endpoint: "/api/discovery-scripts",
-    requiresTenantContext: false,
+    requiresContext: false,
   });
 
   const createMutation = useMutation({
