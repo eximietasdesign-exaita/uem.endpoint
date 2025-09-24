@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Domain, Tenant } from '@shared/schema';
 
 interface DomainTenantContextType {
@@ -30,6 +30,7 @@ interface DomainTenantProviderProps {
 export function DomainTenantProvider({ children }: DomainTenantProviderProps) {
   const [selectedDomain, setSelectedDomain] = useState<Domain | null>(null);
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+  const queryClient = useQueryClient();
 
   // Fetch domains
   const { 
@@ -63,23 +64,33 @@ export function DomainTenantProvider({ children }: DomainTenantProviderProps) {
   const isLoading = domainsLoading || tenantsLoading;
   const error = domainsError?.message || tenantsError?.message || null;
 
-  // Store selections in localStorage for persistence
+  // Store selections in localStorage for persistence and invalidate queries
   useEffect(() => {
     if (selectedDomain) {
       localStorage.setItem('selectedDomainId', selectedDomain.id.toString());
+      // Invalidate all queries that depend on domain context
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/assets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/endpoints'] });
     }
-  }, [selectedDomain]);
+  }, [selectedDomain, queryClient]);
 
   useEffect(() => {
     if (selectedTenant) {
       localStorage.setItem('selectedTenantId', selectedTenant.id.toString());
+      // Invalidate all queries that depend on tenant context
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/assets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/endpoints'] });
     }
-  }, [selectedTenant]);
+  }, [selectedTenant, queryClient]);
 
-  // Clear tenant selection when domain changes
+  // Clear tenant selection and localStorage when domain changes
   useEffect(() => {
     if (selectedDomain) {
       setSelectedTenant(null);
+      // Clear saved tenant since it's not valid for the new domain
+      localStorage.removeItem('selectedTenantId');
     }
   }, [selectedDomain?.id]);
 
@@ -111,8 +122,8 @@ export function DomainTenantProvider({ children }: DomainTenantProviderProps) {
   useEffect(() => {
     if (!Array.isArray(tenants) || tenants.length === 0) return;
     
-    // Don't override if already selected
-    if (selectedTenant) return;
+    // Don't override if already selected and the tenant exists in current tenants list
+    if (selectedTenant && tenants.find(t => t.id === selectedTenant.id)) return;
     
     const savedTenantId = localStorage.getItem('selectedTenantId');
     let tenantToSelect: Tenant | null = null;
@@ -129,7 +140,7 @@ export function DomainTenantProvider({ children }: DomainTenantProviderProps) {
     if (tenantToSelect) {
       setSelectedTenant(tenantToSelect);
     }
-  }, [tenants, selectedTenant]);
+  }, [tenants]); // Removed selectedTenant dependency to avoid race condition
 
   const value: DomainTenantContextType = {
     selectedDomain,
