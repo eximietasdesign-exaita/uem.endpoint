@@ -61,7 +61,8 @@ export default function ScriptPoliciesPage() {
   });
 
   const { data: scripts = [] } = useTenantData({
-    endpoint: "/api/scripts",
+    endpoint: "/api/discovery-scripts",
+    requiresTenantContext: false,
   });
 
   const deleteMutation = useMutation({
