@@ -137,9 +137,10 @@ export default function DiscoveryScriptsPage() {
   
   const { toast } = useToast();
 
-  // Use tenant-aware data fetching
+  // Use tenant-aware data fetching (discovery scripts are global, don't require tenant context)
   const { data: scripts = [], isLoading, hasContext } = useTenantData<DiscoveryScript[]>({
     endpoint: "/api/discovery-scripts",
+    requiresContext: false, // Discovery scripts are global
   });
 
   // Create script mutation

@@ -6,12 +6,13 @@ interface UseTenantDataOptions {
   endpoint: string;
   enabled?: boolean;
   additionalParams?: Record<string, any>;
+  requiresContext?: boolean; // New option to bypass tenant requirements for global endpoints
 }
 
 /**
  * Hook to fetch data with domain/tenant context automatically applied
  */
-export function useTenantData<T>({ endpoint, enabled = true, additionalParams = {} }: UseTenantDataOptions) {
+export function useTenantData<T>({ endpoint, enabled = true, additionalParams = {}, requiresContext = true }: UseTenantDataOptions) {
   const { selectedDomain, selectedTenant } = useDomainTenant();
 
   const queryKey = useMemo(() => {
@@ -25,14 +26,14 @@ export function useTenantData<T>({ endpoint, enabled = true, additionalParams = 
 
   const query = useQuery<T>({
     queryKey,
-    enabled: enabled && !!selectedDomain && !!selectedTenant,
+    enabled: enabled && (requiresContext ? !!selectedDomain && !!selectedTenant : true),
   });
 
   return {
     ...query,
     domainContext: selectedDomain,
     tenantContext: selectedTenant,
-    hasContext: !!selectedDomain && !!selectedTenant,
+    hasContext: requiresContext ? !!selectedDomain && !!selectedTenant : true,
   };
 }
 
