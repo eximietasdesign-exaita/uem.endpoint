@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Domain, Tenant } from '@shared/schema';
 
@@ -10,7 +10,12 @@ interface DomainTenantContextType {
   setSelectedDomain: (domain: Domain | null) => void;
   setSelectedTenant: (tenant: Tenant | null) => void;
   isLoading: boolean;
+  isInitialized: boolean;
   error: string | null;
+  retryCount: number;
+  refreshContext: () => void;
+  getContextHeaders: () => Record<string, string>;
+  invalidateAllQueries: () => void;
 }
 
 const DomainTenantContext = createContext<DomainTenantContextType | undefined>(undefined);
@@ -30,66 +35,148 @@ interface DomainTenantProviderProps {
 export function DomainTenantProvider({ children }: DomainTenantProviderProps) {
   const [selectedDomain, setSelectedDomain] = useState<Domain | null>(null);
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const queryClient = useQueryClient();
 
-  // Fetch domains
+  // Enterprise query configuration with retry logic
+  const queryConfig = {
+    retry: 3,
+    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    cacheTime: 10 * 60 * 1000, // 10 minutes
+  };
+
+  // Fetch domains with enterprise configuration
   const { 
     data: domains = [], 
     isLoading: domainsLoading, 
-    error: domainsError 
+    error: domainsError,
+    refetch: refetchDomains 
   } = useQuery<Domain[]>({
     queryKey: ['/api/domains'],
     queryFn: async () => {
-      const response = await fetch('/api/domains');
-      if (!response.ok) throw new Error('Failed to fetch domains');
+      const response = await fetch('/api/domains', {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch domains: ${response.status} ${response.statusText}`);
+      }
       return response.json();
     },
+    ...queryConfig,
   });
 
-  // Fetch tenants for selected domain
+  // Fetch tenants for selected domain with enterprise configuration
   const { 
     data: tenants = [], 
     isLoading: tenantsLoading, 
-    error: tenantsError 
+    error: tenantsError,
+    refetch: refetchTenants 
   } = useQuery<Tenant[]>({
     queryKey: ['/api/tenants', { domainId: selectedDomain?.id }],
     queryFn: async () => {
-      const response = await fetch(`/api/tenants?domainId=${selectedDomain?.id}`);
-      if (!response.ok) throw new Error('Failed to fetch tenants');
+      const response = await fetch(`/api/tenants?domainId=${selectedDomain?.id}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch tenants: ${response.status} ${response.statusText}`);
+      }
       return response.json();
     },
     enabled: !!selectedDomain,
+    ...queryConfig,
   });
 
   const isLoading = domainsLoading || tenantsLoading;
   const error = domainsError?.message || tenantsError?.message || null;
 
-  // Store selections in localStorage for persistence and invalidate queries
+  // Enterprise utility functions
+  const getContextHeaders = useCallback((): Record<string, string> => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (selectedDomain) {
+      headers['X-Domain-ID'] = selectedDomain.id.toString();
+      headers['X-Domain-Name'] = selectedDomain.name;
+    }
+    
+    if (selectedTenant) {
+      headers['X-Tenant-ID'] = selectedTenant.id.toString();
+      headers['X-Tenant-Name'] = selectedTenant.name;
+    }
+    
+    return headers;
+  }, [selectedDomain, selectedTenant]);
+
+  const invalidateAllQueries = useCallback(() => {
+    // Comprehensive list of all tenant-aware endpoints
+    const tenantAwareQueryKeys = [
+      '/api/dashboard/stats',
+      '/api/assets',
+      '/api/endpoints',
+      '/api/activities',
+      '/api/discovery-jobs', 
+      '/api/discovery-policies',
+      '/api/discovery-scripts',
+      '/api/scripts',
+      '/api/policies', 
+      '/api/users',
+      '/api/audit-logs',
+      '/api/reports',
+      '/api/settings',
+      '/api/notifications',
+      '/api/alerts',
+    ];
+
+    tenantAwareQueryKeys.forEach(queryKey => {
+      queryClient.invalidateQueries({ queryKey: [queryKey] });
+    });
+
+    // Also invalidate any queries that might have domain/tenant parameters
+    queryClient.invalidateQueries({
+      predicate: (query) => {
+        const queryKey = query.queryKey as any[];
+        return queryKey.some(key => 
+          typeof key === 'object' && 
+          (key?.domainId !== undefined || key?.tenantId !== undefined)
+        );
+      }
+    });
+  }, [queryClient]);
+
+  const refreshContext = useCallback(() => {
+    refetchDomains();
+    refetchTenants();
+    setRetryCount(0);
+  }, [refetchDomains, refetchTenants]);
+
+  // Enhanced enterprise-grade persistence and query invalidation
   useEffect(() => {
     if (selectedDomain) {
       localStorage.setItem('selectedDomainId', selectedDomain.id.toString());
-      // Invalidate all queries that depend on domain context
-      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/assets'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/endpoints'] });
+      invalidateAllQueries();
     }
-  }, [selectedDomain, queryClient]);
+  }, [selectedDomain, invalidateAllQueries]);
 
   useEffect(() => {
     if (selectedTenant) {
       localStorage.setItem('selectedTenantId', selectedTenant.id.toString());
-      // Invalidate all queries that depend on tenant context
-      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/assets'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/endpoints'] });
+      invalidateAllQueries();
     }
-  }, [selectedTenant, queryClient]);
+  }, [selectedTenant, invalidateAllQueries]);
 
   // Clear tenant selection and localStorage when domain changes
   useEffect(() => {
     if (selectedDomain) {
       setSelectedTenant(null);
-      // Clear saved tenant since it's not valid for the new domain
       localStorage.removeItem('selectedTenantId');
     }
   }, [selectedDomain?.id]);
@@ -118,7 +205,7 @@ export function DomainTenantProvider({ children }: DomainTenantProviderProps) {
     }
   }, [domains, selectedDomain]);
 
-  // Initialize tenant selection
+  // Initialize tenant selection with enterprise validation
   useEffect(() => {
     if (!Array.isArray(tenants) || tenants.length === 0) return;
     
@@ -142,6 +229,20 @@ export function DomainTenantProvider({ children }: DomainTenantProviderProps) {
     }
   }, [tenants]); // Removed selectedTenant dependency to avoid race condition
 
+  // Track initialization status
+  useEffect(() => {
+    if (selectedDomain && selectedTenant && !isInitialized) {
+      setIsInitialized(true);
+    }
+  }, [selectedDomain, selectedTenant, isInitialized]);
+
+  // Handle errors and retry logic
+  useEffect(() => {
+    if (domainsError || tenantsError) {
+      setRetryCount(prev => prev + 1);
+    }
+  }, [domainsError, tenantsError]);
+
   const value: DomainTenantContextType = {
     selectedDomain,
     selectedTenant,
@@ -150,7 +251,12 @@ export function DomainTenantProvider({ children }: DomainTenantProviderProps) {
     setSelectedDomain,
     setSelectedTenant,
     isLoading,
+    isInitialized,
     error,
+    retryCount,
+    refreshContext,
+    getContextHeaders,
+    invalidateAllQueries,
   };
 
   return (
