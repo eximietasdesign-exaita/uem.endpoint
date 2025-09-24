@@ -38,6 +38,11 @@ export function DomainTenantProvider({ children }: DomainTenantProviderProps) {
     error: domainsError 
   } = useQuery<Domain[]>({
     queryKey: ['/api/domains'],
+    queryFn: async () => {
+      const response = await fetch('/api/domains');
+      if (!response.ok) throw new Error('Failed to fetch domains');
+      return response.json();
+    },
   });
 
   // Fetch tenants for selected domain
