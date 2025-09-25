@@ -34,25 +34,39 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 
-interface Script {
+interface DiscoveryScript {
   id: number;
   name: string;
   description: string;
   category: string;
   type: 'powershell' | 'bash' | 'python' | 'wmi';
-  os: 'windows' | 'linux' | 'macos' | 'cross-platform';
-  author: string;
-  lastModified: string;
-  version: string;
-  isActive: boolean;
-  isFavorite: boolean;
-  executionCount: number;
+  targetOs: string | null;
+  template: string;
+  vendor: string;
+  complexity: string;
+  estimatedRunTimeSeconds: number;
+  requiresElevation: boolean;
+  requiresNetwork: boolean;
+  parameters: string;
+  outputFormat: string;
+  outputProcessing: any;
+  credentialRequirements: any;
   tags: string[];
+  industries: string[];
+  complianceFrameworks: string[] | null;
+  version: string;
+  isStandard: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  // Optional frontend-only fields
+  executionCount?: number;
+  isFavorite?: boolean;
 }
 
 interface ScriptEditorProps {
-  script?: Script;
-  onSave: () => void;
+  script?: DiscoveryScript;
+  onSave: (scriptData: any) => void;
   onCancel: () => void;
 }
 
@@ -84,11 +98,11 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     description: script?.description || '',
     category: script?.category || 'Applications & Databases',
     type: script?.type || 'powershell',
-    os: script?.os || 'windows',
+    os: script?.targetOs || 'windows',
     version: script?.version || '1.0',
     isActive: script?.isActive ?? true,
     tags: script?.tags?.join(', ') || '',
-    code: `# Sample ${script?.type || 'PowerShell'} script
+    code: script?.template || `# Sample ${script?.type || 'PowerShell'} script
 # Description: ${script?.description || 'Add your script description here'}
 
 $ErrorActionPreference = "Stop"
@@ -215,15 +229,15 @@ catch {
             ruleId: rule.id,
             ruleName: rule.name,
             status: 'error',
-            error: error.message
+            error: error instanceof Error ? error.message : String(error)
           });
         }
       }
       
       // Generate processed output
-      const processed = {};
+      const processed: Record<string, any> = {};
       results.forEach(result => {
-        if (result.status === 'success') {
+        if (result.status === 'success' && result.target) {
           processed[result.target] = result.result;
         }
       });
@@ -242,9 +256,34 @@ catch {
   };
 
   const handleSave = () => {
-    // TODO: Implement save functionality
-    console.log('Saving script:', formData);
-    onSave();
+    // Transform form data to match the expected API format
+    const scriptData = {
+      name: formData.name,
+      description: formData.description,
+      category: formData.category,
+      type: formData.type,
+      targetOs: formData.os,
+      template: formData.code,
+      version: formData.version,
+      isActive: formData.isActive,
+      tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0),
+      // Set default values for other required fields
+      vendor: "Custom",
+      complexity: "medium",
+      estimatedRunTimeSeconds: 30,
+      requiresElevation: false,
+      requiresNetwork: false,
+      parameters: "{}",
+      outputFormat: "json",
+      outputProcessing: null,
+      credentialRequirements: null,
+      industries: [],
+      complianceFrameworks: null,
+      isStandard: false
+    };
+    
+    console.log('Saving script:', scriptData);
+    onSave(scriptData);
   };
 
   const handleTest = () => {
