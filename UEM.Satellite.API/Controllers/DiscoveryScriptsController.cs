@@ -160,6 +160,183 @@ public class DiscoveryScriptsController : ControllerBase
             return StatusCode(500, new { error = "Failed to retrieve types" });
         }
     }
+
+    [HttpPost]
+    public async Task<IActionResult> CreateScript([FromBody] CreateDiscoveryScriptRequest request)
+    {
+        try
+        {
+            using var connection = _dbFactory.Open();
+            
+            var insertSql = @"
+                INSERT INTO discovery_scripts (
+                    name, description, category, type, target_os, template, 
+                    vendor, complexity, estimated_run_time_seconds, 
+                    requires_elevation, requires_network, parameters, 
+                    output_format, output_processing, credential_requirements,
+                    tags, industries, compliance_frameworks, version, 
+                    is_standard, is_active, created_at, updated_at
+                ) VALUES (
+                    @Name, @Description, @Category, @Type, @TargetOs, @Template,
+                    @Vendor, @Complexity, @EstimatedRunTimeSeconds,
+                    @RequiresElevation, @RequiresNetwork, @Parameters::jsonb,
+                    @OutputFormat, @OutputProcessing::jsonb, @CredentialRequirements::jsonb,
+                    @Tags, @Industries, @ComplianceFrameworks,
+                    @Version, @IsStandard, @IsActive, @CreatedAt, @UpdatedAt
+                ) 
+                RETURNING id, name, description, category, type, target_os, template,
+                         vendor, complexity, estimated_run_time_seconds,
+                         requires_elevation, requires_network, parameters,
+                         output_format, output_processing, credential_requirements,
+                         tags, industries, compliance_frameworks, version,
+                         is_standard, is_active, created_at, updated_at";
+
+            var now = DateTime.UtcNow;
+            var newScript = await connection.QuerySingleAsync<DiscoveryScript>(insertSql, new 
+            {
+                request.Name,
+                request.Description,
+                request.Category,
+                request.Type,
+                request.TargetOs,
+                request.Template,
+                Vendor = request.Vendor ?? "Custom",
+                Complexity = request.Complexity ?? "medium", 
+                EstimatedRunTimeSeconds = request.EstimatedRunTimeSeconds ?? 30,
+                RequiresElevation = request.RequiresElevation ?? false,
+                RequiresNetwork = request.RequiresNetwork ?? false,
+                Parameters = request.Parameters ?? "{}",
+                OutputFormat = request.OutputFormat ?? "json",
+                OutputProcessing = request.OutputProcessing ?? "null",
+                CredentialRequirements = request.CredentialRequirements ?? "null",
+                Tags = request.Tags ?? new string[0],
+                Industries = request.Industries ?? new string[0],
+                ComplianceFrameworks = request.ComplianceFrameworks,
+                Version = request.Version ?? "1.0",
+                IsStandard = request.IsStandard ?? false,
+                IsActive = request.IsActive ?? true,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+
+            _logger.LogInformation("Created new discovery script: {ScriptName} (ID: {ScriptId})", newScript.Name, newScript.Id);
+            return CreatedAtAction(nameof(GetScript), new { id = newScript.Id }, newScript);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create discovery script");
+            return StatusCode(500, new { error = "Failed to create discovery script" });
+        }
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateScript(int id, [FromBody] CreateDiscoveryScriptRequest request)
+    {
+        try
+        {
+            using var connection = _dbFactory.Open();
+            
+            var updateSql = @"
+                UPDATE discovery_scripts SET 
+                    name = @Name,
+                    description = @Description,
+                    category = @Category,
+                    type = @Type,
+                    target_os = @TargetOs,
+                    template = @Template,
+                    vendor = @Vendor,
+                    complexity = @Complexity,
+                    estimated_run_time_seconds = @EstimatedRunTimeSeconds,
+                    requires_elevation = @RequiresElevation,
+                    requires_network = @RequiresNetwork,
+                    parameters = @Parameters::jsonb,
+                    output_format = @OutputFormat,
+                    output_processing = @OutputProcessing::jsonb,
+                    credential_requirements = @CredentialRequirements::jsonb,
+                    tags = @Tags,
+                    industries = @Industries,
+                    compliance_frameworks = @ComplianceFrameworks,
+                    version = @Version,
+                    is_standard = @IsStandard,
+                    is_active = @IsActive,
+                    updated_at = @UpdatedAt
+                WHERE id = @Id AND is_active = TRUE
+                RETURNING id, name, description, category, type, target_os, template,
+                         vendor, complexity, estimated_run_time_seconds,
+                         requires_elevation, requires_network, parameters,
+                         output_format, output_processing, credential_requirements,
+                         tags, industries, compliance_frameworks, version,
+                         is_standard, is_active, created_at, updated_at";
+
+            var updatedScript = await connection.QuerySingleOrDefaultAsync<DiscoveryScript>(updateSql, new 
+            {
+                Id = id,
+                request.Name,
+                request.Description,
+                request.Category,
+                request.Type,
+                request.TargetOs,
+                request.Template,
+                Vendor = request.Vendor ?? "Custom",
+                Complexity = request.Complexity ?? "medium",
+                EstimatedRunTimeSeconds = request.EstimatedRunTimeSeconds ?? 30,
+                RequiresElevation = request.RequiresElevation ?? false,
+                RequiresNetwork = request.RequiresNetwork ?? false,
+                Parameters = request.Parameters ?? "{}",
+                OutputFormat = request.OutputFormat ?? "json",
+                OutputProcessing = request.OutputProcessing ?? "null",
+                CredentialRequirements = request.CredentialRequirements ?? "null",
+                Tags = request.Tags ?? new string[0],
+                Industries = request.Industries ?? new string[0],
+                ComplianceFrameworks = request.ComplianceFrameworks,
+                Version = request.Version ?? "1.0",
+                IsStandard = request.IsStandard ?? false,
+                IsActive = request.IsActive ?? true,
+                UpdatedAt = DateTime.UtcNow
+            });
+
+            if (updatedScript == null)
+            {
+                return NotFound(new { error = "Discovery script not found" });
+            }
+
+            _logger.LogInformation("Updated discovery script: {ScriptName} (ID: {ScriptId})", updatedScript.Name, updatedScript.Id);
+            return Ok(updatedScript);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update discovery script with id {Id}", id);
+            return StatusCode(500, new { error = "Failed to update discovery script" });
+        }
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteScript(int id)
+    {
+        try
+        {
+            using var connection = _dbFactory.Open();
+            
+            var deleteResult = await connection.ExecuteAsync(@"
+                UPDATE discovery_scripts 
+                SET is_active = FALSE, updated_at = @UpdatedAt
+                WHERE id = @Id AND is_active = TRUE
+            ", new { Id = id, UpdatedAt = DateTime.UtcNow });
+
+            if (deleteResult == 0)
+            {
+                return NotFound(new { error = "Discovery script not found" });
+            }
+
+            _logger.LogInformation("Deleted discovery script with id {ScriptId}", id);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete discovery script with id {Id}", id);
+            return StatusCode(500, new { error = "Failed to delete discovery script" });
+        }
+    }
 }
 
 public class DiscoveryScript
@@ -188,4 +365,29 @@ public class DiscoveryScript
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+public class CreateDiscoveryScriptRequest
+{
+    public string Name { get; set; } = "";
+    public string? Description { get; set; }
+    public string? Category { get; set; }
+    public string? Type { get; set; }
+    public string? TargetOs { get; set; }
+    public string? Template { get; set; }
+    public string? Vendor { get; set; }
+    public string? Complexity { get; set; }
+    public int? EstimatedRunTimeSeconds { get; set; }
+    public bool? RequiresElevation { get; set; }
+    public bool? RequiresNetwork { get; set; }
+    public string? Parameters { get; set; }
+    public string? OutputFormat { get; set; }
+    public string? OutputProcessing { get; set; }
+    public string? CredentialRequirements { get; set; }
+    public string[]? Tags { get; set; }
+    public string[]? Industries { get; set; }
+    public string[]? ComplianceFrameworks { get; set; }
+    public string? Version { get; set; }
+    public bool? IsStandard { get; set; }
+    public bool? IsActive { get; set; }
 }
