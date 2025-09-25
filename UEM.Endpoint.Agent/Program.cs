@@ -1,7 +1,10 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
 using UEM.Endpoint.Agent.Services;
+using UEM.Endpoint.Agent.Data.Contexts;
+using UEM.Endpoint.Agent.Data.Services;
 using UEM.Shared.Infrastructure.Logging;
 using Serilog;
 using Serilog.Events;
@@ -45,6 +48,28 @@ if (OperatingSystem.IsWindows())
     var systemLogDir = @"C:\ProgramData\EximietasDesign\UEM.Endpoint.Service\Logs";
     Directory.CreateDirectory(systemLogDir);
 }
+
+// SQLite databases
+builder.Services.AddDbContext<AgentDataContext>(options =>
+{
+    var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "agentdata.db");
+    options.UseSqlite($"Data Source={dbPath}");
+});
+
+builder.Services.AddDbContext<ServerDataContext>(options =>
+{
+    var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "serverdata.db");
+    options.UseSqlite($"Data Source={dbPath}");
+});
+
+// Database services
+builder.Services.AddScoped<AgentDataService>();
+builder.Services.AddScoped<ServerDataService>();
+
+// Database initialization and maintenance
+builder.Services.AddHostedService<DatabaseInitializationService>();
+builder.Services.AddSingleton<DatabaseMaintenanceService>();
+builder.Services.AddHostedService<DatabaseMaintenanceService>();
 
 // Core agent services
 builder.Services.AddSingleton<AgentRegistrationService>();
