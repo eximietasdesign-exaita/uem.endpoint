@@ -2,7 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using UEM.Satellite.API.Data;
 using Dapper;
 
-namespace UEM.Satellite.API.Controllers;
+namespace UEM.Satellite.API.Controllers
+{
 
 [ApiController]
 [Route("api/discovery-scripts")]
@@ -391,4 +392,5 @@ public class CreateDiscoveryScriptRequest
     public string? Version { get; set; }
     public bool? IsStandard { get; set; }
     public bool? IsActive { get; set; }
+}
 }
