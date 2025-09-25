@@ -230,6 +230,7 @@ public class DiscoveryScriptsController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [HttpPatch("{id}")]
     public async Task<IActionResult> UpdateScript(int id, [FromBody] CreateDiscoveryScriptRequest request)
     {
         try
