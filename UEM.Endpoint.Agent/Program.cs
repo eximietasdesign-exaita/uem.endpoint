@@ -51,6 +51,9 @@ builder.Services.AddSingleton<AgentRegistrationService>();
 builder.Services.AddSingleton<HeartbeatCollector>();
 builder.Services.AddHostedService<HeartbeatService>();
 
+// Logging services
+builder.Services.AddSingleton<LogFileManager>();
+
 // Enterprise discovery services
 builder.Services.AddSingleton<EnterpriseHardwareDiscoveryService>();
 builder.Services.AddSingleton<EnterpriseSoftwareDiscoveryService>();

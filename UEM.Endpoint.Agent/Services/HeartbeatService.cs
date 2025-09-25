@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Diagnostics;
 
 namespace UEM.Endpoint.Agent.Services;
 
@@ -19,8 +20,11 @@ public sealed class HeartbeatService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _log.LogAgentLifecycle("HeartbeatService Started", $"Interval: {_interval.TotalSeconds}s");
+        
         while (!stoppingToken.IsCancellationRequested)
         {
+            var sw = Stopwatch.StartNew();
             try
             {
                 if (string.IsNullOrWhiteSpace(_reg.AgentId) || string.IsNullOrWhiteSpace(_reg.Jwt))
@@ -29,35 +33,56 @@ public sealed class HeartbeatService : BackgroundService
                     await _reg.EnsureRegisteredAsync(stoppingToken);
                     if (string.IsNullOrWhiteSpace(_reg.AgentId) || string.IsNullOrWhiteSpace(_reg.Jwt))
                     {
-
                         _log.LogDebug("Skipping heartbeat; agent not registered yet");
+                        continue;
                     }
+                }
+
+                // Collect heartbeat data with timing
+                var collectSw = Stopwatch.StartNew();
+                var hb = await _collector.CollectAsync(stoppingToken);
+                collectSw.Stop();
+                _log.LogPerformanceMetric("HeartbeatCollection", collectSw.ElapsedMilliseconds, "ms");
+
+                // Send heartbeat to satellite API
+                var baseUrl = Environment.GetEnvironmentVariable("SATELLITE_BASE_URL") ?? "https://localhost:7200";
+                var endpoint = $"{baseUrl}/api/agents/{_reg.AgentId}/heartbeat";
+                
+                using var req = new HttpRequestMessage(HttpMethod.Post, endpoint)
+                { Content = JsonContent.Create(hb) };
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _reg.Jwt);
+                
+                var apiSw = Stopwatch.StartNew();
+                var res = await _http.SendAsync(req, stoppingToken);
+                apiSw.Stop();
+                
+                _log.LogApiCommunication(endpoint, "POST", (int)res.StatusCode, apiSw.Elapsed);
+                
+                if (!res.IsSuccessStatusCode)
+                {
+                    var body = await res.Content.ReadAsStringAsync(stoppingToken);
+                    _log.LogHeartbeat(_reg.AgentId, false, apiSw.Elapsed, 
+                        $"HTTP {(int)res.StatusCode}: {body}");
                 }
                 else
                 {
-                    var hb = await _collector.CollectAsync(stoppingToken);
-                    var baseUrl = Environment.GetEnvironmentVariable("SATELLITE_BASE_URL") ?? "https://localhost:7200";
-                    using var req = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/agents/{_reg.AgentId}/heartbeat")
-                    { Content = JsonContent.Create(hb) };
-                    req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _reg.Jwt);
-                    var res = await _http.SendAsync(req, stoppingToken);
-                    if (!res.IsSuccessStatusCode)
-                    {
-                        var body = await res.Content.ReadAsStringAsync(stoppingToken);
-                        _log.LogWarning("Heartbeat failed: {Code} {Body}", (int)res.StatusCode, body);
-                    }
-                    else
-                    {
-                        _log.LogInformation("Heartbeat sent ({AgentId})", _reg.AgentId);
-                    }
+                    _log.LogHeartbeat(_reg.AgentId, true, apiSw.Elapsed);
                 }
             }
             catch (Exception ex)
             {
-                _log.LogWarning(ex, "Heartbeat loop error");
+                sw.Stop();
+                _log.LogError(ex, "Heartbeat loop error after {Duration:mm\\:ss\\.fff}", sw.Elapsed);
+                
+                if (_reg.AgentId != null)
+                {
+                    _log.LogHeartbeat(_reg.AgentId, false, sw.Elapsed, ex.Message);
+                }
             }
 
             try { await Task.Delay(_interval, stoppingToken); } catch { }
         }
+        
+        _log.LogAgentLifecycle("HeartbeatService Stopped");
     }
 }
