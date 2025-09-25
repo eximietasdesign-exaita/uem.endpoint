@@ -138,14 +138,16 @@ public class EnterpriseSecurityDiscoveryService
                 try
                 {
                     var result = obj.InvokeMethod("GetKeyProtectors", new object[] { 0 });
-                    if (result != null && result["VolumeKeyProtectorID"] is string[] protectorIds)
+                    //if (result != null && result["VolumeKeyProtectorID"] is string[] protectorIds)
+                     if (result != null && result is ManagementBaseObject resultObject && resultObject["VolumeKeyProtectorID"] is string[] protectorIds)
                     {
                         foreach (var protectorId in protectorIds)
                         {
                             var typeResult = obj.InvokeMethod("GetKeyProtectorType", new object[] { protectorId });
-                            if (typeResult != null)
+                            
+                            if (typeResult is ManagementBaseObject typeResultObject)
                             {
-                                var protectorType = Convert.ToInt32(typeResult["KeyProtectorType"]);
+                                var protectorType = Convert.ToInt32(typeResultObject["KeyProtectorType"]);
                                 keyProtectors.Add(GetKeyProtectorTypeName(protectorType));
                             }
                         }

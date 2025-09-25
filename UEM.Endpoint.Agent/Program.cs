@@ -32,7 +32,21 @@ builder.Services.AddHostedService<HeartbeatService>();
 builder.Services.AddSingleton<EnterpriseHardwareDiscoveryService>();
 builder.Services.AddSingleton<EnterpriseSoftwareDiscoveryService>();
 builder.Services.AddSingleton<EnterpriseSecurityDiscoveryService>();
-builder.Services.AddHostedService<EnterpriseDiscoveryOrchestrator>();
+
+// Add this registration for EnterpriseDiscoveryOrchestrator as a singleton:
+builder.Services.AddSingleton<EnterpriseDiscoveryOrchestrator>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<EnterpriseDiscoveryOrchestrator>>();
+    var config = sp.GetRequiredService<IConfiguration>();
+    var reg = sp.GetRequiredService<AgentRegistrationService>();
+    var hardware = sp.GetRequiredService<EnterpriseHardwareDiscoveryService>();
+    var software = sp.GetRequiredService<EnterpriseSoftwareDiscoveryService>();
+    var security = sp.GetRequiredService<EnterpriseSecurityDiscoveryService>();
+    return new EnterpriseDiscoveryOrchestrator(logger, config, reg, hardware, software, security);
+});
+
+// And keep the hosted service registration:
+builder.Services.AddHostedService<EnterpriseDiscoveryOrchestrator>(sp => sp.GetRequiredService<EnterpriseDiscoveryOrchestrator>());
 
 // Command handling
 builder.Services.AddSingleton<CommandChannel>(sp =>
@@ -61,8 +75,8 @@ sealed class AgentWorker : BackgroundService
 
     public AgentWorker(
         ILogger<AgentWorker> log, 
-        AgentRegistrationService reg, 
-        CommandChannel commandChannel,
+        AgentRegistrationService eg, 
+        CommandChannel commandChannel
         EnterpriseDiscoveryOrchestrator discoveryOrchestrator)
     {
         _log = log;

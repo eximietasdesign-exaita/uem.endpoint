@@ -23,8 +23,8 @@ public sealed class AgentInitializationService : BackgroundService
         await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); // Delay for service startup
 
         using var scope = _provider.CreateScope();
-        var hardwareDiscovery = scope.ServiceProvider.GetRequiredService<HardwareDiscoveryService>();
-        var hardwareInfo = hardwareDiscovery.Discover();
+        var hardwareDiscovery = scope.ServiceProvider.GetRequiredService<EnterpriseHardwareDiscoveryService>();
+        var hardwareInfo = await hardwareDiscovery.DiscoverAsync();
 
         var apiUrl = _config.GetValue<string>("Api:CommandResponseUrl") ?? "https://localhost:7201";
         apiUrl = $"{apiUrl}/api/commands/response";
@@ -74,8 +74,8 @@ public sealed class AgentInitializationService : BackgroundService
 //        await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); // Delay before starting functionality
 //        return;
 //        using var scope = _provider.CreateScope();
-//        var hardwareDiscovery = scope.ServiceProvider.GetRequiredService<HardwareDiscoveryService>();
-//        var hardwareInfo = hardwareDiscovery.Discover();
+//        var hardwareDiscovery = scope.ServiceProvider.GetRequiredService<EnterpriseHardwareDiscoveryService>();
+//        var hardwareInfo = await hardwareDiscovery.DiscoverAsync();
 
 //        var apiUrl = _config.GetValue<string>("Api:CommandResponseUrl") ?? "https://localhost:7201";
 //        apiUrl = $"{apiUrl}/api/commands/response";
