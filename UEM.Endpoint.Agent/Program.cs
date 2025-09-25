@@ -3,6 +3,15 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using UEM.Endpoint.Agent.Services;
 using UEM.Shared.Infrastructure.Logging;
+using Serilog;
+using Serilog.Events;
+
+// Initialize Serilog early to capture startup logs
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .CreateBootstrapLogger();
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -12,15 +21,29 @@ builder.Services.Configure<HostOptions>(o =>
     o.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
 });
 
-builder.Logging.ClearProviders();
-builder.Logging.AddSimpleConsole(o => o.TimestampFormat = "HH:mm:ss ");
+// Configure Serilog from appsettings.json
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services));
 
-// Add file logging for Windows
+// Ensure log directories exist
+var logDirs = new[]
+{
+    "logs/agent",
+    "logs/services", 
+    "logs/errors"
+};
+
+foreach (var dir in logDirs)
+{
+    Directory.CreateDirectory(dir);
+}
+
+// For Windows service, also create system log directory
 if (OperatingSystem.IsWindows())
 {
-    var logDir = @"C:\ProgramData\EximietasDesign\UEM.Endpoint.Service\Logs";
-    Directory.CreateDirectory(logDir);
-    // builder.Logging.AddFile(Path.Combine(logDir, "agent.log"), append: true);
+    var systemLogDir = @"C:\ProgramData\EximietasDesign\UEM.Endpoint.Service\Logs";
+    Directory.CreateDirectory(systemLogDir);
 }
 
 // Core agent services
@@ -62,9 +85,20 @@ builder.Services.AddHostedService<AgentWorker>();
 var app = builder.Build();
 
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
-logger.LogInformation("Starting UEM Enterprise Endpoint Agent with comprehensive discovery capabilities...");
+logger.LogInformation("Starting UEM Enterprise Endpoint Agent with comprehensive discovery and daily file logging...");
 
-await app.RunAsync();
+try
+{
+    await app.RunAsync();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "UEM Enterprise Endpoint Agent terminated unexpectedly");
+}
+finally
+{
+    await Log.CloseAndFlushAsync();
+}
 
 sealed class AgentWorker : BackgroundService
 {
@@ -75,8 +109,8 @@ sealed class AgentWorker : BackgroundService
 
     public AgentWorker(
         ILogger<AgentWorker> log, 
-        AgentRegistrationService eg, 
-        CommandChannel commandChannel
+        AgentRegistrationService reg, 
+        CommandChannel commandChannel,
         EnterpriseDiscoveryOrchestrator discoveryOrchestrator)
     {
         _log = log;
