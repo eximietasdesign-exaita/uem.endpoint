@@ -537,7 +537,7 @@ public class EnterpriseSecurityDiscoveryService
 public class EnterpriseSecurityInfo
 {
     public DateTime DiscoveryTimestamp { get; set; }
-    public TmpInfo? TmpInfo { get; set; }
+    public TpmInfo? TpmInfo { get; set; }
     public BitLockerInfo? BitLockerInfo { get; set; }
     public WindowsDefenderInfo? WindowsDefenderInfo { get; set; }
     public FirewallStatusInfo? FirewallStatus { get; set; }
@@ -560,7 +560,7 @@ public class EnterpriseSecurityInfo
     public ComplianceInfo? ComplianceInfo { get; set; }
 }
 
-public class TmpInfo
+public class TpmInfo
 {
     public bool IsAvailable { get; set; } = true;
     public bool IsActivated { get; set; }
