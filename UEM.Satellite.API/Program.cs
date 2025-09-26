@@ -86,6 +86,10 @@ builder.Services.AddScoped<HeartbeatRepository>();
 builder.Services.AddScoped<AgentStore>();
 builder.Services.AddScoped<DiscoveryScriptPopulationService>();
 
+// Policy deployment services
+builder.Services.AddScoped<IPolicyDeploymentService, PolicyDeploymentService>();
+builder.Services.AddScoped<IAgentStatusService, AgentStatusService>();
+
 // Health checks
 builder.Services.AddHealthChecks();
 
