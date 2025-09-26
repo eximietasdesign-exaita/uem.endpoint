@@ -6,7 +6,7 @@ namespace UEM.Endpoint.Agent.Data.Models;
 /// <summary>
 /// Configuration data received from server
 /// </summary>
-[Table("server_configurations")]
+[Table("uem_app_server_configurations")]
 public class ServerConfigurationRecord
 {
     [Key]
@@ -41,7 +41,7 @@ public class ServerConfigurationRecord
 /// <summary>
 /// Commands received from server
 /// </summary>
-[Table("server_commands")]
+[Table("uem_app_server_commands")]
 public class ServerCommandRecord
 {
     [Key]
@@ -86,7 +86,7 @@ public class ServerCommandRecord
 /// <summary>
 /// Discovery scripts received from server
 /// </summary>
-[Table("server_discovery_scripts")]
+[Table("uem_app_server_discovery_scripts")]
 public class ServerDiscoveryScriptRecord
 {
     [Key]
@@ -134,7 +134,7 @@ public class ServerDiscoveryScriptRecord
 /// <summary>
 /// Policy configurations received from server
 /// </summary>
-[Table("server_policies")]
+[Table("uem_app_server_policies")]
 public class ServerPolicyRecord
 {
     [Key]
@@ -179,7 +179,7 @@ public class ServerPolicyRecord
 /// <summary>
 /// Updates and patches received from server
 /// </summary>
-[Table("server_updates")]
+[Table("uem_app_server_updates")]
 public class ServerUpdateRecord
 {
     [Key]
@@ -224,7 +224,7 @@ public class ServerUpdateRecord
 /// <summary>
 /// Server responses to agent communications
 /// </summary>
-[Table("server_responses")]
+[Table("uem_app_server_responses")]
 public class ServerResponseRecord
 {
     [Key]
@@ -267,7 +267,7 @@ public class ServerResponseRecord
 /// <summary>
 /// System notifications received from server
 /// </summary>
-[Table("server_notifications")]
+[Table("uem_app_server_notifications")]
 public class ServerNotificationRecord
 {
     [Key]

@@ -6,7 +6,7 @@ namespace UEM.Endpoint.Agent.Data.Models;
 /// <summary>
 /// Heartbeat data sent to server
 /// </summary>
-[Table("heartbeats")]
+[Table("uem_app_heartbeats")]
 public class HeartbeatRecord
 {
     [Key]
@@ -51,7 +51,7 @@ public class HeartbeatRecord
 /// <summary>
 /// Hardware discovery data sent to server
 /// </summary>
-[Table("hardware_discoveries")]
+[Table("uem_app_hardware_discoveries")]
 public class HardwareDiscoveryRecord
 {
     [Key]
@@ -84,7 +84,7 @@ public class HardwareDiscoveryRecord
 /// <summary>
 /// Software discovery data sent to server
 /// </summary>
-[Table("software_discoveries")]
+[Table("uem_app_software_discoveries")]
 public class SoftwareDiscoveryRecord
 {
     [Key]
@@ -119,7 +119,7 @@ public class SoftwareDiscoveryRecord
 /// <summary>
 /// Security discovery data sent to server
 /// </summary>
-[Table("security_discoveries")]
+[Table("uem_app_security_discoveries")]
 public class SecurityDiscoveryRecord
 {
     [Key]
@@ -152,7 +152,7 @@ public class SecurityDiscoveryRecord
 /// <summary>
 /// Script execution results sent to server
 /// </summary>
-[Table("script_executions")]
+[Table("uem_app_script_executions")]
 public class ScriptExecutionRecord
 {
     [Key]
@@ -198,7 +198,7 @@ public class ScriptExecutionRecord
 /// <summary>
 /// Agent registration data sent to server
 /// </summary>
-[Table("agent_registrations")]
+[Table("uem_app_agent_registrations")]
 public class AgentRegistrationRecord
 {
     [Key]
@@ -233,7 +233,7 @@ public class AgentRegistrationRecord
 /// <summary>
 /// API communication log for data sent to server
 /// </summary>
-[Table("api_communications")]
+[Table("uem_app_api_communications")]
 public class ApiCommunicationRecord
 {
     [Key]

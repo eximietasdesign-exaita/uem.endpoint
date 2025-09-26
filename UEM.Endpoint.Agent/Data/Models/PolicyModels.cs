@@ -6,7 +6,7 @@ namespace UEM.Endpoint.Agent.Data.Models;
 /// <summary>
 /// Policy command record stored in local SQLite database
 /// </summary>
-[Table("policy_commands")]
+[Table("uem_app_policy_commands")]
 public class PolicyCommandRecord
 {
     [Key]
@@ -56,7 +56,7 @@ public class PolicyCommandRecord
 /// <summary>
 /// Policy execution result record stored in local SQLite database
 /// </summary>
-[Table("policy_execution_results")]
+[Table("uem_app_policy_execution_results")]
 public class PolicyExecutionResultRecord
 {
     [Key]
