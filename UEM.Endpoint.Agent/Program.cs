@@ -107,6 +107,11 @@ builder.Services.AddSingleton<CommandChannel>(sp =>
     return new CommandChannel(logger, config);
 });
 
+// Policy execution services
+builder.Services.AddSingleton<PolicyDataService>();
+builder.Services.AddSingleton<ScriptExecutionService>();
+builder.Services.AddHostedService<PolicyExecutionEngine>();
+
 // Main agent worker
 builder.Services.AddHostedService<AgentWorker>();
 

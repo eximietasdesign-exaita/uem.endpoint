@@ -21,6 +21,10 @@ public class AgentDataContext : DbContext
     public DbSet<ScriptExecutionRecord> ScriptExecutions { get; set; }
     public DbSet<AgentRegistrationRecord> AgentRegistrations { get; set; }
     public DbSet<ApiCommunicationRecord> ApiCommunications { get; set; }
+    
+    // Policy management tables
+    public DbSet<PolicyCommandRecord> PolicyCommands { get; set; }
+    public DbSet<PolicyExecutionResultRecord> PolicyExecutionResults { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -81,6 +85,26 @@ public class AgentDataContext : DbContext
             entity.HasIndex(e => e.RequestTimestamp);
             entity.HasIndex(e => e.Endpoint);
             entity.HasIndex(e => e.Success);
+        });
+
+        modelBuilder.Entity<PolicyCommandRecord>(entity =>
+        {
+            entity.HasIndex(e => e.ExecutionId).IsUnique();
+            entity.HasIndex(e => e.AgentId);
+            entity.HasIndex(e => e.PolicyId);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.IssuedAt);
+            entity.HasIndex(e => e.ExpiresAt);
+        });
+
+        modelBuilder.Entity<PolicyExecutionResultRecord>(entity =>
+        {
+            entity.HasIndex(e => e.ExecutionId).IsUnique();
+            entity.HasIndex(e => e.AgentId);
+            entity.HasIndex(e => e.PolicyId);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.ReportedToServer);
+            entity.HasIndex(e => e.CreatedAt);
         });
 
         // Configure JSON columns appropriately
