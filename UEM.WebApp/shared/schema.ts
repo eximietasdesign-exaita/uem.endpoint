@@ -2364,6 +2364,163 @@ export const aiModelConfigurations = pgTable("uem_app_ai_model_configurations", 
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Policy Execution Results table for enterprise-grade tracking
+export const policyExecutionResults = pgTable("uem_app_policy_execution_results", {
+  id: serial("id").primaryKey(),
+  policyId: integer("policy_id").notNull().references(() => policies.id),
+  agentId: text("agent_id").notNull().references(() => agents.id),
+  endpointId: integer("endpoint_id").references(() => endpoints.id),
+  domainId: integer("domain_id").references(() => domains.id),
+  tenantId: integer("tenant_id").references(() => tenants.id),
+  
+  // Execution metadata
+  executionId: text("execution_id").notNull(), // UUID for tracking
+  triggerType: text("trigger_type").notNull(), // manual, scheduled, event_driven
+  triggeredBy: integer("triggered_by").references(() => users.id),
+  
+  // Execution flow tracking
+  totalSteps: integer("total_steps").notNull(),
+  completedSteps: integer("completed_steps").default(0),
+  currentStep: integer("current_step").default(1),
+  
+  // Overall status
+  status: text("status").notNull().default("pending"), // pending, running, completed, failed, cancelled, timeout
+  progress: real("progress").default(0.0), // 0.0 to 100.0
+  
+  // Results and output
+  executionResults: jsonb("execution_results").$type<Array<{
+    stepNumber: number;
+    scriptId: number;
+    scriptName: string;
+    status: string; // success, failed, skipped, timeout
+    exitCode?: number;
+    output?: string;
+    errorMessage?: string;
+    executionTimeMs: number;
+    timestamp: string;
+  }>>(),
+  
+  // Consolidated output
+  finalOutput: text("final_output"),
+  finalStatus: text("final_status"), // success, partial_success, failed
+  errorSummary: text("error_summary"),
+  
+  // Performance metrics
+  totalExecutionTimeMs: integer("total_execution_time_ms").default(0),
+  resourceUsage: jsonb("resource_usage").$type<{
+    peakCpuUsage?: number;
+    peakMemoryUsage?: number;
+    diskIOBytes?: number;
+    networkIOBytes?: number;
+  }>(),
+  
+  // Timing information
+  scheduledAt: timestamp("scheduled_at"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  timeoutAt: timestamp("timeout_at"),
+  
+  // Agent information at execution time
+  agentVersion: text("agent_version"),
+  operatingSystem: text("operating_system"),
+  osVersion: text("os_version"),
+  
+  // Security and compliance
+  executionHash: text("execution_hash"), // For integrity verification
+  signatureVerified: boolean("signature_verified").default(false),
+  complianceFlags: jsonb("compliance_flags").$type<string[]>(),
+  
+  // Retry and recovery
+  retryCount: integer("retry_count").default(0),
+  maxRetries: integer("max_retries").default(3),
+  retryStrategy: text("retry_strategy").default("exponential_backoff"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Policy Deployment Jobs table for batch deployments
+export const policyDeploymentJobs = pgTable("uem_app_policy_deployment_jobs", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  domainId: integer("domain_id").references(() => domains.id),
+  tenantId: integer("tenant_id").references(() => tenants.id),
+  
+  // Policies to deploy
+  policyIds: jsonb("policy_ids").$type<number[]>().notNull(),
+  
+  // Target selection
+  targetType: text("target_type").notNull(), // all_agents, agent_list, criteria_based
+  targetAgents: jsonb("target_agents").$type<string[]>(), // Specific agent IDs
+  targetCriteria: jsonb("target_criteria").$type<{
+    operatingSystem?: string[];
+    osVersion?: string[];
+    domain?: string[];
+    agentVersion?: string[];
+    tags?: string[];
+    customQuery?: string;
+  }>(),
+  
+  // Deployment configuration
+  deploymentStrategy: text("deployment_strategy").notNull().default("parallel"), // parallel, sequential, rolling
+  batchSize: integer("batch_size").default(10), // For rolling deployments
+  maxConcurrency: integer("max_concurrency").default(50),
+  
+  // Scheduling
+  schedule: jsonb("schedule").$type<{
+    type: string; // immediate, scheduled, recurring
+    startTime?: string;
+    timezone?: string;
+    frequency?: string; // daily, weekly, monthly
+    businessHoursOnly?: boolean;
+  }>(),
+  
+  // Progress tracking
+  status: text("status").notNull().default("pending"), // pending, running, completed, failed, cancelled
+  totalTargets: integer("total_targets").default(0),
+  completedTargets: integer("completed_targets").default(0),
+  failedTargets: integer("failed_targets").default(0),
+  progress: real("progress").default(0.0),
+  
+  // Results summary
+  deploymentResults: jsonb("deployment_results").$type<{
+    successful: number;
+    failed: number;
+    timeout: number;
+    cancelled: number;
+    summary: Array<{
+      agentId: string;
+      hostname: string;
+      status: string;
+      executionId?: string;
+      error?: string;
+      completedAt?: string;
+    }>;
+  }>(),
+  
+  // Notifications and reporting
+  notificationSettings: jsonb("notification_settings").$type<{
+    emailOnCompletion: boolean;
+    emailOnError: boolean;
+    webhookUrl?: string;
+    recipients: string[];
+  }>(),
+  
+  // Audit and compliance
+  createdBy: integer("created_by").references(() => users.id),
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvalRequired: boolean("approval_required").default(false),
+  approvedAt: timestamp("approved_at"),
+  
+  // Timing
+  scheduledFor: timestamp("scheduled_for"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // ===== AI SERVICES RELATIONS =====
 
 export const aiConversationsRelations = relations(aiConversations, ({ one, many }) => ({
