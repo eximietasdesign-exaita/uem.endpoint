@@ -49,17 +49,17 @@ public class EnterpriseDiscoveryOrchestrator : BackgroundService
                 RemoteCertificateValidationCallback = (_, __, ___, ____) => true
             }
         };
-        
-        _httpClient = new HttpClient(handler) 
-        { 
+
+        _httpClient = new HttpClient(handler)
+        {
             Timeout = TimeSpan.FromMinutes(5) // Extended timeout for large discovery payloads
         };
 
         // Configure discovery settings
         _discoveryInterval = TimeSpan.FromHours(_configuration.GetValue<int>("Discovery:IntervalHours", 24));
         _enablePeriodicDiscovery = _configuration.GetValue<bool>("Discovery:EnablePeriodic", true);
-        
-        _logger.LogInformation("Enterprise Discovery Orchestrator initialized. Interval: {Interval}, Periodic: {Periodic}", 
+
+        _logger.LogInformation("Enterprise Discovery Orchestrator initialized. Interval: {Interval}, Periodic: {Periodic}",
             _discoveryInterval, _enablePeriodicDiscovery);
     }
 
@@ -116,7 +116,7 @@ public class EnterpriseDiscoveryOrchestrator : BackgroundService
             {
                 _logger.LogWarning("Agent not registered, attempting registration...");
                 await _registrationService.EnsureRegisteredAsync(cancellationToken);
-                
+
                 if (string.IsNullOrWhiteSpace(_registrationService.AgentId))
                 {
                     _logger.LogError("Agent registration failed, skipping discovery");
@@ -232,7 +232,7 @@ public class EnterpriseDiscoveryOrchestrator : BackgroundService
             UserAccountCount = data.Security?.UserAccounts?.Count ?? 0,
             GroupCount = data.Security?.GroupMemberships?.Count ?? 0,
             EncryptedVolumeCount = data.Security?.BitLockerInfo?.Volumes?.Count ?? 0,
-            TpmEnabled = data.Security?.TmpInfo?.IsReady ?? false,
+            TmpEnabled = data.Security?.TpmInfo?.IsReady ?? false,
             WindowsDefenderEnabled = data.Security?.WindowsDefenderInfo?.AntivirusEnabled ?? false,
             FirewallEnabled = (data.Security?.FirewallStatus?.DomainProfileEnabled ?? false) ||
                              (data.Security?.FirewallStatus?.PrivateProfileEnabled ?? false) ||
@@ -264,7 +264,7 @@ public class EnterpriseDiscoveryOrchestrator : BackgroundService
         if (security == null) return 0;
 
         var count = 0;
-        if (security.TmpInfo != null) count++;
+        if (security.TpmInfo != null) count++;
         if (security.BitLockerInfo != null) count++;
         if (security.WindowsDefenderInfo != null) count++;
         if (security.FirewallStatus != null) count++;
@@ -290,16 +290,16 @@ public class EnterpriseDiscoveryOrchestrator : BackgroundService
             };
 
             var jsonData = JsonSerializer.Serialize(data, jsonOptions);
-            
+
             using var content = new StringContent(jsonData, System.Text.Encoding.UTF8, "application/json");
             using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = content };
-            
+
             if (!string.IsNullOrWhiteSpace(_registrationService.Jwt))
             {
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _registrationService.Jwt);
             }
 
-            _logger.LogInformation("Sending discovery data to {Endpoint}. Payload size: {PayloadSize} bytes", 
+            _logger.LogInformation("Sending discovery data to {Endpoint}. Payload size: {PayloadSize} bytes",
                 endpoint, jsonData.Length);
 
             using var response = await _httpClient.SendAsync(request, cancellationToken);
@@ -312,7 +312,7 @@ public class EnterpriseDiscoveryOrchestrator : BackgroundService
             else
             {
                 var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-                _logger.LogWarning("Failed to send discovery data. Status: {StatusCode}, Response: {Response}", 
+                _logger.LogWarning("Failed to send discovery data. Status: {StatusCode}, Response: {Response}",
                     response.StatusCode, responseBody);
                 return false;
             }

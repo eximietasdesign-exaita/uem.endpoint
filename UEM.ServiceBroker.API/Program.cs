@@ -23,4 +23,6 @@ app.MapGet("/health", () => new { status = "healthy", timestamp = DateTime.UtcNo
 
 // Remove duplicate endpoint - handled by StreamController
 
-app.Run();
+// Configure port from settings
+var port = builder.Configuration.GetValue<int>("ServerSettings:Port", 8099);
+app.Run($"http://0.0.0.0:{port}");

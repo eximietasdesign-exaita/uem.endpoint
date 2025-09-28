@@ -13,32 +13,32 @@ public static class LoggingService
     /// <summary>
     /// Log agent lifecycle events with structured data
     /// </summary>
-    public static void LogAgentLifecycle(this ILogger logger, string eventType, string? details = null, 
+    public static void LogAgentLifecycle(this ILogger logger, string eventType, string? details = null,
         [CallerMemberName] string? callerName = null)
     {
-        logger.LogInformation("Agent Lifecycle Event: {EventType} | Caller: {Caller} | Details: {Details}", 
+        logger.LogInformation("Agent Lifecycle Event: {EventType} | Caller: {Caller} | Details: {Details}",
             eventType, callerName, details);
     }
 
     /// <summary>
     /// Log discovery operations with timing and results
     /// </summary>
-    public static void LogDiscoveryOperation(this ILogger logger, string operation, TimeSpan duration, 
+    public static void LogDiscoveryOperation(this ILogger logger, string operation, TimeSpan duration,
         int? itemsFound = null, string? details = null)
     {
-        logger.LogInformation("Discovery Operation: {Operation} | Duration: {Duration:mm\\:ss\\.fff} | Items: {ItemsFound} | Details: {Details}", 
+        logger.LogInformation("Discovery Operation: {Operation} | Duration: {Duration:mm\\:ss\\.fff} | Items: {ItemsFound} | Details: {Details}",
             operation, duration, itemsFound, details);
     }
 
     /// <summary>
     /// Log heartbeat status with metrics
     /// </summary>
-    public static void LogHeartbeat(this ILogger logger, string agentId, bool success, 
+    public static void LogHeartbeat(this ILogger logger, string agentId, bool success,
         TimeSpan? responseTime = null, string? error = null)
     {
         if (success)
         {
-            logger.LogInformation("Heartbeat sent successfully | Agent: {AgentId} | ResponseTime: {ResponseTime:mm\\:ss\\.fff}", 
+            logger.LogInformation("Heartbeat sent successfully | Agent: {AgentId} | ResponseTime: {ResponseTime:mm\\:ss\\.fff}",
                 agentId, responseTime);
         }
         else
@@ -50,17 +50,17 @@ public static class LoggingService
     /// <summary>
     /// Log command execution with context
     /// </summary>
-    public static void LogCommandExecution(this ILogger logger, string commandId, string commandType, 
+    public static void LogCommandExecution(this ILogger logger, string commandId, string commandType,
         bool success, TimeSpan? duration = null, string? result = null, string? error = null)
     {
         if (success)
         {
-            logger.LogInformation("Command executed successfully | ID: {CommandId} | Type: {CommandType} | Duration: {Duration:mm\\:ss\\.fff} | Result: {Result}", 
+            logger.LogInformation("Command executed successfully | ID: {CommandId} | Type: {CommandType} | Duration: {Duration:mm\\:ss\\.fff} | Result: {Result}",
                 commandId, commandType, duration, result);
         }
         else
         {
-            logger.LogError("Command execution failed | ID: {CommandId} | Type: {CommandType} | Duration: {Duration:mm\\:ss\\.fff} | Error: {Error}", 
+            logger.LogError("Command execution failed | ID: {CommandId} | Type: {CommandType} | Duration: {Duration:mm\\:ss\\.fff} | Error: {Error}",
                 commandId, commandType, duration, error);
         }
     }
@@ -68,17 +68,17 @@ public static class LoggingService
     /// <summary>
     /// Log API communication events
     /// </summary>
-    public static void LogApiCommunication(this ILogger logger, string endpoint, string method, 
+    public static void LogApiCommunication(this ILogger logger, string endpoint, string method,
         int statusCode, TimeSpan? duration = null, string? details = null)
     {
         if (statusCode >= 200 && statusCode < 300)
         {
-            logger.LogInformation("API call successful | {Method} {Endpoint} | Status: {StatusCode} | Duration: {Duration:mm\\:ss\\.fff} | Details: {Details}", 
+            logger.LogInformation("API call successful | {Method} {Endpoint} | Status: {StatusCode} | Duration: {Duration:mm\\:ss\\.fff} | Details: {Details}",
                 method, endpoint, statusCode, duration, details);
         }
         else
         {
-            logger.LogWarning("API call failed | {Method} {Endpoint} | Status: {StatusCode} | Duration: {Duration:mm\\:ss\\.fff} | Details: {Details}", 
+            logger.LogWarning("API call failed | {Method} {Endpoint} | Status: {StatusCode} | Duration: {Duration:mm\\:ss\\.fff} | Details: {Details}",
                 method, endpoint, statusCode, duration, details);
         }
     }
@@ -86,20 +86,20 @@ public static class LoggingService
     /// <summary>
     /// Log security events with high priority
     /// </summary>
-    public static void LogSecurityEvent(this ILogger logger, string eventType, string description, 
+    public static void LogSecurityEvent(this ILogger logger, string eventType, string description,
         LogLevel level = LogLevel.Warning, string? additionalData = null)
     {
-        logger.Log(level, "SECURITY EVENT: {EventType} | Description: {Description} | Data: {AdditionalData}", 
+        logger.Log(level, "SECURITY EVENT: {EventType} | Description: {Description} | Data: {AdditionalData}",
             eventType, description, additionalData);
     }
 
     /// <summary>
     /// Log performance metrics
     /// </summary>
-    public static void LogPerformanceMetric(this ILogger logger, string metricName, double value, 
+    public static void LogPerformanceMetric(this ILogger logger, string metricName, double value,
         string? unit = null, string? context = null)
     {
-        logger.LogInformation("Performance Metric | {MetricName}: {Value} {Unit} | Context: {Context}", 
+        logger.LogInformation("Performance Metric | {MetricName}: {Value} {Unit} | Context: {Context}",
             metricName, value, unit, context);
     }
 
@@ -123,7 +123,7 @@ public static class LoggingService
             _logger = logger;
             _operationName = operationName;
             _startTime = DateTime.UtcNow;
-            
+
             _logger.LogDebug("Performance timer started for operation: {OperationName}", _operationName);
         }
 
@@ -158,7 +158,8 @@ public class LogFileManager
     public async Task PerformMaintenanceAsync()
     {
         using var timer = _logger.BeginPerformanceTimer("LogMaintenanceOperation");
-        
+        //using var timer = ((ILogger)_logger).BeginPerformanceTimer("LogMaintenanceOperation");
+
         try
         {
             foreach (var directory in _logDirectories)
@@ -169,7 +170,7 @@ public class LogFileManager
                     await CompressOldLogsAsync(directory);
                 }
             }
-            
+
             _logger.LogInformation("Log file maintenance completed successfully");
         }
         catch (Exception ex)
