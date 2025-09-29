@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using UEM.Endpoint.Agent.Data.Services;
 
 namespace UEM.Endpoint.Agent.Services;
 
@@ -18,6 +19,7 @@ public class EnterpriseDiscoveryOrchestrator : BackgroundService
     private readonly EnterpriseHardwareDiscoveryService _hardwareDiscovery;
     private readonly EnterpriseSoftwareDiscoveryService _softwareDiscovery;
     private readonly EnterpriseSecurityDiscoveryService _securityDiscovery;
+    private readonly AgentDataService _agentDataService;
     private readonly HttpClient _httpClient;
     private readonly TimeSpan _discoveryInterval;
     private readonly bool _enablePeriodicDiscovery;
@@ -28,7 +30,8 @@ public class EnterpriseDiscoveryOrchestrator : BackgroundService
         AgentRegistrationService registrationService,
         EnterpriseHardwareDiscoveryService hardwareDiscovery,
         EnterpriseSoftwareDiscoveryService softwareDiscovery,
-        EnterpriseSecurityDiscoveryService securityDiscovery)
+        EnterpriseSecurityDiscoveryService securityDiscovery,
+        AgentDataService agentDataService)
     {
         _logger = logger;
         _configuration = configuration;
@@ -36,6 +39,7 @@ public class EnterpriseDiscoveryOrchestrator : BackgroundService
         _hardwareDiscovery = hardwareDiscovery;
         _softwareDiscovery = softwareDiscovery;
         _securityDiscovery = securityDiscovery;
+        _agentDataService = agentDataService;
 
         // Configure HTTP client for API communication
         var handler = new SocketsHttpHandler
@@ -107,34 +111,39 @@ public class EnterpriseDiscoveryOrchestrator : BackgroundService
 
     private async Task<bool> RunDiscoveryAsync(CancellationToken cancellationToken)
     {
+        var discoverySessionId = Guid.NewGuid().ToString();
+        _logger.LogInformation("Starting comprehensive enterprise discovery session {DiscoverySessionId}...", discoverySessionId);
+
         try
         {
-            _logger.LogInformation("Starting comprehensive enterprise discovery...");
-
-            // Ensure agent is registered
+            // Step 1: Ensure agent is registered
+            _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Step 1: Validating agent registration", discoverySessionId);
             if (string.IsNullOrWhiteSpace(_registrationService.AgentId))
             {
-                _logger.LogWarning("Agent not registered, attempting registration...");
+                _logger.LogWarning("[Discovery Session {DiscoverySessionId}] Agent not registered, attempting registration...", discoverySessionId);
                 await _registrationService.EnsureRegisteredAsync(cancellationToken);
 
                 if (string.IsNullOrWhiteSpace(_registrationService.AgentId))
                 {
-                    _logger.LogError("Agent registration failed, skipping discovery");
+                    _logger.LogError("[Discovery Session {DiscoverySessionId}] Agent registration failed, aborting discovery", discoverySessionId);
                     return false;
                 }
             }
+            _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Agent registration validated: {AgentId}", discoverySessionId, _registrationService.AgentId);
 
+            var discoveryStartTime = DateTime.UtcNow;
             var discoveryData = new ComprehensiveDiscoveryData
             {
                 AgentId = _registrationService.AgentId,
-                Timestamp = DateTime.UtcNow,
+                Timestamp = discoveryStartTime,
                 DiscoveryVersion = "1.0.0"
             };
 
-            // Run discovery components in parallel for better performance
-            var hardwareTask = DiscoverHardwareAsync(cancellationToken);
-            var softwareTask = DiscoverSoftwareAsync(cancellationToken);
-            var securityTask = DiscoverSecurityAsync(cancellationToken);
+            // Step 2: Run discovery components in parallel for better performance
+            _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Step 2: Starting parallel discovery processes", discoverySessionId);
+            var hardwareTask = DiscoverAndStoreHardwareAsync(discoverySessionId, cancellationToken);
+            var softwareTask = DiscoverAndStoreSoftwareAsync(discoverySessionId, cancellationToken);
+            var securityTask = DiscoverAndStoreSecurityAsync(discoverySessionId, cancellationToken);
 
             await Task.WhenAll(hardwareTask, softwareTask, securityTask);
 
@@ -142,77 +151,133 @@ public class EnterpriseDiscoveryOrchestrator : BackgroundService
             discoveryData.Software = await softwareTask;
             discoveryData.Security = await securityTask;
 
-            // Calculate discovery metrics
+            // Step 3: Calculate and log discovery metrics
+            _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Step 3: Calculating discovery metrics", discoverySessionId);
             discoveryData.DiscoveryMetrics = CalculateDiscoveryMetrics(discoveryData);
+            var discoveryTime = DateTime.UtcNow - discoveryStartTime;
 
-            // Send discovery data to Satellite API
-            var success = await SendDiscoveryDataAsync(discoveryData, cancellationToken);
+            _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Local discovery completed in {DiscoveryTime:c}. Hardware: {HardwareComponents}, Software: {SoftwareItems}, Security: {SecurityPolicies}",
+                discoverySessionId, discoveryTime, 
+                discoveryData.DiscoveryMetrics?.HardwareComponentCount ?? 0,
+                discoveryData.DiscoveryMetrics?.SoftwareItemCount ?? 0,
+                discoveryData.DiscoveryMetrics?.SecurityPolicyCount ?? 0);
+
+            // Step 4: Send discovery data to Satellite API
+            _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Step 4: Transmitting discovery data to Satellite API", discoverySessionId);
+            var success = await SendDiscoveryDataAsync(discoveryData, discoverySessionId, cancellationToken);
 
             if (success)
             {
-                _logger.LogInformation("Enterprise discovery completed successfully. Hardware: {HardwareComponents}, Software: {SoftwareItems}, Security: {SecurityPolicies}",
-                    discoveryData.DiscoveryMetrics?.HardwareComponentCount ?? 0,
-                    discoveryData.DiscoveryMetrics?.SoftwareItemCount ?? 0,
-                    discoveryData.DiscoveryMetrics?.SecurityPolicyCount ?? 0);
+                _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Discovery session completed successfully. Total time: {TotalTime:c}",
+                    discoverySessionId, DateTime.UtcNow - discoveryStartTime);
             }
             else
             {
-                _logger.LogWarning("Discovery completed but failed to send data to API");
+                _logger.LogWarning("[Discovery Session {DiscoverySessionId}] Discovery completed locally but failed to transmit to server. Data preserved in local database.", discoverySessionId);
             }
 
             return success;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during enterprise discovery");
+            _logger.LogError(ex, "[Discovery Session {DiscoverySessionId}] Critical error during enterprise discovery", discoverySessionId);
             return false;
         }
     }
 
-    private async Task<EnterpriseHardwareInfo> DiscoverHardwareAsync(CancellationToken cancellationToken)
+    private async Task<EnterpriseHardwareInfo> DiscoverAndStoreHardwareAsync(string discoverySessionId, CancellationToken cancellationToken)
     {
+        var startTime = DateTime.UtcNow;
+        _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Starting hardware discovery and local storage...", discoverySessionId);
+        
         try
         {
-            _logger.LogInformation("Starting hardware discovery...");
+            // Discover hardware information
             var hardware = await _hardwareDiscovery.DiscoverAsync();
-            _logger.LogInformation("Hardware discovery completed");
+            var discoveryTime = DateTime.UtcNow - startTime;
+
+            _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Hardware discovery completed in {DiscoveryTime:c}. Found {ComponentCount} components", 
+                discoverySessionId, discoveryTime, CalculateHardwareComponentCount(hardware));
+
+            // Store in local SQLite database
+            var storeStartTime = DateTime.UtcNow;
+            var recordId = await _agentDataService.StoreHardwareDiscoveryAsync(_registrationService.AgentId!, hardware, discoverySessionId);
+            var storeTime = DateTime.UtcNow - storeStartTime;
+
+            _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Hardware data stored to local database (Record ID: {RecordId}) in {StoreTime:c}", 
+                discoverySessionId, recordId, storeTime);
+
             return hardware;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Hardware discovery failed");
+            var totalTime = DateTime.UtcNow - startTime;
+            _logger.LogError(ex, "[Discovery Session {DiscoverySessionId}] Hardware discovery failed after {TotalTime:c}", discoverySessionId, totalTime);
             return new EnterpriseHardwareInfo { DiscoveryTimestamp = DateTime.UtcNow };
         }
     }
 
-    private async Task<EnterpriseSoftwareInfo> DiscoverSoftwareAsync(CancellationToken cancellationToken)
+    private async Task<EnterpriseSoftwareInfo> DiscoverAndStoreSoftwareAsync(string discoverySessionId, CancellationToken cancellationToken)
     {
+        var startTime = DateTime.UtcNow;
+        _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Starting software discovery and local storage...", discoverySessionId);
+        
         try
         {
-            _logger.LogInformation("Starting software discovery...");
+            // Discover software information
             var software = await _softwareDiscovery.DiscoverAsync();
-            _logger.LogInformation("Software discovery completed");
+            var discoveryTime = DateTime.UtcNow - startTime;
+            var softwareCount = software?.InstalledPrograms?.Count ?? 0;
+
+            _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Software discovery completed in {DiscoveryTime:c}. Found {SoftwareCount} installed programs", 
+                discoverySessionId, discoveryTime, softwareCount);
+
+            // Store in local SQLite database
+            var storeStartTime = DateTime.UtcNow;
+            var recordId = await _agentDataService.StoreSoftwareDiscoveryAsync(_registrationService.AgentId!, software, softwareCount, discoverySessionId);
+            var storeTime = DateTime.UtcNow - storeStartTime;
+
+            _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Software data stored to local database (Record ID: {RecordId}) in {StoreTime:c}", 
+                discoverySessionId, recordId, storeTime);
+
             return software;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Software discovery failed");
+            var totalTime = DateTime.UtcNow - startTime;
+            _logger.LogError(ex, "[Discovery Session {DiscoverySessionId}] Software discovery failed after {TotalTime:c}", discoverySessionId, totalTime);
             return new EnterpriseSoftwareInfo { DiscoveryTimestamp = DateTime.UtcNow };
         }
     }
 
-    private async Task<EnterpriseSecurityInfo> DiscoverSecurityAsync(CancellationToken cancellationToken)
+    private async Task<EnterpriseSecurityInfo> DiscoverAndStoreSecurityAsync(string discoverySessionId, CancellationToken cancellationToken)
     {
+        var startTime = DateTime.UtcNow;
+        _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Starting security discovery and local storage...", discoverySessionId);
+        
         try
         {
-            _logger.LogInformation("Starting security discovery...");
+            // Discover security information
             var security = await _securityDiscovery.DiscoverAsync();
-            _logger.LogInformation("Security discovery completed");
+            var discoveryTime = DateTime.UtcNow - startTime;
+
+            _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Security discovery completed in {DiscoveryTime:c}. Found {PolicyCount} security policies", 
+                discoverySessionId, discoveryTime, CalculateSecurityPolicyCount(security));
+
+            // Store in local SQLite database
+            var storeStartTime = DateTime.UtcNow;
+            var recordId = await _agentDataService.StoreSecurityDiscoveryAsync(_registrationService.AgentId!, security, discoverySessionId);
+            var storeTime = DateTime.UtcNow - storeStartTime;
+
+            _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Security data stored to local database (Record ID: {RecordId}) in {StoreTime:c}", 
+                discoverySessionId, recordId, storeTime);
+
             return security;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Security discovery failed");
+            var totalTime = DateTime.UtcNow - startTime;
+            _logger.LogError(ex, "[Discovery Session {DiscoverySessionId}] Security discovery failed after {TotalTime:c}", discoverySessionId, totalTime);
             return new EnterpriseSecurityInfo { DiscoveryTimestamp = DateTime.UtcNow };
         }
     }
@@ -275,11 +340,12 @@ public class EnterpriseDiscoveryOrchestrator : BackgroundService
         return count;
     }
 
-    private async Task<bool> SendDiscoveryDataAsync(ComprehensiveDiscoveryData data, CancellationToken cancellationToken)
+    private async Task<bool> SendDiscoveryDataAsync(ComprehensiveDiscoveryData data, string discoverySessionId, CancellationToken cancellationToken)
     {
+        var transmitStartTime = DateTime.UtcNow;
         try
         {
-            var baseUrl = Environment.GetEnvironmentVariable("SATELLITE_BASE_URL") ?? "https://localhost:7200";
+            var baseUrl = Environment.GetEnvironmentVariable("SATELLITE_BASE_URL") ?? "http://localhost:8000";
             var endpoint = $"{baseUrl}/api/agents/{data.AgentId}/enterprise-discovery";
 
             var jsonOptions = new JsonSerializerOptions
@@ -290,6 +356,10 @@ public class EnterpriseDiscoveryOrchestrator : BackgroundService
             };
 
             var jsonData = JsonSerializer.Serialize(data, jsonOptions);
+            var payloadSize = System.Text.Encoding.UTF8.GetByteCount(jsonData);
+
+            _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Preparing transmission to {Endpoint}. Payload size: {PayloadSize} bytes ({PayloadMB:F2} MB)", 
+                discoverySessionId, endpoint, payloadSize, payloadSize / 1024.0 / 1024.0);
 
             using var content = new StringContent(jsonData, System.Text.Encoding.UTF8, "application/json");
             using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = content };
@@ -299,27 +369,59 @@ public class EnterpriseDiscoveryOrchestrator : BackgroundService
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _registrationService.Jwt);
             }
 
-            _logger.LogInformation("Sending discovery data to {Endpoint}. Payload size: {PayloadSize} bytes",
-                endpoint, jsonData.Length);
+            // Add custom headers for tracking
+            request.Headers.Add("X-Discovery-Session-Id", discoverySessionId);
+            request.Headers.Add("X-Agent-Version", "1.0.0");
+            
+            _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Transmitting discovery data to Satellite API...", discoverySessionId);
 
             using var response = await _httpClient.SendAsync(request, cancellationToken);
+            var transmitTime = DateTime.UtcNow - transmitStartTime;
 
             if (response.IsSuccessStatusCode)
             {
-                _logger.LogInformation("Discovery data sent successfully to Satellite API");
+                _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Discovery data transmitted successfully in {TransmitTime:c}. Server responded with {StatusCode}", 
+                    discoverySessionId, transmitTime, response.StatusCode);
+                
+                // Log successful API communication
+                await _agentDataService.LogApiCommunicationAsync(
+                    data.AgentId!, endpoint, "POST", data, null, 
+                    (int)response.StatusCode, true, (int)transmitTime.TotalMilliseconds);
+                
                 return true;
             }
             else
             {
                 var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-                _logger.LogWarning("Failed to send discovery data. Status: {StatusCode}, Response: {Response}",
-                    response.StatusCode, responseBody);
+                _logger.LogWarning("[Discovery Session {DiscoverySessionId}] Failed to transmit discovery data after {TransmitTime:c}. Status: {StatusCode}, Response: {Response}",
+                    discoverySessionId, transmitTime, response.StatusCode, responseBody);
+                
+                // Log failed API communication
+                await _agentDataService.LogApiCommunicationAsync(
+                    data.AgentId!, endpoint, "POST", data, responseBody, 
+                    (int)response.StatusCode, false, (int)transmitTime.TotalMilliseconds, responseBody);
+                
                 return false;
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending discovery data to API");
+            var transmitTime = DateTime.UtcNow - transmitStartTime;
+            _logger.LogError(ex, "[Discovery Session {DiscoverySessionId}] Critical error during discovery data transmission after {TransmitTime:c}", 
+                discoverySessionId, transmitTime);
+            
+            // Log failed API communication
+            try
+            {
+                await _agentDataService.LogApiCommunicationAsync(
+                    data.AgentId!, "unknown", "POST", data, null, 
+                    null, false, (int)transmitTime.TotalMilliseconds, ex.Message);
+            }
+            catch
+            {
+                // Ignore errors in error logging to prevent infinite loops
+            }
+            
             return false;
         }
     }

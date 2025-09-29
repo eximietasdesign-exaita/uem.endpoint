@@ -93,7 +93,8 @@ builder.Services.AddSingleton<EnterpriseDiscoveryOrchestrator>(sp =>
     var hardware = sp.GetRequiredService<EnterpriseHardwareDiscoveryService>();
     var software = sp.GetRequiredService<EnterpriseSoftwareDiscoveryService>();
     var security = sp.GetRequiredService<EnterpriseSecurityDiscoveryService>();
-    return new EnterpriseDiscoveryOrchestrator(logger, config, reg, hardware, software, security);
+    var agentDataService = sp.GetRequiredService<AgentDataService>();
+    return new EnterpriseDiscoveryOrchestrator(logger, config, reg, hardware, software, security, agentDataService);
 });
 
 // And keep the hosted service registration:
