@@ -26,6 +26,10 @@ args = "ServiceBroker API"
 task = "workflow.run"
 args = "UEM WebApp + API"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "UEM Agent Test"
+
 [[workflows.workflow]]
 name = "Satellite API"
 author = "agent"
@@ -59,6 +63,17 @@ waitForPort = 5000
 
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow]]
+name = "UEM Agent Test"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd UEM.Endpoint.Agent && dotnet run --no-launch-profile"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [[ports]]
 localPort = 5000
