@@ -1,17 +1,15 @@
-import React from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Menu, Bell, Globe, Building2 } from "lucide-react";
+import { Menu, Bell, Globe, Building2, ChevronDown } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useLocation } from "wouter";
 import { useDomainTenant } from "@/contexts/DomainTenantContext";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { DomainTenantTree } from "@/components/DomainTenantTree";
 import { cn } from "@/lib/utils";
 
 interface TopHeaderProps {
@@ -22,44 +20,26 @@ interface TopHeaderProps {
 export function TopHeader({ setIsSidebarOpen, getPageInfo }: TopHeaderProps) {
   const [location] = useLocation();
   const { title, subtitle } = getPageInfo(location);
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
   const {
     selectedDomain,
     selectedTenant,
-    domains,
-    tenants,
     setSelectedDomain,
     setSelectedTenant,
     isLoading,
     error,
   } = useDomainTenant();
 
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      active:
-        "bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-200",
-      inactive:
-        "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900 dark:text-yellow-200",
-      suspended:
-        "bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-200",
-    } as const;
-
-    return (
-      <Badge
-        className={cn(
-          "ml-1 text-xs font-medium border",
-          variants[status as keyof typeof variants] ||
-            "bg-gray-100 text-gray-800 border-gray-200",
-        )}
-      >
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </Badge>
-    );
-  };
-
   const showDomainTenant =
     !location.includes("/domain-management") &&
     !location.includes("/tenant-management");
+
+  const handleTreeChange = (value: { domainId: number | null; tenantId: number | null }) => {
+    setSelectedDomain(value.domainId ? { id: value.domainId } as any : null);
+    setSelectedTenant(value.tenantId ? { id: value.tenantId } as any : null);
+    setPopoverOpen(false);
+  };
 
   return (
     <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
@@ -85,112 +65,46 @@ export function TopHeader({ setIsSidebarOpen, getPageInfo }: TopHeaderProps) {
         </div>
 
         <div className="flex items-center space-x-4">
-          {/* Domain/Tenant Selectors */}
+          {/* Domain/Tenant Selector */}
           {showDomainTenant && !isLoading && !error && (
-            <>
-              {/* Domain Selector */}
-              <div className="flex items-center space-x-2">
-                <Globe className="h-4 w-4 text-gray-500" />
-                <Select
-                  value={selectedDomain?.id.toString() || ""}
-                  onValueChange={(value) => {
-                    const domain = domains.find(
-                      (d) => d.id.toString() === value,
-                    );
-                    if (domain) {
-                      setSelectedDomain(domain);
-                    }
-                  }}
+            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 justify-between min-w-[200px]"
                 >
-                  <SelectTrigger className="w-48 h-8 text-sm">
-                    <SelectValue placeholder="Select Domain">
-                      {selectedDomain && (
-                        <div className="flex items-center justify-between w-full">
-                          <span className="font-medium truncate">
-                            {selectedDomain.displayName}
-                          </span>
-                        </div>
-                      )}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.isArray(domains) && domains.length > 0 ? (
-                      domains.map((domain) => (
-                        <SelectItem
-                          key={domain.id}
-                          value={domain.id.toString()}
-                        >
-                          <div className="flex items-center justify-between w-full">
-                            <div className="flex flex-col">
-                              <span className="font-medium">
-                                {domain.displayName}
-                              </span>
-                            </div>
-                          </div>
-                        </SelectItem>
-                      ))
+                  <div className="flex items-center space-x-2 flex-1 min-w-0">
+                    {selectedDomain ? (
+                      <>
+                        <Globe className="h-3 w-3 text-blue-600 flex-shrink-0" />
+                        <span className="text-xs font-medium truncate">
+                          {selectedDomain.displayName}
+                          {selectedTenant && ` / ${selectedTenant.displayName}`}
+                        </span>
+                      </>
                     ) : (
-                      <SelectItem value="no-domains" disabled>
-                        No domains available
-                      </SelectItem>
+                      <span className="text-xs text-muted-foreground">
+                        Select domain & tenant
+                      </span>
                     )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Tenant Selector */}
-              <div className="flex items-center space-x-2">
-                <Building2 className="h-4 w-4 text-gray-500" />
-                <Select
-                  value={selectedTenant?.id.toString() || ""}
-                  onValueChange={(value) => {
-                    const tenant = tenants.find(
-                      (t) => t.id.toString() === value,
-                    );
-                    if (tenant) {
-                      setSelectedTenant(tenant);
-                    }
-                  }}
-                  disabled={!selectedDomain}
-                >
-                  <SelectTrigger className="w-48 h-8 text-sm">
-                    <SelectValue placeholder="Select Tenant">
-                      {selectedTenant && (
-                        <div className="flex items-center justify-between w-full">
-                          <span className="font-medium truncate">
-                            {selectedTenant.displayName}
-                          </span>
-                        </div>
-                      )}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.isArray(tenants) && tenants.length > 0 ? (
-                      tenants.map((tenant) => (
-                        <SelectItem
-                          key={tenant.id}
-                          value={tenant.id.toString()}
-                        >
-                          <div className="flex items-center justify-between w-full">
-                            <div className="flex flex-col">
-                              <span className="font-medium">
-                                {tenant.displayName}
-                              </span>
-                            </div>
-                          </div>
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="no-tenants" disabled>
-                        {selectedDomain
-                          ? "No tenants available"
-                          : "Select domain first"}
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            </>
+                  </div>
+                  <ChevronDown className="h-3 w-3 ml-2 flex-shrink-0" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-2" align="end">
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Select Domain & Tenant</div>
+                  <DomainTenantTree
+                    value={{
+                      domainId: selectedDomain?.id || null,
+                      tenantId: selectedTenant?.id || null
+                    }}
+                    onChange={handleTreeChange}
+                  />
+                </div>
+              </PopoverContent>
+            </Popover>
           )}
 
           {/* Notifications */}

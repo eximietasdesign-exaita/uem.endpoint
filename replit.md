@@ -3,7 +3,9 @@
 ## Overview
 This is a comprehensive enterprise UEM (Unified Endpoint Management) solution with unified C# backend architecture.
 
-**ARCHITECTURAL MILESTONE (September 2025)**: Successfully migrated from dual-server architecture (TypeScript + C#) to unified C#-only backend, achieving complete system integration.
+**ARCHITECTURAL MILESTONES**:
+- **September 2025**: Migrated from dual-server architecture (TypeScript + C#) to unified C#-only backend
+- **September 30, 2025**: Implemented unified hierarchical domain-tenant tree selector across all UI components for consistent context selection and display
 
 ### Unified UEM System - .NET + React Integration
 A robust enterprise UEM system with single-backend architecture, featuring:
@@ -43,11 +45,18 @@ Preferred communication style: Simple, everyday language.
 - **Authentication & Authorization**: Role-based access control (administrator, operator, viewer) with session management ready for implementation.
 - **Data Flow**: Client (TanStack Query) -> C# API Controllers -> Dapper/PostgreSQL -> JSON Responses -> React UI Updates.
 - **Multi-Tenancy**: Universal multi-tenant support across all application screens with data isolation and tenant-aware data fetching.
+  - **Unified Domain-Tenant Selection**: Hierarchical tree control component (DomainTenantTree) used consistently across:
+    - ScriptEditor: Form-based domain/tenant selection for script creation
+    - DomainTenantSelector: General-purpose selector component
+    - TopHeader: Header-based selection via popover
+  - **Context Display**: Consistent context display using useDomainTenant hook in:
+    - TenantContextBanner: Alert-style context banner
+    - EnterpriseContextBar: Breadcrumb bar with domain/tenant pills
 - **Internationalization**: Comprehensive i18n framework supporting 7 languages (English, Spanish, French, German, Chinese, Japanese, Arabic) with RTL support.
 - **Asset Management**: Comprehensive asset inventory with dynamic custom fields, table designer, hierarchical views, and reporting.
 - **Agent Deployment**: Complete remote agent deployment platform for Windows, Mac, and Linux, with job management, real-time monitoring, and multi-OS support.
 - **Discovery**: Unified agentless and agent-based discovery with wizard-driven job creation, policy deployment, and detailed asset tracking.
-- **Script Management**: Enhanced script editor with output processing, real-time validation, and code templates.
+- **Script Management**: Enhanced script editor with hierarchical domain-tenant tree selection, output processing, real-time validation, and code templates.
 - **Policy Management**: Improved execution flow visualization and professional step-card layouts.
 - **System Status**: Enterprise-grade footer displaying internet connectivity, system version, and real-time clock.
 
