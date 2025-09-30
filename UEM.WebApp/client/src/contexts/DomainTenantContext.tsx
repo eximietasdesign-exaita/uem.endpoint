@@ -70,16 +70,16 @@ export function DomainTenantProvider({ children }: DomainTenantProviderProps) {
     ...queryConfig,
   });
 
-  // Fetch tenants for selected domain with enterprise configuration
+  // Fetch all tenants with enterprise configuration
   const { 
     data: tenants = [], 
     isLoading: tenantsLoading, 
     error: tenantsError,
     refetch: refetchTenants 
   } = useQuery<Tenant[]>({
-    queryKey: ['/api/tenants', { domainId: selectedDomain?.id }],
+    queryKey: ['/api/tenants'],
     queryFn: async () => {
-      const response = await fetch(`/api/tenants?domainId=${selectedDomain?.id}`, {
+      const response = await fetch('/api/tenants', {
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache',
@@ -90,7 +90,6 @@ export function DomainTenantProvider({ children }: DomainTenantProviderProps) {
       }
       return response.json();
     },
-    enabled: !!selectedDomain,
     ...queryConfig,
   });
 

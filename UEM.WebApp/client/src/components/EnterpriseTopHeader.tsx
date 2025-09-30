@@ -113,8 +113,14 @@ export function EnterpriseTopHeader({ setIsSidebarOpen }: EnterpriseTopHeaderPro
 
   // Handle domain/tenant tree change
   const handleDomainTenantChange = (value: { domainId: number | null; tenantId: number | null }) => {
-    setSelectedDomain(value.domainId ? { id: value.domainId } as any : null);
-    setSelectedTenant(value.tenantId ? { id: value.tenantId } as any : null);
+    // Find the full domain object from the domains array
+    const domain = value.domainId ? domains.find(d => d.id === value.domainId) || null : null;
+    setSelectedDomain(domain);
+    
+    // Find the full tenant object from the tenants array
+    const tenant = value.tenantId ? tenants.find(t => t.id === value.tenantId) || null : null;
+    setSelectedTenant(tenant);
+    
     setIsDomainTenantOpen(false);
   };
 
