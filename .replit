@@ -56,13 +56,13 @@ args = "cd UEM.ServiceBroker.API && dotnet run --no-launch-profile"
 name = "UEM WebApp + API"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd UEM.Satellite.API && dotnet run --no-launch-profile --urls \"http://0.0.0.0:5000\""
 waitForPort = 5000
-
-[workflows.workflow.metadata]
-outputType = "webview"
 
 [[workflows.workflow]]
 name = "UEM Agent Test"
@@ -78,10 +78,6 @@ outputType = "console"
 [[ports]]
 localPort = 5000
 externalPort = 80
-
-[[ports]]
-localPort = 8000
-externalPort = 8000
 
 [[ports]]
 localPort = 35723

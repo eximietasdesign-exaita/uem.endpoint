@@ -163,6 +163,5 @@ catch (Exception ex)
     logger.LogWarning(ex, "Could not initialize database repositories, continuing with fallback storage");
 }
 
-// Configure port from settings
-var port = builder.Configuration.GetValue<int>("ServerSettings:Port", 8000);
-app.Run($"http://0.0.0.0:{port}");
+// Start the application (respects --urls command-line parameter)
+app.Run();

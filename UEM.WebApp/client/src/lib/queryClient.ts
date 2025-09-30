@@ -21,20 +21,13 @@ const getApiBaseUrl = (endpoint?: string) => {
     }
     
     // For local development, use specific ports
-    // Domain/tenant APIs are on the main web app (port 5000)
-    if (endpoint && (endpoint.includes('/api/domains') || endpoint.includes('/api/tenants') || endpoint.includes('/api/users') || endpoint.includes('/api/dashboard') || endpoint.includes('/api/endpoints'))) {
-      return `${protocol}//${hostname}:5000`;
-    }
-    
-    // Agent/satellite APIs are on port 8000
-    return `${protocol}//${hostname}:8000`;
+    // All APIs are now served on port 5000 (unified architecture)
+    return `${protocol}//${hostname}:5000`;
   }
   
   // For Node.js environment (fallback)
-  if (endpoint && (endpoint.includes('/api/domains') || endpoint.includes('/api/tenants') || endpoint.includes('/api/users') || endpoint.includes('/api/dashboard') || endpoint.includes('/api/endpoints'))) {
-    return 'http://localhost:5000';
-  }
-  return 'http://localhost:8000';
+  // All APIs are now served on port 5000 (unified architecture)
+  return 'http://localhost:5000';
 };
 
 export async function apiRequest(
