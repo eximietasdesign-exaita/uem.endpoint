@@ -460,7 +460,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Comprehensive validation before save
     if (!formData.name.trim()) {
       toast({
@@ -506,13 +506,18 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     };
     
     console.log('Saving enhanced script:', scriptData);
-    onSave(scriptData);
-    setIsDirty(false);
     
-    toast({
-      title: "Script Saved",
-      description: "Your script has been saved successfully."
-    });
+    try {
+      await onSave(scriptData);
+      setIsDirty(false);
+    } catch (error) {
+      console.error('Failed to save script:', error);
+      toast({
+        title: "Save Failed",
+        description: error instanceof Error ? error.message : "Failed to save script. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   // Template and code generation utilities
