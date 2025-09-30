@@ -55,7 +55,9 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const url = queryKey.join("/") as string;
+    // Only join string/number values, skip objects
+    const urlParts = queryKey.filter(part => typeof part === 'string' || typeof part === 'number');
+    const url = urlParts.join("/") as string;
     const baseUrl = getApiBaseUrl(url);
     const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
     
