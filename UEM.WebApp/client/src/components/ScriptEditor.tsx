@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { DomainTenantTree } from "@/components/DomainTenantTree";
 import { 
   Save, 
   X, 
@@ -269,14 +270,12 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     requiresNetwork: script?.requiresNetwork || false,
     industries: script?.industries || [],
     complianceFrameworks: script?.complianceFrameworks || [],
-    domainId: script?.domainId || '',
     code: script?.template || ''
   });
 
-  // Fetch domains from API
-  const { data: domains = [] } = useQuery({
-    queryKey: ['/api/domains'],
-    staleTime: 5 * 60 * 1000,
+  const [domainTenantSelection, setDomainTenantSelection] = useState<{ domainId: number | null; tenantId: number | null }>({
+    domainId: script?.domainId || null,
+    tenantId: script?.tenantId || null
   });
   
   const [activeTab, setActiveTab] = useState<'config' | 'code' | 'processing' | 'test' | 'enterprise'>('config');
@@ -503,7 +502,8 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       estimatedRunTimeSeconds: formData.estimatedRunTime,
       requiresElevation: formData.requiresElevation,
       requiresNetwork: formData.requiresNetwork,
-      domainId: formData.domainId ? parseInt(formData.domainId) : null,
+      domainId: domainTenantSelection.domainId,
+      tenantId: domainTenantSelection.tenantId,
       parameters: JSON.stringify({ outputRules, approvalWorkflow, auditSettings }),
       outputFormat: "json",
       outputProcessing: JSON.stringify(outputRules),
@@ -827,23 +827,23 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="domain">Domain</Label>
-                    <Select value={formData.domainId} onValueChange={(value) => setFormData(prev => ({ ...prev, domainId: value }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select domain" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {domains.map((domain: any) => (
-                          <SelectItem key={domain.id} value={domain.id.toString()}>
-                            {domain.displayName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="domainTenant">Domain & Tenant Selection</Label>
+                  <DomainTenantTree 
+                    value={domainTenantSelection}
+                    onChange={setDomainTenantSelection}
+                  />
+                  {domainTenantSelection.domainId && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {domainTenantSelection.tenantId 
+                        ? `Selected: Domain ID ${domainTenantSelection.domainId}, Tenant ID ${domainTenantSelection.tenantId}`
+                        : `Selected: Domain ID ${domainTenantSelection.domainId} (All Tenants)`
+                      }
+                    </p>
+                  )}
+                </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="tags">Tags (comma-separated)</Label>
                     <Input
