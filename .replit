@@ -16,30 +16,11 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Satellite API"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "ServiceBroker API"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "UEM WebApp + API"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "UEM Agent Test"
-
-[[workflows.workflow]]
-name = "Satellite API"
-author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd UEM.Satellite.API && dotnet run --no-launch-profile"
 
 [[workflows.workflow]]
 name = "ServiceBroker API"
@@ -64,17 +45,6 @@ task = "shell.exec"
 args = "cd UEM.Satellite.API && dotnet run --no-launch-profile --urls \"http://0.0.0.0:5000\""
 waitForPort = 5000
 
-[[workflows.workflow]]
-name = "UEM Agent Test"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd UEM.Endpoint.Agent && dotnet run --no-launch-profile"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
 [[ports]]
 localPort = 5000
 externalPort = 80
@@ -92,12 +62,12 @@ localPort = 35723
 externalPort = 3001
 
 [[ports]]
-localPort = 38629
-externalPort = 3000
+localPort = 38211
+externalPort = 3002
 
 [[ports]]
-localPort = 45849
-externalPort = 3002
+localPort = 38629
+externalPort = 3000
 
 [deployment]
 deploymentTarget = "autoscale"
