@@ -274,8 +274,8 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
   });
 
   const [domainTenantSelection, setDomainTenantSelection] = useState<{ domainId: number | null; tenantId: number | null }>({
-    domainId: script?.domainId || null,
-    tenantId: script?.tenantId || null
+    domainId: null,
+    tenantId: null
   });
   
   const [activeTab, setActiveTab] = useState<'config' | 'code' | 'processing' | 'test' | 'enterprise'>('config');
