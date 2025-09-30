@@ -34,7 +34,6 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { ScriptPolicy, Script } from "@shared/schema";
-import { TenantContextBanner } from "@/components/TenantContextBanner";
 import { useTenantData, useTenantContext } from "@/hooks/useTenantData";
 
 interface PolicyCategory {
@@ -157,14 +156,12 @@ export default function ScriptPoliciesPage() {
   if (!hasContext) {
     return (
       <div className="space-y-6">
-        <TenantContextBanner />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <TenantContextBanner />
       
       {/* Header */}
       <div className="flex items-center justify-between">

@@ -31,7 +31,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 import type { CredentialProfile } from "@shared/schema";
-import { TenantContextBanner } from "@/components/TenantContextBanner";
 import { useTenantData, useTenantContext } from "@/hooks/useTenantData";
 
 // Helper function to parse credential data
@@ -306,7 +305,6 @@ export default function CredentialProfilesPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <TenantContextBanner />
       
       {/* Header */}
       <div className="flex items-center justify-between">

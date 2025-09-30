@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { TenantContextBanner } from "@/components/TenantContextBanner";
 import { useTenantData, useTenantContext } from "@/hooks/useTenantData";
 import { 
   Card, 
@@ -310,7 +309,6 @@ export default function ExternalIntegrationsPage() {
 
   return (
     <div className="space-y-6">
-      <TenantContextBanner />
       
       {/* Header */}
       <div className="flex items-center justify-between">

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
-import { TenantContextBanner } from "@/components/TenantContextBanner";
 import { useTenantData, useTenantContext } from "@/hooks/useTenantData";
 import {
   Card,
@@ -328,7 +327,6 @@ export default function DiscoveryScriptsMarketplacePage() {
 
   return (
     <div className="space-y-6">
-      <TenantContextBanner />
       
       {/* Filter and Search Section */}
       <Card>

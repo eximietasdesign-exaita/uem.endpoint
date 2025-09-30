@@ -70,7 +70,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { TenantContextBanner } from "@/components/TenantContextBanner";
 import { useTenantData, useTenantContext } from "@/hooks/useTenantData";
 
 interface DiscoveryScript {
@@ -362,14 +361,12 @@ print(f"Release: {platform.release()}")`;
   if (!hasContext) {
     return (
       <div className="space-y-6">
-        <TenantContextBanner />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <TenantContextBanner />
       
       {/* Header */}
       <div className="flex items-center justify-between">

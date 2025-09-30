@@ -55,7 +55,6 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { TenantContextBanner } from '@/components/TenantContextBanner';
 import { 
   Dialog, 
   DialogContent, 
@@ -330,11 +329,6 @@ export default function AssetInventoryPage() {
 
   return (
     <div className="space-y-6">
-      <TenantContextBanner 
-        title="Asset Inventory Management"
-        subtitle="Comprehensive asset discovery, tracking, and enterprise-grade inventory management"
-      />
-
       {/* Enhanced Statistics Dashboard with Real-time Updates */}
       <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4">
         <TooltipProvider>

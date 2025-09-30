@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { TenantContextBanner } from '@/components/TenantContextBanner';
 import { useTenantData, useTenantContext } from '@/hooks/useTenantData';
 import { 
   Card, 
@@ -360,7 +359,6 @@ export default function AgentBasedDiscovery() {
 
   return (
     <div className="space-y-6">
-      <TenantContextBanner />
       
       {/* Header */}
       <div className="flex items-center justify-between">

@@ -42,7 +42,6 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
-import { TenantContextBanner } from "@/components/TenantContextBanner";
 import { useTenantData, useTenantContext } from "@/hooks/useTenantData";
 
 export default function AssetsPage() {
@@ -285,14 +284,12 @@ export default function AssetsPage() {
   if (!hasContext) {
     return (
       <div className="space-y-6">
-        <TenantContextBanner />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <TenantContextBanner />
       
       {/* Header */}
       <div className="flex items-center justify-between">

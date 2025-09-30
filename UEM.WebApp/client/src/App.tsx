@@ -41,7 +41,6 @@ import AssetInventoryPage from "@/pages/asset-inventory";
 import RemoteAgentDeploymentPage from "@/pages/remote-agent-deployment";
 import { DomainTenantProvider } from "@/contexts/DomainTenantContext";
 import { EnterpriseTopHeader } from "@/components/EnterpriseTopHeader";
-import { EnterpriseContextBar } from "@/components/EnterpriseContextBar";
 import { cn } from "@/lib/utils";
 
 function AppContent() {
@@ -96,7 +95,6 @@ function AppContent() {
         isSidebarCollapsed ? "lg:ml-16" : "lg:ml-64"
       )}>
         <EnterpriseTopHeader setIsSidebarOpen={setIsSidebarOpen} />
-        <EnterpriseContextBar />
         
         <main className="flex-1 overflow-y-auto p-6">
           <Switch>

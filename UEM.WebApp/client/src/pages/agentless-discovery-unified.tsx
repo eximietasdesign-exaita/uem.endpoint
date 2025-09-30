@@ -51,7 +51,6 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import type { AgentlessDiscoveryJob } from "@shared/schema";
-import { TenantContextBanner } from "@/components/TenantContextBanner";
 import { useTenantData, useTenantContext } from "@/hooks/useTenantData";
 
 interface JobFilters {
@@ -282,7 +281,6 @@ export default function AgentlessDiscoveryPage() {
   if (!hasContext) {
     return (
       <div className="space-y-6">
-        <TenantContextBanner />
       </div>
     );
   }
@@ -290,7 +288,6 @@ export default function AgentlessDiscoveryPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        <TenantContextBanner />
         
         {/* Header */}
         <div className="flex items-center justify-between">

@@ -56,7 +56,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 import type { CredentialProfile } from "@shared/schema";
-import { TenantContextBanner } from "@/components/TenantContextBanner";
 
 // Enterprise-grade credential categories and types
 const credentialCategories = [
@@ -390,7 +389,6 @@ export default function EnterpriseCredentialProfilesPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <TenantContextBanner />
       
       {/* Enterprise Header */}
       <div className="flex items-center justify-between">

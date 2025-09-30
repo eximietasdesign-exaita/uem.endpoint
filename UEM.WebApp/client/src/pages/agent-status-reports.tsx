@@ -60,7 +60,6 @@ import {
 } from 'lucide-react';
 import { AIAnalyticsInsights } from '@/components/AIAnalyticsInsights';
 import { useToast } from '@/hooks/use-toast';
-import { TenantContextBanner } from '@/components/TenantContextBanner';
 import { useTenantData, useTenantContext } from '@/hooks/useTenantData';
 
 export default function AgentStatusReports() {
@@ -290,7 +289,6 @@ export default function AgentStatusReports() {
 
   return (
     <div className="space-y-6">
-      <TenantContextBanner />
       
       {/* Header */}
       <div className="flex items-center justify-between">

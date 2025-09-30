@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { TenantContextBanner } from '@/components/TenantContextBanner';
 import { useTenantData, useTenantContext } from '@/hooks/useTenantData';
 
 interface QueueJob {
@@ -267,7 +266,6 @@ export default function SatelliteJobQueuePage({ serverId, serverName }: Satellit
 
   return (
     <div className="space-y-6">
-      <TenantContextBanner />
       
       {/* Header */}
       <div className="flex items-center justify-between">
