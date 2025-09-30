@@ -695,8 +695,11 @@ print(f"Release: {platform.release()}")`;
           </DialogHeader>
           <ScriptEditor
             script={selectedScript || undefined}
-            onSave={() => setIsEditorOpen(false)}
-            onCancel={() => setIsEditorOpen(false)}
+            onSave={handleSaveScript}
+            onCancel={() => {
+              setIsEditorOpen(false);
+              setSelectedScript(null);
+            }}
           />
         </DialogContent>
       </Dialog>
