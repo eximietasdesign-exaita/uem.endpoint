@@ -148,14 +148,22 @@ export default function DiscoveryScriptsPage() {
     mutationFn: (scriptData: any) => apiRequest("POST", "/api/discovery-scripts", scriptData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/discovery-scripts"] });
+      toast({
+        title: "Success",
+        description: "Script created successfully."
+      });
     }
   });
 
   // Update script mutation
   const updateScriptMutation = useMutation({
-    mutationFn: ({ id, ...scriptData }: any) => apiRequest("PATCH", `/api/discovery-scripts/${id}`, scriptData),
+    mutationFn: ({ id, ...scriptData }: any) => apiRequest("PUT", `/api/discovery-scripts/${id}`, scriptData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/discovery-scripts"] });
+      toast({
+        title: "Success",
+        description: "Script updated successfully."
+      });
     }
   });
 

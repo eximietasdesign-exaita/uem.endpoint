@@ -566,9 +566,9 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-gray-950">
+    <div className="flex flex-col max-h-[85vh] bg-white dark:bg-gray-950">
       {/* Header */}
-      <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-800">
+      <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             {selectedScriptType && <selectedScriptType.icon className="w-6 h-6 text-primary" />}
@@ -595,7 +595,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+      <div className="flex border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex-shrink-0">
         <button
           onClick={() => setActiveTab('config')}
           className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
@@ -1443,7 +1443,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       </div>
 
       {/* Enhanced Action Bar */}
-      <div className="flex justify-between items-center p-6 bg-gray-50 dark:bg-gray-900 border-t">
+      <div className="flex justify-between items-center p-6 bg-gray-50 dark:bg-gray-900 border-t flex-shrink-0">
         <div className="flex items-center space-x-4">
           <Button variant="ghost" onClick={handleCancel}>
             <X className="w-4 h-4 mr-2" />
