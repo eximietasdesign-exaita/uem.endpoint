@@ -5,14 +5,15 @@ import { useQuery } from "@tanstack/react-query";
 interface Domain {
   id: number;
   name: string;
-  displayName: string;
-  parentDomainId?: number;
+  displayname: string;
+  parentdomainid?: number;
 }
 
 interface Tenant {
   id: number;
   name: string;
-  domainId: number;
+  displayname: string;
+  domainid: number;
 }
 
 interface DomainTenantTreeProps {
@@ -52,7 +53,7 @@ export function DomainTenantTree({ value, onChange }: DomainTenantTreeProps) {
   };
 
   const getTenantsByDomain = (domainId: number) => {
-    return tenants.filter(t => t.domainId === domainId);
+    return tenants.filter(t => t.domainid === domainId);
   };
 
   return (
@@ -92,7 +93,7 @@ export function DomainTenantTree({ value, onChange }: DomainTenantTreeProps) {
                   {domainTenants.length === 0 && <div className="w-5" />}
                   <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                   <span className="flex-1 text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {domain.displayName}
+                    {domain.displayname}
                   </span>
                   {domainTenants.length > 0 && (
                     <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
@@ -116,7 +117,7 @@ export function DomainTenantTree({ value, onChange }: DomainTenantTreeProps) {
                         >
                           <Users className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
                           <span className="text-sm text-gray-700 dark:text-gray-300">
-                            {tenant.name}
+                            {tenant.displayname}
                           </span>
                         </div>
                       );
