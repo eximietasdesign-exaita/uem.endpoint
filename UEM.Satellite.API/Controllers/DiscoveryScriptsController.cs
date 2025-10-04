@@ -111,13 +111,13 @@ public class DiscoveryScriptsController : ControllerBase
             var scriptId = await connection.QuerySingleAsync<int>(@"
                 INSERT INTO discovery_scripts (
                     name, description, category, type, target_os, template, version, 
-                    is_active, vendor, complexity, estimated_run_time_seconds, 
+                    is_active, tags, vendor, complexity, estimated_run_time_seconds, 
                     requires_elevation, requires_network, parameters, output_format, 
                     output_processing, credential_requirements, industries, 
                     compliance_frameworks, is_standard, created_at, updated_at
                 ) VALUES (
                     @Name, @Description, @Category, @Type, @TargetOs, @Template, @Version, 
-                    @IsActive, @Vendor, @Complexity, @EstimatedRunTimeSeconds, 
+                    @IsActive, @Tags, @Vendor, @Complexity, @EstimatedRunTimeSeconds, 
                     @RequiresElevation, @RequiresNetwork, @Parameters, @OutputFormat, 
                     @OutputProcessing, @CredentialRequirements, @Industries, 
                     @ComplianceFrameworks, @IsStandard, @CreatedAt, @UpdatedAt
@@ -133,6 +133,7 @@ public class DiscoveryScriptsController : ControllerBase
                 Template = request.Template,
                 Version = request.Version ?? "1.0",
                 IsActive = request.IsActive ?? true,
+                Tags = request.Tags ?? new string[0],
                 Vendor = request.Vendor ?? "Custom",
                 Complexity = request.Complexity ?? "medium",
                 EstimatedRunTimeSeconds = request.EstimatedRunTimeSeconds ?? 30,
@@ -526,11 +527,14 @@ public class CreateDiscoveryScriptRequest
     public string Template { get; set; } = "";
     public string? Version { get; set; }
     public bool? IsActive { get; set; }
+    public string[]? Tags { get; set; }
     public string? Vendor { get; set; }
     public string? Complexity { get; set; }
     public int? EstimatedRunTimeSeconds { get; set; }
     public bool? RequiresElevation { get; set; }
     public bool? RequiresNetwork { get; set; }
+    public int? DomainId { get; set; }
+    public int? TenantId { get; set; }
     public string? Parameters { get; set; }
     public string? OutputFormat { get; set; }
     public string? OutputProcessing { get; set; }
@@ -551,6 +555,7 @@ public class DiscoveryScript
     public string Template { get; set; } = "";
     public string? Version { get; set; }
     public bool IsActive { get; set; }
+    public string[]? Tags { get; set; }
     public string? Vendor { get; set; }
     public string? Complexity { get; set; }
     public int? EstimatedRunTimeSeconds { get; set; }
