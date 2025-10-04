@@ -194,7 +194,7 @@ public class DiscoveryScriptsController : ControllerBase
                 UPDATE discovery_scripts 
                 SET name = @Name, description = @Description, category = @Category, 
                     type = @Type, target_os = @TargetOs, template = @Template, 
-                    version = @Version, is_active = @IsActive, vendor = @Vendor, 
+                    version = @Version, is_active = @IsActive, tags = @Tags, vendor = @Vendor, 
                     complexity = @Complexity, estimated_run_time_seconds = @EstimatedRunTimeSeconds, 
                     requires_elevation = @RequiresElevation, requires_network = @RequiresNetwork, 
                     parameters = @Parameters, output_format = @OutputFormat, 
@@ -213,6 +213,7 @@ public class DiscoveryScriptsController : ControllerBase
                 Template = request.Template,
                 Version = request.Version ?? "1.0",
                 IsActive = request.IsActive ?? true,
+                Tags = request.Tags ?? new string[0],
                 Vendor = request.Vendor ?? "Custom",
                 Complexity = request.Complexity ?? "medium",
                 EstimatedRunTimeSeconds = request.EstimatedRunTimeSeconds ?? 30,
