@@ -151,11 +151,19 @@ export default function DiscoveryScriptsPage() {
   
   const { toast } = useToast();
 
-  // Use tenant-aware data fetching (discovery scripts are global, don't require tenant context)
-  const { data: scripts = [], isLoading, hasContext } = useTenantData<DiscoveryScript[]>({
-    endpoint: "/api/discovery-scripts",
-    requiresContext: false, // Discovery scripts are global
+  // Directly use useQuery to bypass any caching issues
+  const { data, isLoading } = useQuery<DiscoveryScript[]>({
+    queryKey: ["/api/discovery-scripts", { v: "2.0" }],
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: true
   });
+  
+  const scripts = (Array.isArray(data) ? data : []) as DiscoveryScript[];
+  const hasContext = true; // Discovery scripts don't require context
+
+  // Debug logging
+  console.log('[DEBUG] Scripts data:', scripts, 'isArray:', Array.isArray(scripts), 'length:', scripts.length);
 
   // Create script mutation
   const createScriptMutation = useMutation({

@@ -2,11 +2,12 @@ using Microsoft.AspNetCore.Mvc;
 using UEM.Satellite.API.Data;
 using Dapper;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace UEM.Satellite.API.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/discovery-scripts")]
 public class DiscoveryScriptsController : ControllerBase
 {
     private readonly ILogger<DiscoveryScriptsController> _logger;
@@ -28,7 +29,18 @@ public class DiscoveryScriptsController : ControllerBase
             var offset = (page - 1) * pageSize;
             
             var scripts = await connection.QueryAsync<DiscoveryScript>(@"
-                SELECT * FROM discovery_scripts 
+                SELECT 
+                    id, name, description, category, type, target_os AS TargetOs, 
+                    template, version, is_active AS IsActive, tags, vendor, complexity,
+                    estimated_run_time_seconds AS EstimatedRunTimeSeconds,
+                    requires_elevation AS RequiresElevation,
+                    requires_network AS RequiresNetwork,
+                    parameters, output_format AS OutputFormat,
+                    output_processing AS OutputProcessing,
+                    credential_requirements AS CredentialRequirements,
+                    industries, compliance_frameworks AS ComplianceFrameworks,
+                    is_standard AS IsStandard, created_at AS CreatedAt, updated_at AS UpdatedAt
+                FROM discovery_scripts 
                 WHERE is_active = TRUE 
                 ORDER BY created_at DESC 
                 LIMIT @PageSize OFFSET @Offset
@@ -40,14 +52,7 @@ public class DiscoveryScriptsController : ControllerBase
 
             _logger.LogInformation("Retrieved {Count} discovery scripts (page {Page})", scripts.Count(), page);
 
-            return Ok(new
-            {
-                Data = scripts,
-                Total = total,
-                Page = page,
-                PageSize = pageSize,
-                TotalPages = (int)Math.Ceiling((double)total / pageSize)
-            });
+            return Ok(scripts);
         }
         catch (Exception ex)
         {
@@ -555,6 +560,7 @@ public class DiscoveryScript
     public string? TargetOs { get; set; }
     public string Template { get; set; } = "";
     public string? Version { get; set; }
+    [Column("is_active")]
     public bool IsActive { get; set; }
     public string[]? Tags { get; set; }
     public string? Vendor { get; set; }

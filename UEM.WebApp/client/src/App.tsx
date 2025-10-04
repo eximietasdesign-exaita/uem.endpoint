@@ -105,6 +105,7 @@ function AppContent() {
             <Route path="/discovery" component={DiscoveryPage} />
             <Route path="/discovery/scheduled" component={DiscoveryPage} />
             <Route path="/discovery/scripts" component={DiscoveryScriptsPage} />
+            <Route path="/discovery-scripts" component={DiscoveryScriptsPage} />
             <Route path="/scripts" component={DiscoveryScriptsPage} />
             <Route path="/policies" component={ScriptPoliciesPage} />
             <Route path="/discovery-scripts-marketplace" component={DiscoveryScriptsMarketplacePage} />
