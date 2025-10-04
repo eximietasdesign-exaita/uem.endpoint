@@ -27,7 +27,8 @@ import {
   BarChart3,
   TrendingUp,
   ShoppingCart,
-  Globe
+  Globe,
+  Trash2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ScriptEditor } from "@/components/ScriptEditor";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { AIScriptGenerator } from "@/components/AIScriptGenerator";
@@ -123,6 +134,10 @@ export default function DiscoveryScriptsPage() {
   // Publish to Marketplace states
   const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
   const [publishScript, setPublishScript] = useState<DiscoveryScript | null>(null);
+  
+  // Delete confirmation states
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [scriptToDelete, setScriptToDelete] = useState<DiscoveryScript | null>(null);
   const [publishForm, setPublishForm] = useState({
     name: "",
     description: "",
@@ -247,11 +262,29 @@ export default function DiscoveryScriptsPage() {
     }
   };
 
-  const handleDeleteScript = async (scriptId: number) => {
+  const handleDeleteScript = (script: DiscoveryScript) => {
+    setScriptToDelete(script);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteScript = async () => {
+    if (!scriptToDelete) return;
+    
     try {
-      await deleteScriptMutation.mutateAsync(scriptId);
+      await deleteScriptMutation.mutateAsync(scriptToDelete.id);
+      toast({
+        title: "Success",
+        description: `Script "${scriptToDelete.name}" has been deleted.`
+      });
+      setIsDeleteDialogOpen(false);
+      setScriptToDelete(null);
     } catch (error) {
       console.error("Failed to delete script:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete script. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -678,6 +711,13 @@ print(f"Release: {platform.release()}")`;
                               <ShoppingCart className="w-4 h-4 mr-2 text-purple-600" />
                               Publish to Marketplace
                             </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleDeleteScript(script)}
+                              className="text-red-600 dark:text-red-400"
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete Script
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -865,6 +905,29 @@ print(f"Release: {platform.release()}")`;
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Script</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <span className="font-semibold">{scriptToDelete?.name}</span>? 
+              This action will inactivate the script and it will no longer appear in the active scripts list.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteScript}
+              className="bg-red-600 hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700"
+            >
+              Delete Script
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* AI Components */}
       <AIScriptGenerator
