@@ -34,7 +34,7 @@ public sealed class AgentServiceWrapper : BackgroundService
                     services.AddHostedService<AgentWorker>();
                     services.AddSingleton<HeartbeatCollector>();
                     services.AddHostedService<HeartbeatService>();
-                    services.AddSingleton<HardwareDiscoveryService>();
+                    services.AddSingleton<EnterpriseHardwareDiscoveryService>();
 
                   
                     services.AddSingleton<CommandChannel>(sp =>

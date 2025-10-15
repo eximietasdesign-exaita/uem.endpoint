@@ -23,8 +23,15 @@ public sealed class AgentInitializationService : BackgroundService
         await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); // Delay for service startup
 
         using var scope = _provider.CreateScope();
-        var hardwareDiscovery = scope.ServiceProvider.GetRequiredService<HardwareDiscoveryService>();
-        var hardwareInfo = hardwareDiscovery.Discover();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            _log.LogWarning("EnterpriseHardwareDiscoveryService is only supported on Windows. Skipping hardware discovery.");
+            return;
+        }
+
+        var hardwareDiscovery = scope.ServiceProvider.GetRequiredService<EnterpriseHardwareDiscoveryService>();
+        var hardwareInfo = await hardwareDiscovery.DiscoverAsync();
 
         var apiUrl = _config.GetValue<string>("Api:CommandResponseUrl") ?? "https://localhost:7201";
         apiUrl = $"{apiUrl}/api/commands/response";
@@ -74,8 +81,8 @@ public sealed class AgentInitializationService : BackgroundService
 //        await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); // Delay before starting functionality
 //        return;
 //        using var scope = _provider.CreateScope();
-//        var hardwareDiscovery = scope.ServiceProvider.GetRequiredService<HardwareDiscoveryService>();
-//        var hardwareInfo = hardwareDiscovery.Discover();
+//        var hardwareDiscovery = scope.ServiceProvider.GetRequiredService<EnterpriseHardwareDiscoveryService>();
+//        var hardwareInfo = await hardwareDiscovery.DiscoverAsync();
 
 //        var apiUrl = _config.GetValue<string>("Api:CommandResponseUrl") ?? "https://localhost:7201";
 //        apiUrl = $"{apiUrl}/api/commands/response";
@@ -152,7 +159,7 @@ sealed class AgentWorkerService : BackgroundService
             catch (Exception ex)
             {
                 _log.LogError(ex, "Unhandled exception in AgentWorker loop: {Message}", ex.Message);
-                _log.LogWarning(ex, "Agent loop error; retrying in 5s…");
+                _log.LogWarning(ex, "Agent loop error; retrying in 5sï¿½");
                 await Task.Delay(1000 * 120, stoppingToken);
             }
         }
