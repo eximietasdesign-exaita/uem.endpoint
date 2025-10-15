@@ -60,48 +60,53 @@ public class EnterpriseSecurityDiscoveryService
     {
         var info = new TpmInfo();
         
-        try
-        {
-            // Check TPM availability and status
-            using var searcher = new ManagementObjectSearcher("root\\cimv2\\security\\microsofttpm", "SELECT * FROM Win32_Tpm");
-            foreach (ManagementObject obj in searcher.Get())
-            {
-                info.IsActivated = Convert.ToBoolean(obj["IsActivated_InitialValue"] ?? false);
-                info.IsEnabled = Convert.ToBoolean(obj["IsEnabled_InitialValue"] ?? false);
-                info.IsOwned = Convert.ToBoolean(obj["IsOwned_InitialValue"] ?? false);
-                info.ManufacturerId = Convert.ToInt32(obj["ManufacturerId"] ?? 0);
-                info.ManufacturerVersion = obj["ManufacturerVersion"]?.ToString();
-                info.ManufacturerVersionInfo = obj["ManufacturerVersionInfo"]?.ToString();
-                info.PhysicalPresenceVersionInfo = obj["PhysicalPresenceVersionInfo"]?.ToString();
-                info.SpecVersion = obj["SpecVersion"]?.ToString();
-                break;
-            }
-
-            // Get TPM version from registry if WMI fails
-            if (string.IsNullOrEmpty(info.SpecVersion))
-            {
                 try
                 {
-                    using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\TPM\WMI");
-                    if (key != null)
+        #if WINDOWS || NET5_0_OR_GREATER && WINDOWS
+                    // Check TPM availability and status
+                    using var searcher = new ManagementObjectSearcher("root\\cimv2\\security\\microsofttpm", "SELECT * FROM Win32_Tpm");
+                    foreach (ManagementObject obj in searcher.Get())
                     {
-                        info.SpecVersion = key.GetValue("SpecVersion")?.ToString();
+                        info.IsActivated = Convert.ToBoolean(obj["IsActivated_InitialValue"] ?? false);
+                        info.IsEnabled = Convert.ToBoolean(obj["IsEnabled_InitialValue"] ?? false);
+                        info.IsOwned = Convert.ToBoolean(obj["IsOwned_InitialValue"] ?? false);
+                        info.ManufacturerId = Convert.ToInt32(obj["ManufacturerId"] ?? 0);
+                        info.ManufacturerVersion = obj["ManufacturerVersion"]?.ToString();
+                        info.ManufacturerVersionInfo = obj["ManufacturerVersionInfo"]?.ToString();
+                        info.PhysicalPresenceVersionInfo = obj["PhysicalPresenceVersionInfo"]?.ToString();
+                        info.SpecVersion = obj["SpecVersion"]?.ToString();
+                        break;
                     }
+        
+                    // Get TPM version from registry if WMI fails
+                    if (string.IsNullOrEmpty(info.SpecVersion))
+                    {
+                        try
+                        {
+                            using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\TPM\WMI");
+                            if (key != null)
+                            {
+                                info.SpecVersion = key.GetValue("SpecVersion")?.ToString();
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogDebug(ex, "Failed to get TPM version from registry");
+                        }
+                    }
+        
+                    // Check if TPM is ready for use
+                    info.IsReady = info.IsActivated && info.IsEnabled && info.IsOwned;
+        #else
+                    _logger.LogWarning("TPM information is only available on Windows platforms.");
+                    info.IsAvailable = false;
+        #endif
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogDebug(ex, "Failed to get TPM version from registry");
+                    _logger.LogWarning(ex, "Failed to get TPM information");
+                    info.IsAvailable = false;
                 }
-            }
-
-            // Check if TPM is ready for use
-            info.IsReady = info.IsActivated && info.IsEnabled && info.IsOwned;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to get TPM information");
-            info.IsAvailable = false;
-        }
 
         return info;
     }
@@ -111,65 +116,72 @@ public class EnterpriseSecurityDiscoveryService
         var info = new BitLockerInfo();
         var volumes = new List<BitLockerVolumeInfo>();
         
-        try
-        {
-            using var searcher = new ManagementObjectSearcher("root\\cimv2\\security\\microsoftvolumeencryption", 
-                "SELECT * FROM Win32_EncryptableVolume");
-            
-            foreach (ManagementObject obj in searcher.Get())
-            {
-                var volumeInfo = new BitLockerVolumeInfo
-                {
-                    DriveLetter = obj["DriveLetter"]?.ToString(),
-                    DeviceID = obj["DeviceID"]?.ToString(),
-                    PersistentVolumeID = obj["PersistentVolumeID"]?.ToString(),
-                    ProtectionStatus = Convert.ToInt32(obj["ProtectionStatus"] ?? 0),
-                    LockStatus = Convert.ToInt32(obj["LockStatus"] ?? 0),
-                    EncryptionMethod = Convert.ToInt32(obj["EncryptionMethod"] ?? 0),
-                    ConversionStatus = Convert.ToInt32(obj["ConversionStatus"] ?? 0),
-                    EncryptionPercentage = Convert.ToInt32(obj["EncryptionPercentage"] ?? 0),
-                    WipePercentage = Convert.ToInt32(obj["WipePercentage"] ?? 0),
-                    VolumeType = Convert.ToInt32(obj["VolumeType"] ?? 0),
-                    IsVolumeInitializedForProtection = Convert.ToBoolean(obj["IsVolumeInitializedForProtection"] ?? false)
-                };
-
-                // Get key protectors
-                var keyProtectors = new List<string>();
                 try
                 {
-                    var result = obj.InvokeMethod("GetKeyProtectors", new object[] { 0 });
-                    //if (result != null && result["VolumeKeyProtectorID"] is string[] protectorIds)
-                     if (result != null && result is ManagementBaseObject resultObject && resultObject["VolumeKeyProtectorID"] is string[] protectorIds)
+        #if WINDOWS || NET5_0_OR_GREATER && WINDOWS
+                    using var searcher = new ManagementObjectSearcher("root\\cimv2\\security\\microsoftvolumeencryption", 
+                        "SELECT * FROM Win32_EncryptableVolume");
+                    
+                    foreach (ManagementObject obj in searcher.Get())
                     {
-                        foreach (var protectorId in protectorIds)
+                        var volumeInfo = new BitLockerVolumeInfo
                         {
-                            var typeResult = obj.InvokeMethod("GetKeyProtectorType", new object[] { protectorId });
-                            
-                            if (typeResult is ManagementBaseObject typeResultObject)
+                            DriveLetter = obj["DriveLetter"]?.ToString(),
+                            DeviceID = obj["DeviceID"]?.ToString(),
+                            PersistentVolumeID = obj["PersistentVolumeID"]?.ToString(),
+                            ProtectionStatus = Convert.ToInt32(obj["ProtectionStatus"] ?? 0),
+                            LockStatus = Convert.ToInt32(obj["LockStatus"] ?? 0),
+                            EncryptionMethod = Convert.ToInt32(obj["EncryptionMethod"] ?? 0),
+                            ConversionStatus = Convert.ToInt32(obj["ConversionStatus"] ?? 0),
+                            EncryptionPercentage = Convert.ToInt32(obj["EncryptionPercentage"] ?? 0),
+                            WipePercentage = Convert.ToInt32(obj["WipePercentage"] ?? 0),
+                            VolumeType = Convert.ToInt32(obj["VolumeType"] ?? 0),
+                            IsVolumeInitializedForProtection = Convert.ToBoolean(obj["IsVolumeInitializedForProtection"] ?? false)
+                        };
+        
+                        // Get key protectors
+                        var keyProtectors = new List<string>();
+                        try
+                        {
+                            var result = obj.InvokeMethod("GetKeyProtectors", new object[] { 0 });
+                            //if (result != null && result["VolumeKeyProtectorID"] is string[] protectorIds)
+                             if (result != null && result is ManagementBaseObject resultObject && resultObject["VolumeKeyProtectorID"] is string[] protectorIds)
                             {
-                                var protectorType = Convert.ToInt32(typeResultObject["KeyProtectorType"]);
-                                keyProtectors.Add(GetKeyProtectorTypeName(protectorType));
+                                foreach (var protectorId in protectorIds)
+                                {
+                                    var typeResult = obj.InvokeMethod("GetKeyProtectorType", new object[] { protectorId });
+                                    
+                                    if (typeResult is ManagementBaseObject typeResultObject)
+                                    {
+                                        var protectorType = Convert.ToInt32(typeResultObject["KeyProtectorType"]);
+                                        keyProtectors.Add(GetKeyProtectorTypeName(protectorType));
+                                    }
+                                }
                             }
                         }
+                        catch (Exception ex)
+                        {
+                            _logger.LogDebug(ex, "Failed to get key protectors for volume {DriveLetter}", volumeInfo.DriveLetter);
+                        }
+        
+                        volumeInfo.KeyProtectors = keyProtectors;
+                        volumes.Add(volumeInfo);
                     }
+        
+                    info.Volumes = volumes;
+                    info.IsSupported = volumes.Any();
+                    info.HasEncryptedVolumes = volumes.Any(v => v.ProtectionStatus == 1);
+        #else
+                    _logger.LogWarning("BitLocker information is only available on Windows platforms.");
+                    info.IsSupported = false;
+                    info.HasEncryptedVolumes = false;
+                    info.Volumes = new List<BitLockerVolumeInfo>();
+        #endif
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogDebug(ex, "Failed to get key protectors for volume {DriveLetter}", volumeInfo.DriveLetter);
+                    _logger.LogWarning(ex, "Failed to get BitLocker information");
                 }
-
-                volumeInfo.KeyProtectors = keyProtectors;
-                volumes.Add(volumeInfo);
-            }
-
-            info.Volumes = volumes;
-            info.IsSupported = volumes.Any();
-            info.HasEncryptedVolumes = volumes.Any(v => v.ProtectionStatus == 1);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to get BitLocker information");
-        }
 
         return info;
     }
@@ -197,35 +209,39 @@ public class EnterpriseSecurityDiscoveryService
     {
         var info = new WindowsDefenderInfo();
         
-        try
-        {
-            // Get Windows Defender status
-            using var searcher = new ManagementObjectSearcher(@"root\Microsoft\Windows\Defender", 
-                "SELECT * FROM MSFT_MpComputerStatus");
-            
-            foreach (ManagementObject obj in searcher.Get())
-            {
-                info.AntivirusEnabled = Convert.ToBoolean(obj["AntivirusEnabled"] ?? false);
-                info.AntispywareEnabled = Convert.ToBoolean(obj["AntispywareEnabled"] ?? false);
-                info.RealTimeProtectionEnabled = Convert.ToBoolean(obj["RealTimeProtectionEnabled"] ?? false);
-                info.OnAccessProtectionEnabled = Convert.ToBoolean(obj["OnAccessProtectionEnabled"] ?? false);
-                info.InputOutputProtectionEnabled = Convert.ToBoolean(obj["InputOutputProtectionEnabled"] ?? false);
-                info.BehaviorMonitorEnabled = Convert.ToBoolean(obj["BehaviorMonitorEnabled"] ?? false);
-                info.AntivirusSignatureLastUpdated = Convert.ToDateTime(obj["AntivirusSignatureLastUpdated"] ?? DateTime.MinValue);
-                info.AntispywareSignatureLastUpdated = Convert.ToDateTime(obj["AntispywareSignatureLastUpdated"] ?? DateTime.MinValue);
-                info.QuickScanStartTime = Convert.ToDateTime(obj["QuickScanStartTime"] ?? DateTime.MinValue);
-                info.QuickScanEndTime = Convert.ToDateTime(obj["QuickScanEndTime"] ?? DateTime.MinValue);
-                info.FullScanStartTime = Convert.ToDateTime(obj["FullScanStartTime"] ?? DateTime.MinValue);
-                info.FullScanEndTime = Convert.ToDateTime(obj["FullScanEndTime"] ?? DateTime.MinValue);
-                info.AntivirusSignatureVersion = obj["AntivirusSignatureVersion"]?.ToString();
-                info.AntispywareSignatureVersion = obj["AntispywareSignatureVersion"]?.ToString();
-                break;
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to get Windows Defender information");
-        }
+                try
+                {
+        #if WINDOWS || NET5_0_OR_GREATER && WINDOWS
+                    // Get Windows Defender status
+                    using var searcher = new ManagementObjectSearcher(@"root\Microsoft\Windows\Defender", 
+                        "SELECT * FROM MSFT_MpComputerStatus");
+                    
+                    foreach (ManagementObject obj in searcher.Get())
+                    {
+                        info.AntivirusEnabled = Convert.ToBoolean(obj["AntivirusEnabled"] ?? false);
+                        info.AntispywareEnabled = Convert.ToBoolean(obj["AntispywareEnabled"] ?? false);
+                        info.RealTimeProtectionEnabled = Convert.ToBoolean(obj["RealTimeProtectionEnabled"] ?? false);
+                        info.OnAccessProtectionEnabled = Convert.ToBoolean(obj["OnAccessProtectionEnabled"] ?? false);
+                        info.InputOutputProtectionEnabled = Convert.ToBoolean(obj["InputOutputProtectionEnabled"] ?? false);
+                        info.BehaviorMonitorEnabled = Convert.ToBoolean(obj["BehaviorMonitorEnabled"] ?? false);
+                        info.AntivirusSignatureLastUpdated = Convert.ToDateTime(obj["AntivirusSignatureLastUpdated"] ?? DateTime.MinValue);
+                        info.AntispywareSignatureLastUpdated = Convert.ToDateTime(obj["AntispywareSignatureLastUpdated"] ?? DateTime.MinValue);
+                        info.QuickScanStartTime = Convert.ToDateTime(obj["QuickScanStartTime"] ?? DateTime.MinValue);
+                        info.QuickScanEndTime = Convert.ToDateTime(obj["QuickScanEndTime"] ?? DateTime.MinValue);
+                        info.FullScanStartTime = Convert.ToDateTime(obj["FullScanStartTime"] ?? DateTime.MinValue);
+                        info.FullScanEndTime = Convert.ToDateTime(obj["FullScanEndTime"] ?? DateTime.MinValue);
+                        info.AntivirusSignatureVersion = obj["AntivirusSignatureVersion"]?.ToString();
+                        info.AntispywareSignatureVersion = obj["AntispywareSignatureVersion"]?.ToString();
+                        break;
+                    }
+        #else
+                    _logger.LogWarning("Windows Defender information is only available on Windows platforms.");
+        #endif
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to get Windows Defender information");
+                }
 
         return info;
     }
@@ -234,43 +250,47 @@ public class EnterpriseSecurityDiscoveryService
     {
         var info = new FirewallStatusInfo();
         
-        try
-        {
-            // Get firewall status for each profile
-            using var searcher = new ManagementObjectSearcher(@"root\StandardCimv2", 
-                "SELECT * FROM MSFT_NetFirewallProfile");
-            
-            foreach (ManagementObject obj in searcher.Get())
-            {
-                var profile = obj["Name"]?.ToString();
-                var enabled = Convert.ToBoolean(obj["Enabled"] ?? false);
-                var defaultInboundAction = obj["DefaultInboundAction"]?.ToString();
-                var defaultOutboundAction = obj["DefaultOutboundAction"]?.ToString();
-                
-                switch (profile?.ToLower())
+                try
                 {
-                    case "domain":
-                        info.DomainProfileEnabled = enabled;
-                        info.DomainInboundAction = defaultInboundAction;
-                        info.DomainOutboundAction = defaultOutboundAction;
-                        break;
-                    case "private":
-                        info.PrivateProfileEnabled = enabled;
-                        info.PrivateInboundAction = defaultInboundAction;
-                        info.PrivateOutboundAction = defaultOutboundAction;
-                        break;
-                    case "public":
-                        info.PublicProfileEnabled = enabled;
-                        info.PublicInboundAction = defaultInboundAction;
-                        info.PublicOutboundAction = defaultOutboundAction;
-                        break;
+        #if WINDOWS || NET5_0_OR_GREATER && WINDOWS
+                    // Get firewall status for each profile
+                    using var searcher = new ManagementObjectSearcher(@"root\StandardCimv2", 
+                        "SELECT * FROM MSFT_NetFirewallProfile");
+                    
+                    foreach (ManagementObject obj in searcher.Get())
+                    {
+                        var profile = obj["Name"]?.ToString();
+                        var enabled = Convert.ToBoolean(obj["Enabled"] ?? false);
+                        var defaultInboundAction = obj["DefaultInboundAction"]?.ToString();
+                        var defaultOutboundAction = obj["DefaultOutboundAction"]?.ToString();
+                        
+                        switch (profile?.ToLower())
+                        {
+                            case "domain":
+                                info.DomainProfileEnabled = enabled;
+                                info.DomainInboundAction = defaultInboundAction;
+                                info.DomainOutboundAction = defaultOutboundAction;
+                                break;
+                            case "private":
+                                info.PrivateProfileEnabled = enabled;
+                                info.PrivateInboundAction = defaultInboundAction;
+                                info.PrivateOutboundAction = defaultOutboundAction;
+                                break;
+                            case "public":
+                                info.PublicProfileEnabled = enabled;
+                                info.PublicInboundAction = defaultInboundAction;
+                                info.PublicOutboundAction = defaultOutboundAction;
+                                break;
+                        }
+                    }
+        #else
+                    _logger.LogWarning("Firewall status is only available on Windows platforms.");
+        #endif
                 }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to get firewall status");
-        }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to get firewall status");
+                }
 
         return info;
     }
@@ -279,26 +299,30 @@ public class EnterpriseSecurityDiscoveryService
     {
         var info = new UacSettingsInfo();
         
-        try
-        {
-            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System");
-            if (key != null)
-            {
-                info.UacEnabled = Convert.ToInt32(key.GetValue("EnableLUA") ?? 0) == 1;
-                info.ConsentPromptBehaviorAdmin = Convert.ToInt32(key.GetValue("ConsentPromptBehaviorAdmin") ?? 0);
-                info.ConsentPromptBehaviorUser = Convert.ToInt32(key.GetValue("ConsentPromptBehaviorUser") ?? 0);
-                info.EnableInstallerDetection = Convert.ToInt32(key.GetValue("EnableInstallerDetection") ?? 0) == 1;
-                info.PromptOnSecureDesktop = Convert.ToInt32(key.GetValue("PromptOnSecureDesktop") ?? 0) == 1;
-                info.EnableSecureUIAPaths = Convert.ToInt32(key.GetValue("EnableSecureUIAPaths") ?? 0) == 1;
-                info.EnableUIADesktopToggle = Convert.ToInt32(key.GetValue("EnableUIADesktopToggle") ?? 0) == 1;
-                info.ValidateAdminCodeSignatures = Convert.ToInt32(key.GetValue("ValidateAdminCodeSignatures") ?? 0) == 1;
-                info.EnableVirtualization = Convert.ToInt32(key.GetValue("EnableVirtualization") ?? 0) == 1;
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to get UAC settings");
-        }
+                try
+                {
+        #if WINDOWS || NET5_0_OR_GREATER && WINDOWS
+                    using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System");
+                    if (key != null)
+                    {
+                        info.UacEnabled = Convert.ToInt32(key.GetValue("EnableLUA") ?? 0) == 1;
+                        info.ConsentPromptBehaviorAdmin = Convert.ToInt32(key.GetValue("ConsentPromptBehaviorAdmin") ?? 0);
+                        info.ConsentPromptBehaviorUser = Convert.ToInt32(key.GetValue("ConsentPromptBehaviorUser") ?? 0);
+                        info.EnableInstallerDetection = Convert.ToInt32(key.GetValue("EnableInstallerDetection") ?? 0) == 1;
+                        info.PromptOnSecureDesktop = Convert.ToInt32(key.GetValue("PromptOnSecureDesktop") ?? 0) == 1;
+                        info.EnableSecureUIAPaths = Convert.ToInt32(key.GetValue("EnableSecureUIAPaths") ?? 0) == 1;
+                        info.EnableUIADesktopToggle = Convert.ToInt32(key.GetValue("EnableUIADesktopToggle") ?? 0) == 1;
+                        info.ValidateAdminCodeSignatures = Convert.ToInt32(key.GetValue("ValidateAdminCodeSignatures") ?? 0) == 1;
+                        info.EnableVirtualization = Convert.ToInt32(key.GetValue("EnableVirtualization") ?? 0) == 1;
+                    }
+        #else
+                    _logger.LogWarning("UAC settings are only available on Windows platforms.");
+        #endif
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to get UAC settings");
+                }
 
         return info;
     }
@@ -412,64 +436,80 @@ public class EnterpriseSecurityDiscoveryService
     {
         var info = new WindowsUpdateSettingsInfo();
         
-        try
-        {
-            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU");
-            if (key != null)
-            {
-                info.AutoUpdateEnabled = Convert.ToInt32(key.GetValue("NoAutoUpdate") ?? 1) == 0;
-                info.ScheduledInstallDay = Convert.ToInt32(key.GetValue("ScheduledInstallDay") ?? 0);
-                info.ScheduledInstallTime = Convert.ToInt32(key.GetValue("ScheduledInstallTime") ?? 3);
-                info.AutoInstallMinorUpdates = Convert.ToInt32(key.GetValue("AutoInstallMinorUpdates") ?? 1) == 1;
-                info.IncludeRecommendedUpdates = Convert.ToInt32(key.GetValue("IncludeRecommendedUpdates") ?? 1) == 1;
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to get Windows Update settings");
-        }
+                try
+                {
+        #if WINDOWS || NET5_0_OR_GREATER && WINDOWS
+                    if (OperatingSystem.IsWindows())
+                    {
+                        using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU");
+                        if (key != null)
+                        {
+                            info.AutoUpdateEnabled = Convert.ToInt32(key.GetValue("NoAutoUpdate") ?? 1) == 0;
+                            info.ScheduledInstallDay = Convert.ToInt32(key.GetValue("ScheduledInstallDay") ?? 0);
+                            info.ScheduledInstallTime = Convert.ToInt32(key.GetValue("ScheduledInstallTime") ?? 3);
+                            info.AutoInstallMinorUpdates = Convert.ToInt32(key.GetValue("AutoInstallMinorUpdates") ?? 1) == 1;
+                            info.IncludeRecommendedUpdates = Convert.ToInt32(key.GetValue("IncludeRecommendedUpdates") ?? 1) == 1;
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Windows Update settings are only available on Windows platforms.");
+                    }
+        #else
+                    _logger.LogWarning("Windows Update settings are only available on Windows platforms.");
+        #endif
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to get Windows Update settings");
+                }
 
         return info;
     }
 
-    private List<UserAccountInfo> GetUserAccounts()
-    {
-        var accounts = new List<UserAccountInfo>();
-        
-        try
+        private List<UserAccountInfo> GetUserAccounts()
         {
-            using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_UserAccount WHERE LocalAccount = True");
-            foreach (ManagementObject obj in searcher.Get())
+            var accounts = new List<UserAccountInfo>();
+    
+    #if WINDOWS || NET5_0_OR_GREATER && WINDOWS
+            try
             {
-                accounts.Add(new UserAccountInfo
+                using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_UserAccount WHERE LocalAccount = True");
+                foreach (ManagementObject obj in searcher.Get())
                 {
-                    Name = obj["Name"]?.ToString(),
-                    FullName = obj["FullName"]?.ToString(),
-                    Description = obj["Description"]?.ToString(),
-                    SID = obj["SID"]?.ToString(),
-                    AccountType = Convert.ToInt32(obj["AccountType"] ?? 0),
-                    Disabled = Convert.ToBoolean(obj["Disabled"] ?? false),
-                    LocalAccount = Convert.ToBoolean(obj["LocalAccount"] ?? false),
-                    Lockout = Convert.ToBoolean(obj["Lockout"] ?? false),
-                    PasswordChangeable = Convert.ToBoolean(obj["PasswordChangeable"] ?? false),
-                    PasswordExpires = Convert.ToBoolean(obj["PasswordExpires"] ?? false),
-                    PasswordRequired = Convert.ToBoolean(obj["PasswordRequired"] ?? false),
-                    Status = obj["Status"]?.ToString()
-                });
+                    accounts.Add(new UserAccountInfo
+                    {
+                        Name = obj["Name"]?.ToString(),
+                        FullName = obj["FullName"]?.ToString(),
+                        Description = obj["Description"]?.ToString(),
+                        SID = obj["SID"]?.ToString(),
+                        AccountType = Convert.ToInt32(obj["AccountType"] ?? 0),
+                        Disabled = Convert.ToBoolean(obj["Disabled"] ?? false),
+                        LocalAccount = Convert.ToBoolean(obj["LocalAccount"] ?? false),
+                        Lockout = Convert.ToBoolean(obj["Lockout"] ?? false),
+                        PasswordChangeable = Convert.ToBoolean(obj["PasswordChangeable"] ?? false),
+                        PasswordExpires = Convert.ToBoolean(obj["PasswordExpires"] ?? false),
+                        PasswordRequired = Convert.ToBoolean(obj["PasswordRequired"] ?? false),
+                        Status = obj["Status"]?.ToString()
+                    });
+                }
             }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get user accounts");
+            }
+    #else
+            _logger.LogWarning("User account discovery is only available on Windows platforms.");
+    #endif
+    
+            return accounts;
         }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to get user accounts");
-        }
-
-        return accounts;
-    }
 
     private List<GroupMembershipInfo> GetGroupMemberships()
     {
         var memberships = new List<GroupMembershipInfo>();
-        
+
+    #if WINDOWS || NET5_0_OR_GREATER && WINDOWS
         try
         {
             using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_Group WHERE LocalAccount = True");
@@ -477,7 +517,7 @@ public class EnterpriseSecurityDiscoveryService
             {
                 var groupName = obj["Name"]?.ToString();
                 var groupSID = obj["SID"]?.ToString();
-                
+
                 // Get group members
                 var members = new List<string>();
                 try
@@ -516,6 +556,9 @@ public class EnterpriseSecurityDiscoveryService
         {
             _logger.LogWarning(ex, "Failed to get group memberships");
         }
+    #else
+        _logger.LogWarning("Group membership discovery is only available on Windows platforms.");
+    #endif
 
         return memberships;
     }

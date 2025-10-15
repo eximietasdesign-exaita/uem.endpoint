@@ -193,7 +193,16 @@ public class EnterpriseDiscoveryOrchestrator : BackgroundService
         try
         {
             // Discover hardware information
-            var hardware = await _hardwareDiscovery.DiscoverAsync();
+            EnterpriseHardwareInfo hardware;
+            if (OperatingSystem.IsWindows())
+            {
+                hardware = await _hardwareDiscovery.DiscoverAsync();
+            }
+            else
+            {
+                _logger.LogWarning("[Discovery Session {DiscoverySessionId}] Hardware discovery is only supported on Windows. Skipping hardware discovery.", discoverySessionId);
+                hardware = new EnterpriseHardwareInfo { DiscoveryTimestamp = DateTime.UtcNow };
+            }
             var discoveryTime = DateTime.UtcNow - startTime;
 
             _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Hardware discovery completed in {DiscoveryTime:c}. Found {ComponentCount} components", 
@@ -225,9 +234,23 @@ public class EnterpriseDiscoveryOrchestrator : BackgroundService
         try
         {
             // Discover software information
-            var software = await _softwareDiscovery.DiscoverAsync();
+            EnterpriseSoftwareInfo? software;
+            if (OperatingSystem.IsWindows())
+            {
+                software = await _softwareDiscovery.DiscoverAsync();
+            }
+            else
+            {
+                _logger.LogWarning("[Discovery Session {DiscoverySessionId}] Software discovery is only supported on Windows. Skipping software discovery.", discoverySessionId);
+                software = new EnterpriseSoftwareInfo { DiscoveryTimestamp = DateTime.UtcNow };
+            }
+            // Ensure software is not null before proceeding
+            if (software == null)
+            {
+                software = new EnterpriseSoftwareInfo { DiscoveryTimestamp = DateTime.UtcNow };
+            }
             var discoveryTime = DateTime.UtcNow - startTime;
-            var softwareCount = software?.InstalledPrograms?.Count ?? 0;
+            var softwareCount = software.InstalledPrograms?.Count ?? 0;
 
             _logger.LogInformation("[Discovery Session {DiscoverySessionId}] Software discovery completed in {DiscoveryTime:c}. Found {SoftwareCount} installed programs", 
                 discoverySessionId, discoveryTime, softwareCount);

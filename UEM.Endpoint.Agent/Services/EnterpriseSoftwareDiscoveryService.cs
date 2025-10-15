@@ -7,9 +7,10 @@ using Microsoft.Win32;
 using System.IO;
 using System.Diagnostics;
 using System.Text.Json;
+using System.Runtime.Versioning;
 
 namespace UEM.Endpoint.Agent.Services;
-
+[SupportedOSPlatform("windows")]
 public class EnterpriseSoftwareDiscoveryService
 {
     private readonly ILogger<EnterpriseSoftwareDiscoveryService> _logger;
@@ -23,31 +24,34 @@ public class EnterpriseSoftwareDiscoveryService
     {
         _logger.LogInformation("Starting comprehensive software discovery...");
         
-        var info = new EnterpriseSoftwareInfo
-        {
-            DiscoveryTimestamp = DateTime.UtcNow,
-            InstalledPrograms = GetInstalledPrograms(),
-            WindowsFeatures = GetWindowsFeatures(),
-            WindowsUpdates = GetWindowsUpdates(),
-            EnvironmentVariables = GetEnvironmentVariables(),
-            Services = GetWindowsServices(),
-            StartupPrograms = GetStartupPrograms(),
-            Drivers = GetInstalledDrivers(),
-            Certificates = GetInstalledCertificates(),
-            FirewallRules = GetFirewallRules(),
-            RunningProcesses = GetRunningProcesses(),
-            ScheduledTasks = GetScheduledTasks(),
-            NetworkConnections = GetNetworkConnections(),
-            EventLogSummary = GetEventLogSummary(),
-            SystemConfiguration = GetSystemConfiguration()
-        };
+        // Run discovery operations asynchronously
+        return await Task.Run(() => {
+            var info = new EnterpriseSoftwareInfo
+            {
+                DiscoveryTimestamp = DateTime.UtcNow,
+                InstalledPrograms = GetInstalledPrograms(),
+                WindowsFeatures = GetWindowsFeatures(),
+                WindowsUpdates = GetWindowsUpdates(),
+                EnvironmentVariables = GetEnvironmentVariables(),
+                Services = GetWindowsServices(),
+                StartupPrograms = GetStartupPrograms(),
+                Drivers = GetInstalledDrivers(),
+                Certificates = GetInstalledCertificates(),
+                FirewallRules = GetFirewallRules(),
+                RunningProcesses = GetRunningProcesses(),
+                ScheduledTasks = GetScheduledTasks(),
+                NetworkConnections = GetNetworkConnections(),
+                EventLogSummary = GetEventLogSummary(),
+                SystemConfiguration = GetSystemConfiguration()
+            };
 
-        _logger.LogInformation("Software discovery completed successfully. Found {ProgramCount} programs, {ServiceCount} services, {ProcessCount} processes", 
-            info.InstalledPrograms?.Count ?? 0, 
-            info.Services?.Count ?? 0, 
-            info.RunningProcesses?.Count ?? 0);
-        
-        return info;
+            _logger.LogInformation("Software discovery completed successfully. Found {ProgramCount} programs, {ServiceCount} services, {ProcessCount} processes", 
+                info.InstalledPrograms?.Count ?? 0, 
+                info.Services?.Count ?? 0, 
+                info.RunningProcesses?.Count ?? 0);
+            
+            return info;
+        });
     }
 
     private List<InstalledProgramInfo> GetInstalledPrograms()
@@ -225,7 +229,11 @@ public class EnterpriseSoftwareDiscoveryService
         {
             foreach (var entry in Environment.GetEnvironmentVariables().Cast<System.Collections.DictionaryEntry>())
             {
-                variables[entry.Key.ToString()] = entry.Value?.ToString() ?? "";
+                var keyString = entry.Key?.ToString();
+                if (!string.IsNullOrEmpty(keyString))
+                {
+                    variables[keyString] = entry.Value?.ToString() ?? "";
+                }
             }
         }
         catch (Exception ex)

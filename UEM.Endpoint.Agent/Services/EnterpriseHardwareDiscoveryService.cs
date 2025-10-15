@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Management;
 using System.Net;
+using System.Runtime.Versioning;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
@@ -12,6 +13,7 @@ using Microsoft.Win32;
 
 namespace UEM.Endpoint.Agent.Services;
 
+[SupportedOSPlatform("windows")]
 public class EnterpriseHardwareDiscoveryService
 {
     private readonly ILogger<EnterpriseHardwareDiscoveryService> _logger;
@@ -80,7 +82,7 @@ public class EnterpriseHardwareDiscoveryService
                 };
 
                 var pcrole = obj["PCSystemType"]?.ToString();
-                if (pcroleMap.ContainsKey(pcrole ?? ""))
+                if (!string.IsNullOrEmpty(pcrole) && pcroleMap.ContainsKey(pcrole))
                     return pcroleMap[pcrole];
                 
                 // Fallback to model detection

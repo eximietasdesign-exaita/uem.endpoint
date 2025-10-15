@@ -5,6 +5,9 @@ namespace UEM.Endpoint.Agent.Services;
 /// <summary>
 /// Policy execution command received from server
 /// </summary>
+/// 
+
+/*
 public class PolicyExecutionCommand
 {
     public string ExecutionId { get; set; } = string.Empty;
@@ -117,6 +120,7 @@ public class ScriptExecutionResult
     public DateTime? CompletedAt { get; set; }
 }
 
+
 /// <summary>
 /// Performance extension methods for logging
 /// </summary>
@@ -150,3 +154,4 @@ internal class PerformanceTimer : IDisposable
         _logger.LogDebug("Operation {OperationName} completed in {Duration}ms", _operationName, duration.TotalMilliseconds);
     }
 }
+*/
