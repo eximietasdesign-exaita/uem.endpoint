@@ -124,6 +124,12 @@ export function EnterpriseTopHeader({ setIsSidebarOpen }: EnterpriseTopHeaderPro
     setIsDomainTenantOpen(false);
   };
 
+// Helper to get tenants for a given domain
+const getTenantsForDomain = (domainId: number | null) => {
+    if (!domainId) return [];
+    return tenants.filter(t => t.domainId === domainId || (t as any).domainid === domainId);
+};
+
   // Global search functionality
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -233,35 +239,51 @@ export function EnterpriseTopHeader({ setIsSidebarOpen }: EnterpriseTopHeaderPro
                 >
                   <div className="flex items-center space-x-2 flex-1 min-w-0">
                     {selectedDomain ? (
-                      <>
-                        <div className="flex items-center space-x-1.5 flex-1 min-w-0">
-                          <Globe className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-                          <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">
-                            {(selectedDomain as any).displayname || selectedDomain.displayName}
-                          </span>
-                          {selectedTenant && (
-                            <>
-                              <ChevronRight className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                              <Building2 className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
-                              <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">
-                                {(selectedTenant as any).displayname || selectedTenant.displayName}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex items-center space-x-2">
-                        <Globe className="h-3.5 w-3.5 text-gray-400" />
-                        <span className="text-xs text-gray-600 dark:text-gray-400">
-                          Select Domain & Tenant
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <Badge variant="secondary" className="text-xs font-medium ml-auto">
-                    {selectedTenant ? 'Tenant' : selectedDomain ? 'Domain' : 'All'}
-                  </Badge>
+  <div className="flex items-center space-x-2 flex-1 min-w-0">
+    <Globe className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+    <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">
+      {(selectedDomain as any).displayname || selectedDomain.displayName}
+    </span>
+    
+    {selectedTenant ? (
+      <>
+        <ChevronRight className="h-3 w-3 text-gray-400 flex-shrink-0" />
+        <Building2 className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+        <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">
+          {(selectedTenant as any).displayname || selectedTenant.displayName}
+        </span>
+      </>
+    ) : (
+      getTenantsForDomain(selectedDomain.id).length > 0 && (
+        <Badge variant="secondary" className="ml-2 text-xs">
+          {getTenantsForDomain(selectedDomain.id).length} {getTenantsForDomain(selectedDomain.id).length === 1 ? 'Tenant' : 'Tenants'}
+        </Badge>
+      )
+    )}
+  </div>
+) : (
+  <div className="flex items-center space-x-2">
+    <Globe className="h-3.5 w-3.5 text-gray-400" />
+    <span className="text-xs text-gray-600 dark:text-gray-400">
+      Select Domain & Tenant
+    </span>
+  </div>
+)}
+</div>
+
+<Badge 
+  variant="secondary" 
+  className="text-xs font-medium ml-3"
+>
+  {selectedTenant 
+    ? 'Tenant' 
+    : selectedDomain && getTenantsForDomain(selectedDomain.id).length > 1 
+      ? 'Multi-Tenant Domain' 
+      : selectedDomain 
+        ? 'Domain' 
+        : 'All'
+  }
+</Badge>
                 </Button>
               </PopoverTrigger>
               <PopoverContent 

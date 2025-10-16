@@ -866,7 +866,7 @@ export default function AgentStatusReports() {
       <AIAnalyticsInsights
         isOpen={isAIInsightsOpen}
         onClose={() => setIsAIInsightsOpen(false)}
-        onInsightGenerated={handleAIInsightGenerated}
+        agentData={agentStatusData}
       />
     </div>
   );

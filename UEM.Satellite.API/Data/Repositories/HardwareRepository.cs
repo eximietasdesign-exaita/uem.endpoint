@@ -34,45 +34,42 @@ public class HardwareRepository : IHardwareRepository
                     capacity BIGINT,
                     properties JSONB,
                     discovered_at TIMESTAMPTZ DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ DEFAULT NOW()
-                );
-
-                CREATE INDEX IF NOT EXISTS idx_hardware_agent_type 
-                ON hardware(agent_id, component_type);";
-
-            const string upsertSql = @"
-                INSERT INTO hardware (
-                    agent_id, component_type, manufacturer, model, serial_number, 
-                    version, capacity, properties
-                ) VALUES (
-                    @AgentId, @ComponentType, @Manufacturer, @Model, @SerialNumber,
-                    @Version, @Capacity, @Properties::jsonb
-                ) ON CONFLICT (agent_id, component_type, manufacturer, model) 
-                DO UPDATE SET
-                    serial_number = EXCLUDED.serial_number,
-                    version = EXCLUDED.version,
-                    capacity = EXCLUDED.capacity,
-                    properties = EXCLUDED.properties,
-                    updated_at = NOW()";
+                    updated_at TIMESTAMPTZ DEFAULT NOW(),
+                    CONSTRAINT unique_hardware_component UNIQUE (agent_id, component_type, manufacturer, model)
+                );";
 
             using var connection = _dbFactory.Open();
             await connection.ExecuteAsync(createTableSql);
 
+            // First delete existing records for this agent
+            await connection.ExecuteAsync(
+                "DELETE FROM hardware WHERE agent_id = @AgentId",
+                new { AgentId = agentId }
+            );
+
+            // Then insert new records
             foreach (var component in hardware)
             {
-                var properties = component.Properties != null ? JsonSerializer.Serialize(component.Properties) : null;
+                var properties = component.Properties != null ? 
+                    JsonSerializer.Serialize(component.Properties) : null;
                 
-                await connection.ExecuteAsync(upsertSql, new
-                {
-                    AgentId = agentId,
-                    component.ComponentType,
-                    component.Manufacturer,
-                    component.Model,
-                    component.SerialNumber,
-                    component.Version,
-                    component.Capacity,
-                    Properties = properties
-                });
+                await connection.ExecuteAsync(@"
+                    INSERT INTO hardware (
+                        agent_id, component_type, manufacturer, model, serial_number,
+                        version, capacity, properties
+                    ) VALUES (
+                        @AgentId, @ComponentType, @Manufacturer, @Model, @SerialNumber,
+                        @Version, @Capacity, @Properties::jsonb
+                    )", new {
+                        AgentId = agentId,
+                        component.ComponentType,
+                        component.Manufacturer,
+                        component.Model,
+                        component.SerialNumber,
+                        component.Version,
+                        component.Capacity,
+                        Properties = properties
+                    });
             }
 
             _logger.LogInformation("Upserted {Count} hardware components for agent {AgentId}", hardware.Length, agentId);

@@ -37,13 +37,15 @@ public class NetworkRepository : INetworkRepository
                     bytes_sent BIGINT NOT NULL,
                     bytes_received BIGINT NOT NULL,
                     speed DOUBLE PRECISION NOT NULL,
-                    timestamp TIMESTAMPTZ DEFAULT NOW()
-                );
+                    timestamp TIMESTAMPTZ DEFAULT NOW(),
+                    CONSTRAINT unique_agent_interface UNIQUE (agent_id, interface_name)
+                );";
 
-                CREATE INDEX IF NOT EXISTS idx_network_interfaces_agent_name 
-                ON network_interfaces(agent_id, interface_name);";
+            const string clearOldSql = @"
+                DELETE FROM network_interfaces 
+                WHERE agent_id = @AgentId;";
 
-            const string upsertSql = @"
+            const string insertSql = @"
                 INSERT INTO network_interfaces (
                     agent_id, interface_name, description, mac_address, ip_address,
                     subnet_mask, gateway, dns_servers, is_active, interface_type,
@@ -52,30 +54,18 @@ public class NetworkRepository : INetworkRepository
                     @AgentId, @InterfaceName, @Description, @MacAddress, @IpAddress,
                     @SubnetMask, @Gateway, @DnsServers, @IsActive, @InterfaceType,
                     @BytesSent, @BytesReceived, @Speed
-                ) ON CONFLICT (agent_id, interface_name) 
-                DO UPDATE SET
-                    description = EXCLUDED.description,
-                    mac_address = EXCLUDED.mac_address,
-                    ip_address = EXCLUDED.ip_address,
-                    subnet_mask = EXCLUDED.subnet_mask,
-                    gateway = EXCLUDED.gateway,
-                    dns_servers = EXCLUDED.dns_servers,
-                    is_active = EXCLUDED.is_active,
-                    interface_type = EXCLUDED.interface_type,
-                    bytes_sent = EXCLUDED.bytes_sent,
-                    bytes_received = EXCLUDED.bytes_received,
-                    speed = EXCLUDED.speed,
-                    timestamp = NOW()";
+                );";
 
             using var connection = _dbFactory.Open();
             await connection.ExecuteAsync(createTableSql);
+            await connection.ExecuteAsync(clearOldSql, new { AgentId = agentId });
 
             foreach (var networkInterface in interfaces)
             {
                 var dnsServers = networkInterface.DnsServers != null ? 
                     string.Join(",", networkInterface.DnsServers) : null;
 
-                await connection.ExecuteAsync(upsertSql, new
+                await connection.ExecuteAsync(insertSql, new
                 {
                     AgentId = agentId,
                     networkInterface.InterfaceName,

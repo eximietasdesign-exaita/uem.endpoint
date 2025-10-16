@@ -43,7 +43,7 @@ export function DomainTenantTree({ value, onChange }: DomainTenantTreeProps) {
     }
     setExpandedDomains(newExpanded);
   };
-
+  
   const handleDomainSelect = (domainId: number) => {
     onChange({ domainId, tenantId: null });
   };

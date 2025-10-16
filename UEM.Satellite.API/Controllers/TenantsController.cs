@@ -25,13 +25,13 @@ public class TenantsController : ControllerBase
         {
             using var connection = _dbFactory.Open();
             var query = @"
-                SELECT t.id, t.name, t.display_name as displayName, t.description, t.domain_id as domainId,
-                       t.type, t.status, t.is_active as isActive, t.created_by as createdBy,
+                SELECT t.id, t.name, t.display_name as displayName, t.description, 
+                       t.domain_id as domainId, t.type, t.status, t.is_active as isActive,
                        t.created_at as createdAt, t.updated_at as updatedAt,
                        d.name as domainName, d.display_name as domainDisplayName
                 FROM uem_app_tenants t
                 LEFT JOIN uem_app_domains d ON t.domain_id = d.id";
-            
+
             var parameters = new DynamicParameters();
             
             if (domainId.HasValue)
@@ -39,7 +39,7 @@ public class TenantsController : ControllerBase
                 query += " WHERE t.domain_id = @DomainId";
                 parameters.Add("DomainId", domainId.Value);
             }
-            
+
             query += " ORDER BY t.display_name";
             
             var tenants = await connection.QueryAsync<object>(query, parameters);
