@@ -34,17 +34,17 @@ public class CloudCredentialsRepository
                     provider_id AS ProviderId,
                     tenant_id AS TenantId,
                     domain_id AS DomainId,
-                    credential_name AS CredentialName,
+                    name AS CredentialName,
                     encrypted_credentials AS EncryptedCredentials,
                     is_active AS IsActive,
-                    last_validated_at AS LastValidatedAt,
+                    last_validated AS LastValidatedAt,
                     validation_status AS ValidationStatus,
-                    validation_error AS ValidationError,
+                    '' AS ValidationError,
                     expires_at AS ExpiresAt,
                     created_at AS CreatedAt,
                     created_by AS CreatedBy,
                     updated_at AS UpdatedAt,
-                    updated_by AS UpdatedBy
+                    '' AS UpdatedBy
                 FROM cloud_credentials
                 WHERE id = @Id";
 
@@ -75,22 +75,22 @@ public class CloudCredentialsRepository
                     provider_id AS ProviderId,
                     tenant_id AS TenantId,
                     domain_id AS DomainId,
-                    credential_name AS CredentialName,
+                    name AS CredentialName,
                     encrypted_credentials AS EncryptedCredentials,
                     is_active AS IsActive,
-                    last_validated_at AS LastValidatedAt,
+                    last_validated AS LastValidatedAt,
                     validation_status AS ValidationStatus,
-                    validation_error AS ValidationError,
+                    '' AS ValidationError,
                     expires_at AS ExpiresAt,
                     created_at AS CreatedAt,
                     created_by AS CreatedBy,
                     updated_at AS UpdatedAt,
-                    updated_by AS UpdatedBy
+                    '' AS UpdatedBy
                 FROM cloud_credentials
                 WHERE tenant_id = @TenantId 
                   AND (@DomainId IS NULL OR domain_id = @DomainId)
                   AND is_active = true
-                ORDER BY credential_name";
+                ORDER BY name";
 
             var credentials = await connection.QueryAsync<CloudCredential>(sql, new { TenantId = tenantId, DomainId = domainId });
             
@@ -119,22 +119,22 @@ public class CloudCredentialsRepository
                     provider_id AS ProviderId,
                     tenant_id AS TenantId,
                     domain_id AS DomainId,
-                    credential_name AS CredentialName,
+                    name AS CredentialName,
                     encrypted_credentials AS EncryptedCredentials,
                     is_active AS IsActive,
-                    last_validated_at AS LastValidatedAt,
+                    last_validated AS LastValidatedAt,
                     validation_status AS ValidationStatus,
-                    validation_error AS ValidationError,
+                    '' AS ValidationError,
                     expires_at AS ExpiresAt,
                     created_at AS CreatedAt,
                     created_by AS CreatedBy,
                     updated_at AS UpdatedAt,
-                    updated_by AS UpdatedBy
+                    '' AS UpdatedBy
                 FROM cloud_credentials
                 WHERE provider_id = @ProviderId 
                   AND tenant_id = @TenantId
                   AND is_active = true
-                ORDER BY credential_name";
+                ORDER BY name";
 
             var credentials = await connection.QueryAsync<CloudCredential>(sql, new { ProviderId = providerId, TenantId = tenantId });
             
@@ -163,7 +163,7 @@ public class CloudCredentialsRepository
             
             const string sql = @"
                 INSERT INTO cloud_credentials (
-                    provider_id, tenant_id, domain_id, credential_name,
+                    provider_id, tenant_id, domain_id, name,
                     encrypted_credentials, is_active, validation_status,
                     expires_at, created_at, created_by
                 ) VALUES (
@@ -210,15 +210,13 @@ public class CloudCredentialsRepository
             
             const string sql = @"
                 UPDATE cloud_credentials SET
-                    credential_name = @CredentialName,
+                    name = @CredentialName,
                     encrypted_credentials = COALESCE(@EncryptedCredentials, encrypted_credentials),
                     is_active = @IsActive,
                     validation_status = @ValidationStatus,
-                    validation_error = @ValidationError,
-                    last_validated_at = @LastValidatedAt,
+                    last_validated = @LastValidatedAt,
                     expires_at = @ExpiresAt,
-                    updated_at = @UpdatedAt,
-                    updated_by = @UpdatedBy
+                    updated_at = @UpdatedAt
                 WHERE id = @Id";
 
             await connection.ExecuteAsync(sql, new
@@ -306,17 +304,17 @@ public class CloudCredentialsRepository
                     provider_id AS ProviderId,
                     tenant_id AS TenantId,
                     domain_id AS DomainId,
-                    credential_name AS CredentialName,
+                    name AS CredentialName,
                     encrypted_credentials AS EncryptedCredentials,
                     is_active AS IsActive,
-                    last_validated_at AS LastValidatedAt,
+                    last_validated AS LastValidatedAt,
                     validation_status AS ValidationStatus,
-                    validation_error AS ValidationError,
+                    '' AS ValidationError,
                     expires_at AS ExpiresAt,
                     created_at AS CreatedAt,
                     created_by AS CreatedBy,
                     updated_at AS UpdatedAt,
-                    updated_by AS UpdatedBy
+                    '' AS UpdatedBy
                 FROM cloud_credentials
                 WHERE is_active = true
                   AND expires_at IS NOT NULL

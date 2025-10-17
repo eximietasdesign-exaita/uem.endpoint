@@ -12,14 +12,14 @@ public class CloudDiscoveryController : ControllerBase
     private readonly CloudProvidersRepository _providersRepo;
     private readonly CloudCredentialsRepository _credentialsRepo;
     private readonly CloudDiscoveryJobsRepository _jobsRepo;
-    private readonly CredentialEncryptionService _encryptionService;
+    private readonly ICredentialEncryptionService _encryptionService;
     private readonly ILogger<CloudDiscoveryController> _logger;
 
     public CloudDiscoveryController(
         CloudProvidersRepository providersRepo,
         CloudCredentialsRepository credentialsRepo,
         CloudDiscoveryJobsRepository jobsRepo,
-        CredentialEncryptionService encryptionService,
+        ICredentialEncryptionService encryptionService,
         ILogger<CloudDiscoveryController> logger)
     {
         _providersRepo = providersRepo;
@@ -71,8 +71,7 @@ public class CloudDiscoveryController : ControllerBase
         try
         {
             // Encrypt credentials
-            var credentialsJson = System.Text.Json.JsonSerializer.Serialize(request.Credentials);
-            var encryptedCredentials = _encryptionService.EncryptCredentials(credentialsJson);
+            var encryptedCredentials = _encryptionService.Encrypt(request.Credentials);
             
             // Create credential object
             var credential = new CloudCredential
