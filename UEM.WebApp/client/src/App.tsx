@@ -39,6 +39,7 @@ import DomainManagementPage from "@/pages/domain-management";
 import TenantManagementPage from "@/pages/tenant-management";
 import AssetInventoryPage from "@/pages/asset-inventory";
 import RemoteAgentDeploymentPage from "@/pages/remote-agent-deployment";
+import CloudDiscoveryPage from "@/pages/cloud-discovery";
 import { DomainTenantProvider } from "@/contexts/DomainTenantContext";
 import { EnterpriseTopHeader } from "@/components/EnterpriseTopHeader";
 import { cn } from "@/lib/utils";
@@ -76,6 +77,7 @@ function AppContent() {
     if (pathname === "/agent-discovery") return { title: "Agent-Based Discovery", subtitle: "Deploy discovery policies to agent-based endpoints" };
     if (pathname === "/agent-status-reports") return { title: "Agent Status Reports", subtitle: "Comprehensive analysis of agent discovery effectiveness and policy compliance" };
     if (pathname === "/remote-agent-deployment") return { title: "Remote Agent Deployment", subtitle: "Enterprise-grade remote agent deployment with multi-OS support and comprehensive monitoring" };
+    if (pathname === "/cloud-discovery") return { title: "Cloud Discovery", subtitle: "Discover and manage resources across AWS, GCP, and Azure cloud platforms" };
     if (pathname === "/user-management") return { title: t("user_management"), subtitle: "User accounts and permissions" };
     if (pathname === "/settings") return { title: t("settings"), subtitle: "System configuration" };
     return { title: "Page", subtitle: "Description" };
@@ -124,6 +126,7 @@ function AppContent() {
             <Route path="/agent-discovery" component={AgentBasedDiscoveryPage} />
             <Route path="/agent-status-reports" component={AgentStatusReportsPage} />
             <Route path="/remote-agent-deployment" component={RemoteAgentDeploymentPage} />
+            <Route path="/cloud-discovery" component={CloudDiscoveryPage} />
             <Route path="/user-management" component={UserManagementPage} />
             <Route path="/alerts" component={() => <div>Alerts & Notifications page</div>} />
             <Route path="/reports" component={() => <div>Reports page</div>} />
