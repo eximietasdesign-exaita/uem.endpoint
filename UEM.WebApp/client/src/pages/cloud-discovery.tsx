@@ -1,19 +1,45 @@
 import { useState } from "react";
-import { Cloud, Plus, Settings, Play, Database, Key, Calendar, Loader2 } from "lucide-react";
+import { Cloud, Plus, Settings, Play, Database, Key, Calendar, Loader2, Shield, CheckCircle, XCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useCloudProviders, useCloudStats } from "@/lib/api/cloudDiscovery";
+import { useCloudProviders, useCloudStats, cloudDiscoveryApi } from "@/lib/api/cloudDiscovery";
 import { useDomainTenant } from "@/contexts/DomainTenantContext";
+import { AddCredentialDialog } from "@/components/cloud/AddCredentialDialog";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export default function CloudDiscovery() {
   const [selectedTab, setSelectedTab] = useState("overview");
+  const [addCredentialOpen, setAddCredentialOpen] = useState(false);
   const { selectedTenantId, selectedDomainId } = useDomainTenant();
+  const queryClient = useQueryClient();
 
   // Fetch real data from API
   const { data: providers = [], isLoading: providersLoading } = useCloudProviders();
   const { data: stats, isLoading: statsLoading } = useCloudStats(selectedTenantId || undefined, selectedDomainId || undefined);
+  const { data: credentials = [], isLoading: credentialsLoading } = useQuery({
+    queryKey: ["cloud-credentials", selectedTenantId, selectedDomainId],
+    queryFn: () => cloudDiscoveryApi.getCredentials(selectedTenantId || undefined, selectedDomainId || undefined),
+    enabled: !!selectedTenantId,
+  });
+
+  // Delete credential mutation
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => cloudDiscoveryApi.deleteCredential(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cloud-credentials"] });
+      queryClient.invalidateQueries({ queryKey: ["cloud-stats"] });
+    },
+  });
+
+  // Validate credential mutation
+  const validateMutation = useMutation({
+    mutationFn: (id: number) => cloudDiscoveryApi.validateCredential(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cloud-credentials"] });
+    },
+  });
 
   // Provider icon mapping
   const providerIcons: Record<string, string> = {
@@ -55,7 +81,7 @@ export default function CloudDiscovery() {
             <Settings className="h-4 w-4 mr-2" />
             Settings
           </Button>
-          <Button>
+          <Button onClick={() => setAddCredentialOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Credential
           </Button>
@@ -181,25 +207,100 @@ export default function CloudDiscovery() {
         {/* Credentials Tab */}
         <TabsContent value="credentials">
           <Card>
-            <CardHeader>
-              <CardTitle>Cloud Credentials</CardTitle>
-              <CardDescription>
-                Manage your cloud provider credentials securely
-              </CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Cloud Credentials</CardTitle>
+                <CardDescription>
+                  Manage your cloud provider credentials securely (AES-256 encrypted)
+                </CardDescription>
+              </div>
+              <Button onClick={() => setAddCredentialOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Credential
+              </Button>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-12">
-                <Key className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Credentials Management</h3>
-                <p className="text-muted-foreground mb-4">
-                  This feature is coming soon. You'll be able to securely store and manage
-                  cloud credentials with AES-256 encryption.
-                </p>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Credential
-                </Button>
-              </div>
+              {credentialsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : credentials.length === 0 ? (
+                <div className="text-center py-12">
+                  <Key className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Credentials Yet</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Add your first cloud credential to start discovering resources
+                  </p>
+                  <Button onClick={() => setAddCredentialOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Credential
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {credentials.map((cred: any) => {
+                    const provider = providers.find((p) => p.id === cred.providerId);
+                    return (
+                      <div
+                        key={cred.id}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="h-10 w-10 rounded-lg bg-white p-2 flex items-center justify-center border">
+                            <img
+                              src={providerIcons[provider?.providerType || 'aws'] || providerIcons['aws']}
+                              alt={provider?.name || 'Cloud Provider'}
+                              className="h-6 w-6 object-contain"
+                            />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold">{cred.credentialName}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              {provider?.providerName || 'Unknown Provider'}
+                              {cred.lastValidatedAt && (
+                                <span className="ml-2">
+                                  • Last validated: {new Date(cred.lastValidatedAt).toLocaleDateString()}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <Shield className="h-4 w-4 text-blue-600" />
+                            <span className="text-xs text-muted-foreground">Encrypted</span>
+                          </div>
+                          <Badge variant={
+                            cred.validationStatus === 'valid' ? 'default' :
+                            cred.validationStatus === 'invalid' ? 'destructive' :
+                            'secondary'
+                          }>
+                            {cred.validationStatus === 'valid' && <CheckCircle className="h-3 w-3 mr-1" />}
+                            {cred.validationStatus === 'invalid' && <XCircle className="h-3 w-3 mr-1" />}
+                            {cred.validationStatus || 'Pending'}
+                          </Badge>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => validateMutation.mutate(cred.id)}
+                            disabled={validateMutation.isPending}
+                          >
+                            Test
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => deleteMutation.mutate(cred.id)}
+                            disabled={deleteMutation.isPending}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -255,6 +356,9 @@ export default function CloudDiscovery() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Add Credential Dialog */}
+      <AddCredentialDialog open={addCredentialOpen} onOpenChange={setAddCredentialOpen} />
     </div>
   );
 }

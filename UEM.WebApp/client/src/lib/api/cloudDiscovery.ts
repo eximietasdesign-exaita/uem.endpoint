@@ -170,3 +170,61 @@ export function useCreateCloudDiscoveryJob() {
     },
   });
 }
+
+// Direct API calls (for use in components)
+export const cloudDiscoveryApi = {
+  async getProviders() {
+    const response = await fetch(`${API_BASE}/providers`);
+    if (!response.ok) throw new Error("Failed to fetch providers");
+    return response.json();
+  },
+
+  async getCredentials(tenantId?: number, domainId?: number) {
+    const params = new URLSearchParams();
+    if (tenantId) params.append("tenantId", tenantId.toString());
+    if (domainId) params.append("domainId", domainId.toString());
+    
+    const response = await fetch(`${API_BASE}/credentials?${params}`);
+    if (!response.ok) throw new Error("Failed to fetch credentials");
+    return response.json();
+  },
+
+  async createCredential(data: {
+    providerId: number;
+    tenantId?: number;
+    domainId?: number;
+    credentialName: string;
+    credentials: Record<string, string>;
+  }) {
+    const response = await fetch(`${API_BASE}/credentials`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(error || "Failed to create credential");
+    }
+    
+    return response.json();
+  },
+
+  async deleteCredential(id: number) {
+    const response = await fetch(`${API_BASE}/credentials/${id}`, {
+      method: "DELETE",
+    });
+    
+    if (!response.ok) throw new Error("Failed to delete credential");
+    return response.json();
+  },
+
+  async validateCredential(id: number) {
+    const response = await fetch(`${API_BASE}/credentials/${id}/validate`, {
+      method: "POST",
+    });
+    
+    if (!response.ok) throw new Error("Failed to validate credential");
+    return response.json();
+  },
+};
