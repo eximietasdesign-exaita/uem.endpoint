@@ -67,7 +67,7 @@ Preferred communication style: Simple, everyday language.
 - **Script Management**: Enhanced script editor with hierarchical domain-tenant tree selection, output processing, real-time validation, and code templates.
 - **Policy Management**: Improved execution flow visualization and professional step-card layouts.
 - **System Status**: Enterprise-grade footer displaying internet connectivity, system version, and real-time clock.
-- **Cloud Discovery** (Phase 1-3 Complete): Enterprise-grade multi-cloud discovery infrastructure:
+- **Cloud Discovery** (Phase 1-4 Complete): Enterprise-grade multi-cloud discovery infrastructure:
   - **Database Foundation** ✅: 6 tables with 40+ indexes for optimal query performance
   - **Multi-Cloud Support** ✅: AWS, GCP, Azure provider registry with extensible architecture (3 providers auto-initialized)
   - **Security** ✅: AES-256 encrypted credential storage with validation and expiration tracking
@@ -78,9 +78,12 @@ Preferred communication style: Simple, everyday language.
   - **Cloud Provider SDKs** ✅: AWS SDK (EC2, S3, RDS), Google Cloud (Compute, Storage), Azure (ResourceManager, Compute, Storage)
   - **Discovery Services** ✅: Fully implemented AWS, GCP, and Azure discovery engines with authentication, validation, and resource enumeration
   - **Encryption Service** ✅: AES-256 credential encryption with PBKDF2 key derivation and secure credential management
-  - **Data Access Layer** ✅: CloudCredentialsRepository, CloudProvidersRepository, CloudDiscoveryJobsRepository with full CRUD operations
+  - **Data Access Layer** ✅: CloudCredentialsRepository, CloudProvidersRepository, CloudDiscoveryJobsRepository with full CRUD operations (fixed column mapping for name/last_validated)
   - **Service Factory** ✅: CloudDiscoveryServiceFactory for provider-based service selection
   - **Dependency Injection** ✅: All services registered and auto-initialized on application startup
+  - **Credential Management UI** ✅: Complete credential management with provider-specific forms, validation status badges, and encrypted storage indicators
+  - **Backend API** ✅: 12 cloud discovery endpoints (providers, credentials CRUD, validation, jobs, assets, stats) with proper encryption handling
+  - **Frontend Integration** ✅: AddCredentialDialog component with dynamic AWS/GCP/Azure credential fields and real-time validation
 
 ## External Dependencies
 
