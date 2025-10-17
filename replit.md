@@ -6,6 +6,7 @@ This is a comprehensive enterprise UEM (Unified Endpoint Management) solution wi
 **ARCHITECTURAL MILESTONES**:
 - **September 2025**: Migrated from dual-server architecture (TypeScript + C#) to unified C#-only backend
 - **September 30, 2025**: Implemented unified hierarchical domain-tenant tree selector across all UI components for consistent context selection and display
+- **October 17, 2025**: Implemented enterprise-grade Cloud Discovery infrastructure for AWS, GCP, and Azure with encrypted credentials, scheduled discovery jobs, and comprehensive audit trails
 
 ### Unified UEM System - .NET + React Integration
 A robust enterprise UEM system with single-backend architecture, featuring:
@@ -35,9 +36,16 @@ Preferred communication style: Simple, everyday language.
 - **Static Files**: Integrated serving of React build assets
 
 ### Database
-- **Type**: PostgreSQL (Enterprise-grade with 44+ tables)
+- **Type**: PostgreSQL (Enterprise-grade with 50+ tables)
 - **ORM**: Dapper with raw SQL for performance
 - **Management**: C# repositories with graceful fallbacks, comprehensive agent data
+- **Cloud Discovery Schema**: 6 specialized tables for multi-cloud asset discovery:
+  - `cloud_providers`: AWS, GCP, Azure registry with 3 default providers
+  - `cloud_credentials`: AES-256 encrypted credential storage with validation tracking
+  - `cloud_discovery_jobs`: Scheduled discovery job configuration with cron support
+  - `cloud_assets`: Discovered cloud resources with JSONB metadata and cost estimates
+  - `cloud_discovery_results`: Execution history and audit trail for all discovery runs
+  - `cloud_audit_logs`: Comprehensive security audit trail for all cloud operations
 
 ### Key Features & Components
 - **Data Models**: Users, Endpoints, Activities, System Status.
@@ -59,6 +67,14 @@ Preferred communication style: Simple, everyday language.
 - **Script Management**: Enhanced script editor with hierarchical domain-tenant tree selection, output processing, real-time validation, and code templates.
 - **Policy Management**: Improved execution flow visualization and professional step-card layouts.
 - **System Status**: Enterprise-grade footer displaying internet connectivity, system version, and real-time clock.
+- **Cloud Discovery** (Phase 1 Complete): Enterprise-grade multi-cloud discovery infrastructure:
+  - **Database Foundation**: 6 tables with 40+ indexes for optimal query performance
+  - **Multi-Cloud Support**: AWS, GCP, Azure provider registry with extensible architecture
+  - **Security**: AES-256 encrypted credential storage with validation and expiration tracking
+  - **Scheduling**: Cron-based job scheduling (hourly, daily, weekly, custom expressions)
+  - **Asset Tracking**: Comprehensive cloud resource inventory with tags, metadata, cost estimates
+  - **Audit Trail**: Full execution history and security audit logs for compliance
+  - **Tenant Isolation**: Multi-tenant support with domain/tenant-based data isolation
 
 ## External Dependencies
 
