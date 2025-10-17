@@ -16,7 +16,8 @@ public class CloudCredentialsRepository
         ICredentialEncryptionService encryptionService,
         ILogger<CloudCredentialsRepository> logger)
     {
-        _connectionString = configuration.GetConnectionString("DefaultConnection") 
+        _connectionString = configuration.GetConnectionString("Postgres") 
+            ?? Environment.GetEnvironmentVariable("DATABASE_URL")
             ?? throw new InvalidOperationException("Database connection string not configured");
         _encryptionService = encryptionService;
         _logger = logger;

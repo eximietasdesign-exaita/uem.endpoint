@@ -103,9 +103,9 @@ public class AzureDiscoveryService : ICloudDiscoveryService
                             Tags = vm.Data.Tags?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
                             Metadata = new Dictionary<string, object>
                             {
-                                ["VmSize"] = vm.Data.HardwareProfile?.VmSize ?? "unknown",
+                                ["VmSize"] = vm.Data.HardwareProfile?.VmSize.ToString() ?? "unknown",
                                 ["ResourceGroup"] = resourceGroup.Data.Name,
-                                ["OsType"] = vm.Data.StorageProfile?.OsDisk?.OSType.ToString() ?? "unknown"
+                                ["OsType"] = vm.Data.StorageProfile?.ImageReference?.Offer ?? "unknown"
                             }
                         });
                     }

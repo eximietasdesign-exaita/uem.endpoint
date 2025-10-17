@@ -51,7 +51,8 @@ public class GcpDiscoveryService : ICloudDiscoveryService
 
             // Create credential and test with a simple API call
             var credential = GoogleCredential.FromJson(serviceAccountJson);
-            var computeClient = await InstancesClient.CreateAsync(credential: credential);
+            var computeClientBuilder = new InstancesClientBuilder { Credential = credential };
+            var computeClient = await computeClientBuilder.BuildAsync();
             
             // This validates the credentials without discovering resources
             return (true, null);
@@ -73,10 +74,12 @@ public class GcpDiscoveryService : ICloudDiscoveryService
         try
         {
             var (credential, projectId) = CreateCredential(credentials);
-            var instancesClient = await InstancesClient.CreateAsync(credential: credential);
+            var instancesClientBuilder = new InstancesClientBuilder { Credential = credential };
+            var instancesClient = await instancesClientBuilder.BuildAsync();
 
             // Get zones to search
-            var zonesClient = await ZonesClient.CreateAsync(credential: credential);
+            var zonesClientBuilder = new ZonesClientBuilder { Credential = credential };
+            var zonesClient = await zonesClientBuilder.BuildAsync();
             var zones = zonesClient.List(projectId);
 
             foreach (var zone in zones)
@@ -136,7 +139,7 @@ public class GcpDiscoveryService : ICloudDiscoveryService
         try
         {
             var (credential, projectId) = CreateCredential(credentials);
-            var storageClient = await StorageClient.CreateAsync(credential);
+            var storageClient = await StorageClient.CreateAsync(credential: credential);
 
             var buckets = storageClient.ListBuckets(projectId);
 
@@ -157,7 +160,7 @@ public class GcpDiscoveryService : ICloudDiscoveryService
                     Metadata = new Dictionary<string, object>
                     {
                         ["StorageClass"] = bucket.StorageClass ?? "STANDARD",
-                        ["TimeCreated"] = bucket.TimeCreated,
+                        ["TimeCreated"] = bucket.TimeCreatedDateTimeOffset?.ToString() ?? "unknown",
                         ["Location"] = bucket.Location ?? "unknown"
                     }
                 });
