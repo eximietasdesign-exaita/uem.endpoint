@@ -18,7 +18,8 @@ import {
   Shield,
   LucideIcon,
   HardDrive,
-  UserCheck
+  UserCheck,
+  Cloud
 } from "lucide-react";
 
 export interface NavigationItem {
@@ -160,6 +161,18 @@ export const navigationRegistry: NavigationItem[] = [
         tags: ['satellite', 'jobs', 'queue', 'server'],
         category: 'discovery',
         order: 7,
+        parentId: 'discovery-group'
+      },
+      {
+        id: 'cloud-discovery',
+        path: '/cloud-discovery',
+        nameKey: 'cloud_discovery',
+        name: 'Cloud Discovery',
+        icon: Cloud,
+        searchable: true,
+        tags: ['cloud', 'aws', 'azure', 'gcp', 'multi-cloud'],
+        category: 'discovery',
+        order: 8,
         parentId: 'discovery-group'
       }
     ]
