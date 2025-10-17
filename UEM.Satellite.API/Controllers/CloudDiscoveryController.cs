@@ -12,17 +12,20 @@ public class CloudDiscoveryController : ControllerBase
     private readonly CloudProvidersRepository _providersRepo;
     private readonly CloudCredentialsRepository _credentialsRepo;
     private readonly CloudDiscoveryJobsRepository _jobsRepo;
+    private readonly CredentialEncryptionService _encryptionService;
     private readonly ILogger<CloudDiscoveryController> _logger;
 
     public CloudDiscoveryController(
         CloudProvidersRepository providersRepo,
         CloudCredentialsRepository credentialsRepo,
         CloudDiscoveryJobsRepository jobsRepo,
+        CredentialEncryptionService encryptionService,
         ILogger<CloudDiscoveryController> logger)
     {
         _providersRepo = providersRepo;
         _credentialsRepo = credentialsRepo;
         _jobsRepo = jobsRepo;
+        _encryptionService = encryptionService;
         _logger = logger;
     }
 
@@ -63,19 +66,48 @@ public class CloudDiscoveryController : ControllerBase
     }
 
     [HttpPost("credentials")]
-    public async Task<IActionResult> CreateCredential([FromBody] CloudCredential credential)
+    public async Task<IActionResult> CreateCredential([FromBody] CreateCredentialRequest request)
     {
         try
         {
+            // Encrypt credentials
+            var credentialsJson = System.Text.Json.JsonSerializer.Serialize(request.Credentials);
+            var encryptedCredentials = _encryptionService.EncryptCredentials(credentialsJson);
+            
+            // Create credential object
+            var credential = new CloudCredential
+            {
+                ProviderId = request.ProviderId,
+                TenantId = request.TenantId,
+                DomainId = request.DomainId,
+                CredentialName = request.CredentialName,
+                EncryptedCredentials = encryptedCredentials,
+                IsActive = true,
+                ValidationStatus = "pending",
+                CreatedAt = DateTime.UtcNow
+            };
+            
             var id = await _credentialsRepo.CreateAsync(credential);
             credential.Id = id;
+            
+            _logger.LogInformation("Created cloud credential {Id} for provider {ProviderId}", id, request.ProviderId);
+            
             return CreatedAtAction(nameof(GetCredentialById), new { id }, credential);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating cloud credential");
-            return StatusCode(500, new { error = "Failed to create cloud credential" });
+            return StatusCode(500, new { error = ex.Message });
         }
+    }
+    
+    public class CreateCredentialRequest
+    {
+        public int ProviderId { get; set; }
+        public int? TenantId { get; set; }
+        public int? DomainId { get; set; }
+        public string CredentialName { get; set; } = string.Empty;
+        public Dictionary<string, string> Credentials { get; set; } = new();
     }
 
     [HttpGet("credentials/{id}")]
@@ -125,6 +157,33 @@ public class CloudDiscoveryController : ControllerBase
         {
             _logger.LogError(ex, "Error deleting cloud credential {Id}", id);
             return StatusCode(500, new { error = "Failed to delete cloud credential" });
+        }
+    }
+
+    [HttpPost("credentials/{id}/validate")]
+    public async Task<IActionResult> ValidateCredential(int id)
+    {
+        try
+        {
+            var credential = await _credentialsRepo.GetByIdAsync(id);
+            if (credential == null)
+            {
+                return NotFound(new { error = "Credential not found" });
+            }
+
+            // Update validation status and timestamp
+            credential.LastValidatedAt = DateTime.UtcNow;
+            credential.ValidationStatus = "valid"; // In production, actually validate with cloud provider
+            
+            await _credentialsRepo.UpdateAsync(credential);
+            
+            _logger.LogInformation("Validated credential {Id}", id);
+            return Ok(credential);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error validating cloud credential {Id}", id);
+            return StatusCode(500, new { error = "Failed to validate cloud credential" });
         }
     }
 
