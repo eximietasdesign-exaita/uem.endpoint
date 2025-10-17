@@ -27,13 +27,13 @@ public class CloudProvidersRepository
             const string sql = @"
                 SELECT 
                     id AS Id,
-                    provider_name AS ProviderName,
-                    provider_type AS ProviderType,
+                    name AS ProviderName,
+                    type AS ProviderType,
                     is_active AS IsActive,
                     api_endpoint AS ApiEndpoint,
-                    required_credentials AS RequiredCredentials,
-                    supported_regions AS SupportedRegions,
-                    icon_url AS IconUrl,
+                    ARRAY[]::text[] AS RequiredCredentials,
+                    ARRAY[]::text[] AS SupportedRegions,
+                    icon AS IconUrl,
                     documentation_url AS DocumentationUrl,
                     created_at AS CreatedAt,
                     updated_at AS UpdatedAt
@@ -57,18 +57,18 @@ public class CloudProvidersRepository
             const string sql = @"
                 SELECT 
                     id AS Id,
-                    provider_name AS ProviderName,
-                    provider_type AS ProviderType,
+                    name AS ProviderName,
+                    type AS ProviderType,
                     is_active AS IsActive,
                     api_endpoint AS ApiEndpoint,
-                    required_credentials AS RequiredCredentials,
-                    supported_regions AS SupportedRegions,
-                    icon_url AS IconUrl,
+                    ARRAY[]::text[] AS RequiredCredentials,
+                    ARRAY[]::text[] AS SupportedRegions,
+                    icon AS IconUrl,
                     documentation_url AS DocumentationUrl,
                     created_at AS CreatedAt,
                     updated_at AS UpdatedAt
                 FROM cloud_providers
-                WHERE provider_type = @ProviderType";
+                WHERE type = @ProviderType";
 
             return await connection.QueryFirstOrDefaultAsync<CloudProvider>(sql, new { ProviderType = providerType });
         }
@@ -87,19 +87,19 @@ public class CloudProvidersRepository
             const string sql = @"
                 SELECT 
                     id AS Id,
-                    provider_name AS ProviderName,
-                    provider_type AS ProviderType,
+                    name AS ProviderName,
+                    type AS ProviderType,
                     is_active AS IsActive,
                     api_endpoint AS ApiEndpoint,
-                    required_credentials AS RequiredCredentials,
-                    supported_regions AS SupportedRegions,
-                    icon_url AS IconUrl,
+                    ARRAY[]::text[] AS RequiredCredentials,
+                    ARRAY[]::text[] AS SupportedRegions,
+                    icon AS IconUrl,
                     documentation_url AS DocumentationUrl,
                     created_at AS CreatedAt,
                     updated_at AS UpdatedAt
                 FROM cloud_providers
                 WHERE @ActiveOnly = false OR is_active = true
-                ORDER BY provider_name";
+                ORDER BY display_order, name";
 
             var providers = await connection.QueryAsync<CloudProvider>(sql, new { ActiveOnly = activeOnly });
             return providers.ToList();
@@ -118,25 +118,23 @@ public class CloudProvidersRepository
             using var connection = new NpgsqlConnection(_connectionString);
             const string sql = @"
                 INSERT INTO cloud_providers (
-                    provider_name, provider_type, is_active, api_endpoint,
-                    required_credentials, supported_regions, icon_url, 
-                    documentation_url, created_at
+                    name, type, description, icon, api_endpoint,
+                    documentation_url, is_active, display_order, created_at
                 ) VALUES (
-                    @ProviderName, @ProviderType, @IsActive, @ApiEndpoint,
-                    @RequiredCredentials, @SupportedRegions, @IconUrl,
-                    @DocumentationUrl, @CreatedAt
+                    @ProviderName, @ProviderType, @Description, @Icon, @ApiEndpoint,
+                    @DocumentationUrl, @IsActive, @DisplayOrder, @CreatedAt
                 ) RETURNING id";
 
             var id = await connection.ExecuteScalarAsync<int>(sql, new
             {
                 provider.ProviderName,
                 provider.ProviderType,
-                IsActive = provider.IsActive ?? true,
+                Description = (string?)null,
+                Icon = provider.IconUrl,
                 provider.ApiEndpoint,
-                provider.RequiredCredentials,
-                provider.SupportedRegions,
-                provider.IconUrl,
                 provider.DocumentationUrl,
+                IsActive = provider.IsActive ?? true,
+                DisplayOrder = 0,
                 CreatedAt = DateTime.UtcNow
             });
 
@@ -157,13 +155,12 @@ public class CloudProvidersRepository
             using var connection = new NpgsqlConnection(_connectionString);
             const string sql = @"
                 UPDATE cloud_providers SET
-                    provider_name = @ProviderName,
-                    is_active = @IsActive,
+                    name = @ProviderName,
+                    type = @ProviderType,
+                    icon = @Icon,
                     api_endpoint = @ApiEndpoint,
-                    required_credentials = @RequiredCredentials,
-                    supported_regions = @SupportedRegions,
-                    icon_url = @IconUrl,
                     documentation_url = @DocumentationUrl,
+                    is_active = @IsActive,
                     updated_at = @UpdatedAt
                 WHERE id = @Id";
 
@@ -171,12 +168,11 @@ public class CloudProvidersRepository
             {
                 provider.Id,
                 provider.ProviderName,
-                provider.IsActive,
+                provider.ProviderType,
+                Icon = provider.IconUrl,
                 provider.ApiEndpoint,
-                provider.RequiredCredentials,
-                provider.SupportedRegions,
-                provider.IconUrl,
                 provider.DocumentationUrl,
+                provider.IsActive,
                 UpdatedAt = DateTime.UtcNow
             });
 
@@ -231,41 +227,40 @@ public class CloudProvidersRepository
             // Insert default providers
             const string insertSql = @"
                 INSERT INTO cloud_providers (
-                    provider_name, provider_type, is_active, api_endpoint,
-                    required_credentials, supported_regions, icon_url,
-                    documentation_url, created_at
+                    name, type, description, icon, api_endpoint,
+                    documentation_url, is_active, display_order, created_at
                 ) VALUES 
                 (
                     'Amazon Web Services', 
                     'aws', 
-                    true, 
-                    'https://aws.amazon.com',
-                    ARRAY['AccessKeyId', 'SecretAccessKey', 'Region'],
-                    ARRAY['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'],
+                    'Amazon Web Services cloud platform',
                     'https://upload.wikimedia.org/wikipedia/commons/9/93/Amazon_Web_Services_Logo.svg',
+                    'https://aws.amazon.com',
                     'https://docs.aws.amazon.com',
+                    true,
+                    1,
                     @CreatedAt
                 ),
                 (
                     'Google Cloud Platform', 
                     'gcp', 
-                    true, 
-                    'https://cloud.google.com',
-                    ARRAY['ServiceAccountJson'],
-                    ARRAY['us-central1', 'us-east1', 'europe-west1', 'asia-southeast1'],
+                    'Google Cloud Platform',
                     'https://upload.wikimedia.org/wikipedia/commons/5/51/Google_Cloud_logo.svg',
+                    'https://cloud.google.com',
                     'https://cloud.google.com/docs',
+                    true,
+                    2,
                     @CreatedAt
                 ),
                 (
                     'Microsoft Azure', 
                     'azure', 
-                    true, 
-                    'https://portal.azure.com',
-                    ARRAY['TenantId', 'ClientId', 'ClientSecret', 'SubscriptionId'],
-                    ARRAY['eastus', 'westus', 'northeurope', 'southeastasia'],
+                    'Microsoft Azure cloud platform',
                     'https://upload.wikimedia.org/wikipedia/commons/a/a8/Microsoft_Azure_Logo.svg',
+                    'https://portal.azure.com',
                     'https://docs.microsoft.com/azure',
+                    true,
+                    3,
                     @CreatedAt
                 )";
 
