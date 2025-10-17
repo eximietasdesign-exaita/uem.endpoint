@@ -12,30 +12,30 @@ public class CloudProvider
     
     [Required]
     [StringLength(100)]
-    public string Name { get; set; } = string.Empty;
+    public string ProviderName { get; set; } = string.Empty;
     
     [Required]
     [StringLength(50)]
-    public string Type { get; set; } = string.Empty; // aws, gcp, azure, alibaba, oracle
+    public string ProviderType { get; set; } = string.Empty; // aws, gcp, azure
     
-    public string? Description { get; set; }
-    
-    [StringLength(255)]
-    public string? Icon { get; set; }
+    public bool? IsActive { get; set; } = true;
     
     [StringLength(500)]
     public string? ApiEndpoint { get; set; }
     
+    public string[]? RequiredCredentials { get; set; } // Array of required credential fields
+    
+    public string[]? SupportedRegions { get; set; } // Array of supported regions
+    
+    [StringLength(500)]
+    public string? IconUrl { get; set; }
+    
     [StringLength(500)]
     public string? DocumentationUrl { get; set; }
     
-    public bool IsActive { get; set; } = true;
-    
-    public int DisplayOrder { get; set; } = 0;
-    
     public DateTime CreatedAt { get; set; }
     
-    public DateTime UpdatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
 }
 
 /// <summary>
@@ -48,47 +48,45 @@ public class CloudCredential
     [Required]
     public int ProviderId { get; set; }
     
-    [Required]
-    [StringLength(200)]
-    public string Name { get; set; } = string.Empty;
-    
-    [Required]
-    [StringLength(50)]
-    public string CredentialType { get; set; } = string.Empty; // access_key, service_account, client_secret, api_key
-    
-    [Required]
-    public string EncryptedCredentials { get; set; } = string.Empty; // AES-256 encrypted JSON
-    
-    [StringLength(100)]
-    public string? EncryptionKeyId { get; set; }
-    
-    [StringLength(100)]
-    public string? Region { get; set; } // AWS region, GCP zone, Azure location
-    
     public int? TenantId { get; set; }
     
     public int? DomainId { get; set; }
     
+    [Required]
+    [StringLength(200)]
+    public string CredentialName { get; set; } = string.Empty;
+    
+    [Required]
+    public string EncryptedCredentials { get; set; } = string.Empty; // AES-256 encrypted JSON
+    
     public bool IsActive { get; set; } = true;
     
-    public DateTime? LastValidated { get; set; }
+    public DateTime? LastValidatedAt { get; set; }
     
     [StringLength(50)]
-    public string ValidationStatus { get; set; } = "pending"; // pending, valid, invalid, expired
+    public string? ValidationStatus { get; set; } = "pending"; // pending, valid, invalid, expired
+    
+    [StringLength(500)]
+    public string? ValidationError { get; set; }
+    
+    public DateTime? ExpiresAt { get; set; }
+    
+    public DateTime CreatedAt { get; set; }
     
     [StringLength(100)]
     public string? CreatedBy { get; set; }
     
-    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
     
-    public DateTime UpdatedAt { get; set; }
-    
-    public DateTime? LastUsedAt { get; set; }
-    
-    public DateTime? ExpiresAt { get; set; }
+    [StringLength(100)]
+    public string? UpdatedBy { get; set; }
     
     // Navigation property
     public CloudProvider? Provider { get; set; }
+    
+    // Transient property for decrypted credentials (not stored in database)
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Dictionary<string, string> Credentials { get; set; } = new();
 }
 
 /// <summary>
@@ -100,56 +98,51 @@ public class CloudDiscoveryJob
     
     [Required]
     [StringLength(200)]
-    public string Name { get; set; } = string.Empty;
-    
-    public string? Description { get; set; }
-    
-    [Required]
-    public int ProviderId { get; set; }
+    public string JobName { get; set; } = string.Empty;
     
     [Required]
     public int CredentialId { get; set; }
-    
-    [Required]
-    [StringLength(50)]
-    public string DiscoveryScope { get; set; } = string.Empty; // compute, storage, database, network, all, custom
-    
-    public string? ScopeConfig { get; set; } // JSON: regions, resource types, tags
-    
-    [StringLength(50)]
-    public string ScheduleType { get; set; } = "manual"; // manual, hourly, daily, weekly, monthly, custom
-    
-    [StringLength(100)]
-    public string? CronExpression { get; set; }
-    
-    public DateTime? LastRun { get; set; }
-    
-    public DateTime? NextRun { get; set; }
-    
-    [StringLength(50)]
-    public string Status { get; set; } = "active"; // active, paused, disabled, failed, running
     
     public int? TenantId { get; set; }
     
     public int? DomainId { get; set; }
     
-    public bool IsActive { get; set; } = true;
+    public bool? IsEnabled { get; set; } = true;
     
-    public int RetryCount { get; set; } = 0;
+    [StringLength(50)]
+    public string? ScheduleType { get; set; } = "manual"; // manual, hourly, daily, weekly, monthly, custom
     
-    public int MaxRetries { get; set; } = 3;
+    [StringLength(100)]
+    public string? CronExpression { get; set; }
     
-    public int TimeoutMinutes { get; set; } = 30;
+    public string[]? TargetRegions { get; set; } // Array of target regions
+    
+    public string[]? ResourceTypes { get; set; } // Array of resource types to discover
+    
+    public DateTime? LastRunAt { get; set; }
+    
+    [StringLength(50)]
+    public string? LastRunStatus { get; set; }
+    
+    public DateTime? NextRunAt { get; set; }
+    
+    public int? TotalRuns { get; set; } = 0;
+    
+    public int? SuccessfulRuns { get; set; } = 0;
+    
+    public int? FailedRuns { get; set; } = 0;
+    
+    public DateTime CreatedAt { get; set; }
     
     [StringLength(100)]
     public string? CreatedBy { get; set; }
     
-    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
     
-    public DateTime UpdatedAt { get; set; }
+    [StringLength(100)]
+    public string? UpdatedBy { get; set; }
     
     // Navigation properties
-    public CloudProvider? Provider { get; set; }
     public CloudCredential? Credential { get; set; }
 }
 

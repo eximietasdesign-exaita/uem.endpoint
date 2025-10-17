@@ -51,6 +51,11 @@ builder.Services.AddScoped<IProcessRepository, ProcessRepository>();
 builder.Services.AddScoped<INetworkRepository, NetworkRepository>();
 builder.Services.AddScoped<IEnhancedHeartbeatRepository, EnhancedHeartbeatRepository>();
 
+// Cloud discovery repositories
+builder.Services.AddScoped<UEM.Satellite.API.Repositories.CloudCredentialsRepository>();
+builder.Services.AddScoped<UEM.Satellite.API.Repositories.CloudProvidersRepository>();
+builder.Services.AddScoped<UEM.Satellite.API.Repositories.CloudDiscoveryJobsRepository>();
+
 // Agent simulation service for testing
 builder.Services.AddHostedService<UEM.Satellite.API.Services.AgentSimulationService>();
 
@@ -89,6 +94,13 @@ builder.Services.AddScoped<DiscoveryScriptPopulationService>();
 // Policy deployment services
 builder.Services.AddScoped<IPolicyDeploymentService, PolicyDeploymentService>();
 builder.Services.AddScoped<IAgentStatusService, AgentStatusService>();
+
+// Cloud discovery services
+builder.Services.AddSingleton<UEM.Satellite.API.Services.Cloud.ICredentialEncryptionService, UEM.Satellite.API.Services.Cloud.CredentialEncryptionService>();
+builder.Services.AddScoped<UEM.Satellite.API.Services.Cloud.AwsDiscoveryService>();
+builder.Services.AddScoped<UEM.Satellite.API.Services.Cloud.GcpDiscoveryService>();
+builder.Services.AddScoped<UEM.Satellite.API.Services.Cloud.AzureDiscoveryService>();
+builder.Services.AddScoped<UEM.Satellite.API.Services.Cloud.CloudDiscoveryServiceFactory>();
 
 // Health checks
 builder.Services.AddHealthChecks();
@@ -161,6 +173,21 @@ catch (Exception ex)
 {
     var logger = app.Services.GetRequiredService<ILogger<Program>>();
     logger.LogWarning(ex, "Could not initialize database repositories, continuing with fallback storage");
+}
+
+// Initialize default cloud providers (AWS, GCP, Azure)
+try
+{
+    using var scope = app.Services.CreateScope();
+    var cloudProvidersRepo = scope.ServiceProvider.GetRequiredService<UEM.Satellite.API.Repositories.CloudProvidersRepository>();
+    await cloudProvidersRepo.InitializeDefaultProvidersAsync();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    logger.LogInformation("Cloud providers initialized successfully");
+}
+catch (Exception ex)
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogWarning(ex, "Could not initialize cloud providers: {Message}", ex.Message);
 }
 
 // Start the application (respects --urls command-line parameter)
