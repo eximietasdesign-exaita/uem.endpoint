@@ -1,53 +1,41 @@
 import { useState } from "react";
-import { Cloud, Plus, Settings, Play, Database, Key, Calendar } from "lucide-react";
+import { Cloud, Plus, Settings, Play, Database, Key, Calendar, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useCloudProviders, useCloudStats } from "@/lib/api/cloudDiscovery";
+import { useDomainTenant } from "@/contexts/DomainTenantContext";
 
 export default function CloudDiscovery() {
   const [selectedTab, setSelectedTab] = useState("overview");
+  const { selectedTenantId, selectedDomainId } = useDomainTenant();
 
-  // Mock data - will be replaced with API calls
-  const providers = [
-    {
-      id: 1,
-      name: "Amazon Web Services",
-      type: "aws",
-      icon: "https://upload.wikimedia.org/wikipedia/commons/9/93/Amazon_Web_Services_Logo.svg",
-      isActive: true,
-      credentialsCount: 2,
-      assetsCount: 45,
-      lastDiscovery: "2 hours ago"
-    },
-    {
-      id: 2,
-      name: "Google Cloud Platform",
-      type: "gcp",
-      icon: "https://upload.wikimedia.org/wikipedia/commons/5/51/Google_Cloud_logo.svg",
-      isActive: true,
-      credentialsCount: 1,
-      assetsCount: 23,
-      lastDiscovery: "5 hours ago"
-    },
-    {
-      id: 3,
-      name: "Microsoft Azure",
-      type: "azure",
-      icon: "https://upload.wikimedia.org/wikipedia/commons/a/a8/Microsoft_Azure_Logo.svg",
-      isActive: true,
-      credentialsCount: 1,
-      assetsCount: 31,
-      lastDiscovery: "1 hour ago"
-    }
+  // Fetch real data from API
+  const { data: providers = [], isLoading: providersLoading } = useCloudProviders();
+  const { data: stats, isLoading: statsLoading } = useCloudStats(selectedTenantId || undefined, selectedDomainId || undefined);
+
+  // Provider icon mapping
+  const providerIcons: Record<string, string> = {
+    aws: "https://upload.wikimedia.org/wikipedia/commons/9/93/Amazon_Web_Services_Logo.svg",
+    gcp: "https://upload.wikimedia.org/wikipedia/commons/5/51/Google_Cloud_logo.svg",
+    azure: "https://upload.wikimedia.org/wikipedia/commons/a/a8/Microsoft_Azure_Logo.svg"
+  };
+
+  const statsCards = [
+    { label: "Active Credentials", value: stats?.credentialsCount?.toString() || "0", icon: Key, color: "text-blue-600" },
+    { label: "Discovery Jobs", value: stats?.jobsCount?.toString() || "0", icon: Calendar, color: "text-green-600" },
+    { label: "Cloud Assets", value: stats?.assetsCount?.toString() || "0", icon: Database, color: "text-purple-600" },
+    { label: "Providers", value: stats?.providersCount?.toString() || "0", icon: Cloud, color: "text-orange-600" }
   ];
 
-  const stats = [
-    { label: "Active Credentials", value: "4", icon: Key, color: "text-blue-600" },
-    { label: "Discovery Jobs", value: "6", icon: Calendar, color: "text-green-600" },
-    { label: "Cloud Assets", value: "99", icon: Database, color: "text-purple-600" },
-    { label: "Providers", value: "3", icon: Cloud, color: "text-orange-600" }
-  ];
+  if (providersLoading || statsLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -76,7 +64,7 @@ export default function CloudDiscovery() {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
+        {statsCards.map((stat) => (
           <Card key={stat.label}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{stat.label}</CardTitle>
@@ -109,42 +97,45 @@ export default function CloudDiscovery() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {providers.map((provider) => (
-                  <div
-                    key={provider.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-lg bg-white p-2 flex items-center justify-center border">
-                        <img
-                          src={provider.icon}
-                          alt={provider.name}
-                          className="h-8 w-8 object-contain"
-                        />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold">{provider.name}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {provider.credentialsCount} credential{provider.credentialsCount !== 1 ? 's' : ''} • {provider.assetsCount} assets
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <Badge variant={provider.isActive ? "default" : "secondary"}>
-                          {provider.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Last discovery: {provider.lastDiscovery}
-                        </p>
-                      </div>
-                      <Button size="sm" variant="outline">
-                        <Play className="h-4 w-4 mr-2" />
-                        Discover
-                      </Button>
-                    </div>
+                {providers.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No cloud providers configured
                   </div>
-                ))}
+                ) : (
+                  providers.map((provider) => (
+                    <div
+                      key={provider.id}
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-lg bg-white p-2 flex items-center justify-center border">
+                          <img
+                            src={providerIcons[provider.providerType] || providerIcons['aws']}
+                            alt={provider.name}
+                            className="h-8 w-8 object-contain"
+                          />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold">{provider.name}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {provider.description || `${provider.providerType.toUpperCase()} cloud provider`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <Badge variant={provider.isActive ? "default" : "secondary"}>
+                            {provider.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                        </div>
+                        <Button size="sm" variant="outline">
+                          <Play className="h-4 w-4 mr-2" />
+                          Discover
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>
