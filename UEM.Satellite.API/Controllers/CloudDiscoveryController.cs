@@ -194,11 +194,33 @@ public class CloudDiscoveryController : ControllerBase
             // Return empty list if no tenantId provided
             if (!tenantId.HasValue)
             {
-                return Ok(new List<CloudDiscoveryJob>());
+                return Ok(new List<object>());
             }
             
             var jobs = await _jobsRepo.GetByTenantAsync(tenantId.Value, domainId);
-            return Ok(jobs);
+            
+            // Enrich jobs with provider information
+            var enrichedJobs = new List<object>();
+            foreach (var job in jobs)
+            {
+                var credential = await _credentialsRepo.GetByIdAsync(job.CredentialId);
+                enrichedJobs.Add(new
+                {
+                    job.Id,
+                    Name = job.JobName,
+                    job.CredentialId,
+                    job.TenantId,
+                    job.DomainId,
+                    IsActive = job.IsEnabled,
+                    Schedule = job.CronExpression,
+                    job.LastRunAt,
+                    Status = job.LastRunStatus ?? "pending",
+                    job.CreatedAt,
+                    ProviderId = credential?.ProviderId ?? 0
+                });
+            }
+            
+            return Ok(enrichedJobs);
         }
         catch (Exception ex)
         {
@@ -270,6 +292,37 @@ public class CloudDiscoveryController : ControllerBase
         {
             _logger.LogError(ex, "Error deleting cloud discovery job {Id}", id);
             return StatusCode(500, new { error = "Failed to delete cloud discovery job" });
+        }
+    }
+
+    [HttpPost("jobs/{id}/run")]
+    public async Task<IActionResult> RunJob(int id)
+    {
+        try
+        {
+            var job = await _jobsRepo.GetByIdAsync(id);
+            if (job == null)
+            {
+                return NotFound(new { error = "Job not found" });
+            }
+
+            job.LastRunAt = DateTime.UtcNow;
+            job.LastRunStatus = "running";
+            await _jobsRepo.UpdateAsync(job);
+            
+            _logger.LogInformation("Started discovery job {Id}", id);
+            
+            return Ok(new 
+            { 
+                message = "Discovery job queued for execution",
+                jobId = id,
+                status = "running"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error running cloud discovery job {Id}", id);
+            return StatusCode(500, new { error = "Failed to run cloud discovery job" });
         }
     }
 

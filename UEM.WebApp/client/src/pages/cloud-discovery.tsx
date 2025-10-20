@@ -7,13 +7,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCloudProviders, useCloudStats, cloudDiscoveryApi } from "@/lib/api/cloudDiscovery";
 import { useDomainTenant } from "@/contexts/DomainTenantContext";
 import { AddCredentialDialog } from "@/components/cloud/AddCredentialDialog";
+import { CreateDiscoveryJobDialog } from "@/components/cloud/CreateDiscoveryJobDialog";
+import { DiscoveryJobsList } from "@/components/cloud/DiscoveryJobsList";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export default function CloudDiscovery() {
   const [selectedTab, setSelectedTab] = useState("overview");
   const [addCredentialOpen, setAddCredentialOpen] = useState(false);
-  const { selectedTenantId, selectedDomainId } = useDomainTenant();
+  const [createJobOpen, setCreateJobOpen] = useState(false);
+  const { selectedTenant, selectedDomain } = useDomainTenant();
   const queryClient = useQueryClient();
+
+  const selectedTenantId = selectedTenant?.id;
+  const selectedDomainId = selectedDomain?.id;
 
   // Fetch real data from API
   const { data: providers = [], isLoading: providersLoading } = useCloudProviders();
@@ -256,7 +262,7 @@ export default function CloudDiscovery() {
                           <div>
                             <h3 className="font-semibold">{cred.credentialName}</h3>
                             <p className="text-sm text-muted-foreground">
-                              {provider?.providerName || 'Unknown Provider'}
+                              {provider?.name || 'Unknown Provider'}
                               {cred.lastValidatedAt && (
                                 <span className="ml-2">
                                   • Last validated: {new Date(cred.lastValidatedAt).toLocaleDateString()}
@@ -308,24 +314,20 @@ export default function CloudDiscovery() {
         {/* Jobs Tab */}
         <TabsContent value="jobs">
           <Card>
-            <CardHeader>
-              <CardTitle>Discovery Jobs</CardTitle>
-              <CardDescription>
-                Schedule and manage automated cloud discovery jobs
-              </CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Discovery Jobs</CardTitle>
+                <CardDescription>
+                  Schedule and manage automated cloud discovery jobs
+                </CardDescription>
+              </div>
+              <Button onClick={() => setCreateJobOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Job
+              </Button>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-12">
-                <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Discovery Jobs</h3>
-                <p className="text-muted-foreground mb-4">
-                  Create scheduled jobs to automatically discover resources across your cloud providers.
-                </p>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Job
-                </Button>
-              </div>
+              <DiscoveryJobsList tenantId={selectedTenantId || 1} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -357,8 +359,14 @@ export default function CloudDiscovery() {
         </TabsContent>
       </Tabs>
 
-      {/* Add Credential Dialog */}
+      {/* Dialogs */}
       <AddCredentialDialog open={addCredentialOpen} onOpenChange={setAddCredentialOpen} />
+      <CreateDiscoveryJobDialog
+        open={createJobOpen}
+        onOpenChange={setCreateJobOpen}
+        tenantId={selectedTenantId || 1}
+        domainId={selectedDomainId || 1}
+      />
     </div>
   );
 }
