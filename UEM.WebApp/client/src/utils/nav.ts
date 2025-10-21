@@ -105,8 +105,8 @@ export const navigationRegistry: NavigationItem[] = [
       {
         id: 'discovery-jobs',
         path: '/agentless-jobs',
-        nameKey: 'discovery_jobs',
-        name: 'Discovery Jobs',
+        nameKey: 'agent_discovery_job',
+        name: 'Agent Discovery Job',
         icon: ListChecks,
         searchable: true,
         tags: ['jobs', 'tasks', 'queue'],
@@ -130,8 +130,8 @@ export const navigationRegistry: NavigationItem[] = [
       {
         id: 'scheduler',
         path: '/agentless-discovery',
-        nameKey: 'scheduler',
-        name: 'Scheduler',
+        nameKey: 'agentless_discovery',
+        name: 'Agentless Discovery',
         icon: CalendarClock,
         searchable: true,
         tags: ['scheduler', 'jobs', 'time-discovery', 'agentless'],
@@ -142,8 +142,8 @@ export const navigationRegistry: NavigationItem[] = [
       {
         id: 'scan-engine-management',
         path: '/discovery-probes',
-        nameKey: 'scan_engine_management',
-        name: 'Scan Engine Management',
+        nameKey: 'satellite_server',
+        name: 'Satellite Server',
         icon: Settings2,
         searchable: true,
         tags: ['scan', 'engine', 'probes', 'collectors'],
@@ -154,8 +154,8 @@ export const navigationRegistry: NavigationItem[] = [
       {
         id: 'discovery-mode-config',
         path: '/agent-discovery',
-        nameKey: 'discovery_mode_config',
-        name: 'Discovery Mode Configuration',
+        nameKey: 'agent_discovery',
+        name: 'Agent Discovery',
         icon: Target,
         searchable: true,
         tags: ['configuration', 'mode', 'agentless', 'agent', 'cloud'],
@@ -166,8 +166,8 @@ export const navigationRegistry: NavigationItem[] = [
       {
         id: 'discovery-status-audit',
         path: '/agent-status-reports',
-        nameKey: 'discovery_status_audit',
-        name: 'Discovery Status & Audit',
+        nameKey: 'agent_status_report',
+        name: 'Agent Status Report',
         icon: Activity,
         searchable: true,
         tags: ['status', 'audit', 'reports', 'health'],
@@ -349,7 +349,7 @@ export const navigationRegistry: NavigationItem[] = [
       },
       {
         id: 'enterprise-credential-vault',
-        path: '/credential-vault',
+        path: '/credential-profiles',
         nameKey: 'enterprise_credential_vault',
         name: 'Enterprise Credential Vault',
         icon: Shield,

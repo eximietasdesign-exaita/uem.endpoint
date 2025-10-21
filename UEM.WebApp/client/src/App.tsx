@@ -71,7 +71,7 @@ function AppContent() {
     if (pathname === "/scripts") return { title: "Scripts", subtitle: "Discovery scripts and automation templates" };
     if (pathname === "/policies") return { title: "Policies", subtitle: "Group scripts into policies for streamlined deployment" };
     if (pathname === "/discovery-scripts-marketplace") return { title: "Discovery Scripts Marketplace", subtitle: "Browse and download enterprise-grade discovery scripts from our comprehensive library" };
-    if (pathname === "/discovery-probes") return { title: "Discovery Probes", subtitle: "Manage data collectors deployed across your network infrastructure" };
+    if (pathname === "/discovery-probes") return { title: t("satellite_server"), subtitle: "Manage data collectors deployed across your network infrastructure" };
     if (pathname === "/satellite-job-queue") return { title: "Satellite Job Queue", subtitle: "Manage job queue for satellite server operations" };
     if (pathname === "/credential-vault") return { title: "Credential Vault", subtitle: "Manage credential profiles for secure access to enterprise systems" };
     if (pathname === "/credential-profiles") return { title: "Credential Vault", subtitle: "Manage credential profiles for secure access to enterprise systems" };
@@ -80,11 +80,11 @@ function AppContent() {
     if (pathname === "/domain-management") return { title: "Domain Management", subtitle: "Manage multi-domain configuration and hierarchical relationships" };
     if (pathname === "/tenant-management") return { title: "Tenant Management", subtitle: "Manage multi-tenant configuration and resource allocation" };
     if (pathname === "/asset-inventory") return { title: "Asset Inventory", subtitle: "Comprehensive enterprise asset inventory management with dynamic fields and hierarchical reporting" };
-    if (pathname === "/agentless-discovery") return { title: "Agentless Discovery", subtitle: "Manage automated network discovery and compliance scanning" };
-    if (pathname === "/agentless-jobs") return { title: "Agentless Discovery Jobs", subtitle: "Manage and monitor automated network discovery jobs with enterprise-grade filtering" };
+    if (pathname === "/agentless-discovery") return { title: t("agentless_discovery"), subtitle: "Manage automated network discovery and compliance scanning" };
+    if (pathname === "/agentless-jobs") return { title: t("agent_discovery_job"), subtitle: "Manage and monitor automated network discovery jobs with enterprise-grade filtering" };
     if (pathname.startsWith("/agentless-discovery/view/")) return { title: "Job Details", subtitle: "View discovery job results and configuration" };
-    if (pathname === "/agent-discovery") return { title: "Agent-Based Discovery", subtitle: "Deploy discovery policies to agent-based endpoints" };
-    if (pathname === "/agent-status-reports") return { title: "Agent Status Reports", subtitle: "Comprehensive analysis of agent discovery effectiveness and policy compliance" };
+    if (pathname === "/agent-discovery") return { title: t("agent_discovery"), subtitle: "Deploy discovery policies to agent-based endpoints" };
+    if (pathname === "/agent-status-reports") return { title: t("agent_status_report"), subtitle: "Comprehensive analysis of agent discovery effectiveness and policy compliance" };
     if (pathname === "/remote-agent-deployment") return { title: "Remote Agent Deployment", subtitle: "Enterprise-grade remote agent deployment with multi-OS support and comprehensive monitoring" };
     if (pathname === "/cloud-discovery") return { title: "Cloud Discovery", subtitle: "Discover and manage resources across AWS, GCP, and Azure cloud platforms" };
     if (pathname === "/asset-change-log") return { title: t("asset_change_log"), subtitle: "Immutable audit trail of all asset modifications and integrity checks" };
