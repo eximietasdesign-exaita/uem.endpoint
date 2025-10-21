@@ -289,8 +289,8 @@ export const navigationRegistry: NavigationItem[] = [
       {
         id: 'enterprise-integrations',
         path: '/external-integrations',
-        nameKey: 'enterprise_integrations',
-        name: 'Enterprise Integrations',
+        nameKey: 'integrations',
+        name: 'Integrations',
         icon: ArrowRightLeft,
         searchable: true,
         tags: ['integrations', 'external', 'api', 'connectors'],
