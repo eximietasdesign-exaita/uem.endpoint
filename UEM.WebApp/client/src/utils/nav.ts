@@ -31,7 +31,15 @@ import {
   AlertTriangle,
   ScrollText,
   Lock,
-  Boxes
+  Boxes,
+  MoreHorizontal,
+  Server,
+  Calendar,
+  FileCode,
+  Store,
+  Key,
+  PlusCircle,
+  Languages
 } from "lucide-react";
 
 export interface NavigationItem {
@@ -422,6 +430,211 @@ export const navigationRegistry: NavigationItem[] = [
     ]
   },
   {
+    id: 'others-group',
+    path: null,
+    nameKey: 'others',
+    name: 'Others',
+    icon: MoreHorizontal,
+    searchable: false,
+    tags: ['miscellaneous', 'other'],
+    category: 'others',
+    order: 8,
+    children: [
+      {
+        id: 'assets-page',
+        path: '/assets',
+        nameKey: 'assets_page',
+        name: 'Assets Page',
+        icon: Server,
+        searchable: true,
+        tags: ['assets', 'endpoints'],
+        category: 'others',
+        order: 1,
+        parentId: 'others-group'
+      },
+      {
+        id: 'assets-agent-based',
+        path: '/assets/agent-based',
+        nameKey: 'assets_agent_based',
+        name: 'Assets (Agent-Based)',
+        icon: Server,
+        searchable: true,
+        tags: ['assets', 'agent-based'],
+        category: 'others',
+        order: 2,
+        parentId: 'others-group'
+      },
+      {
+        id: 'assets-agentless',
+        path: '/assets/agentless',
+        nameKey: 'assets_agentless',
+        name: 'Assets (Agentless)',
+        icon: Server,
+        searchable: true,
+        tags: ['assets', 'agentless'],
+        category: 'others',
+        order: 3,
+        parentId: 'others-group'
+      },
+      {
+        id: 'discovery-scheduled',
+        path: '/discovery/scheduled',
+        nameKey: 'discovery_scheduled',
+        name: 'Discovery (Scheduled)',
+        icon: Calendar,
+        searchable: true,
+        tags: ['discovery', 'scheduled'],
+        category: 'others',
+        order: 4,
+        parentId: 'others-group'
+      },
+      {
+        id: 'discovery-scripts-alt',
+        path: '/discovery/scripts',
+        nameKey: 'discovery_scripts_alt',
+        name: 'Discovery Scripts (Alt)',
+        icon: FileCode,
+        searchable: true,
+        tags: ['scripts', 'discovery'],
+        category: 'others',
+        order: 5,
+        parentId: 'others-group'
+      },
+      {
+        id: 'discovery-scripts-main',
+        path: '/discovery-scripts',
+        nameKey: 'discovery_scripts_main',
+        name: 'Discovery Scripts (Main)',
+        icon: FileCode,
+        searchable: true,
+        tags: ['scripts', 'discovery'],
+        category: 'others',
+        order: 6,
+        parentId: 'others-group'
+      },
+      {
+        id: 'policies-alt',
+        path: '/policies',
+        nameKey: 'policies_alt',
+        name: 'Policies (Alt)',
+        icon: Shield,
+        searchable: true,
+        tags: ['policies', 'scripts'],
+        category: 'others',
+        order: 7,
+        parentId: 'others-group'
+      },
+      {
+        id: 'scripts-marketplace',
+        path: '/discovery-scripts-marketplace',
+        nameKey: 'scripts_marketplace',
+        name: 'Scripts Marketplace',
+        icon: Store,
+        searchable: true,
+        tags: ['marketplace', 'scripts'],
+        category: 'others',
+        order: 8,
+        parentId: 'others-group'
+      },
+      {
+        id: 'satellite-job-queue',
+        path: '/satellite-job-queue',
+        nameKey: 'satellite_job_queue',
+        name: 'Satellite Job Queue',
+        icon: ListChecks,
+        searchable: true,
+        tags: ['jobs', 'queue', 'satellite'],
+        category: 'others',
+        order: 9,
+        parentId: 'others-group'
+      },
+      {
+        id: 'enterprise-cred-profiles',
+        path: '/enterprise-credential-profiles',
+        nameKey: 'enterprise_cred_profiles',
+        name: 'Enterprise Credential Profiles',
+        icon: Key,
+        searchable: true,
+        tags: ['credentials', 'enterprise'],
+        category: 'others',
+        order: 10,
+        parentId: 'others-group'
+      },
+      {
+        id: 'asset-inventory-page',
+        path: '/asset-inventory',
+        nameKey: 'asset_inventory_page',
+        name: 'Asset Inventory Page',
+        icon: Package,
+        searchable: true,
+        tags: ['assets', 'inventory'],
+        category: 'others',
+        order: 11,
+        parentId: 'others-group'
+      },
+      {
+        id: 'agentless-job-wizard',
+        path: '/agentless-discovery/create',
+        nameKey: 'agentless_job_wizard',
+        name: 'Create Agentless Job',
+        icon: PlusCircle,
+        searchable: true,
+        tags: ['create', 'job', 'wizard'],
+        category: 'others',
+        order: 12,
+        parentId: 'others-group'
+      },
+      {
+        id: 'alerts-page',
+        path: '/alerts',
+        nameKey: 'alerts_page',
+        name: 'Alerts & Notifications',
+        icon: Bell,
+        searchable: true,
+        tags: ['alerts', 'notifications'],
+        category: 'others',
+        order: 13,
+        parentId: 'others-group'
+      },
+      {
+        id: 'reports-page',
+        path: '/reports',
+        nameKey: 'reports_page',
+        name: 'Reports',
+        icon: FileText,
+        searchable: true,
+        tags: ['reports', 'analytics'],
+        category: 'others',
+        order: 14,
+        parentId: 'others-group'
+      },
+      {
+        id: 'i18n-demo',
+        path: '/i18n-demo',
+        nameKey: 'i18n_demo',
+        name: 'i18n Demo',
+        icon: Languages,
+        searchable: true,
+        tags: ['demo', 'i18n', 'testing'],
+        category: 'others',
+        order: 15,
+        parentId: 'others-group'
+      },
+      {
+        id: 'simple-i18n-demo',
+        path: '/simple-i18n-demo',
+        nameKey: 'simple_i18n_demo',
+        name: 'Simple i18n Demo',
+        icon: Languages,
+        searchable: true,
+        tags: ['demo', 'i18n', 'testing'],
+        category: 'others',
+        order: 16,
+        parentId: 'others-group'
+      }
+    ]
+  },
+  {
     id: 'settings',
     path: '/settings',
     nameKey: 'settings',
@@ -430,7 +643,7 @@ export const navigationRegistry: NavigationItem[] = [
     searchable: true,
     tags: ['settings', 'preferences', 'config', 'system'],
     category: 'system',
-    order: 8
+    order: 9
   }
 ];
 
