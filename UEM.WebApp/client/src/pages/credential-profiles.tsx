@@ -170,10 +170,10 @@ export default function CredentialProfilesPage() {
   });
 
   // Filter profiles based on search
-  const filteredProfiles = profiles.filter((profile: CredentialProfile) =>
+  const filteredProfiles = Array.isArray(profiles) ? profiles.filter((profile: CredentialProfile) =>
     profile.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (profile.description || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  ) : [];
 
   const handleCreateProfile = () => {
     if (!newProfile.name.trim()) {
@@ -345,7 +345,7 @@ export default function CredentialProfilesPage() {
                   Total Profiles
                 </p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
-                  {profiles.length}
+                  {Array.isArray(profiles) ? profiles.length : 0}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
@@ -362,7 +362,7 @@ export default function CredentialProfilesPage() {
                   Active
                 </p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
-                  {profiles.filter((p: CredentialProfile) => p.isActive).length}
+                  {Array.isArray(profiles) ? profiles.filter((p: CredentialProfile) => p.isActive).length : 0}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400">
@@ -379,11 +379,11 @@ export default function CredentialProfilesPage() {
                   Total Credentials
                 </p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
-                  {profiles.reduce((acc: number, p: CredentialProfile) => {
+                  {Array.isArray(profiles) ? profiles.reduce((acc: number, p: CredentialProfile) => {
                     const credData = p.credentialsLegacy ? JSON.stringify(p.credentialsLegacy) : '[]';
                     const creds = parseCredentials(credData);
                     return acc + creds.length;
-                  }, 0)}
+                  }, 0) : 0}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400">
@@ -400,7 +400,7 @@ export default function CredentialProfilesPage() {
                   Total Usage
                 </p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
-                  {profiles.reduce((acc: number, p: CredentialProfile) => acc + (p.usageCount || 0), 0)}
+                  {Array.isArray(profiles) ? profiles.reduce((acc: number, p: CredentialProfile) => acc + (p.usageCount || 0), 0) : 0}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400">
@@ -454,10 +454,10 @@ export default function CredentialProfilesPage() {
           filteredProfiles.map((profile: CredentialProfile) => {
             const credData = profile.credentialsLegacy ? JSON.stringify(profile.credentialsLegacy) : '[]';
             const credentials = parseCredentials(credData);
-            const credentialTypesSummary = credentials.reduce((acc: any, cred: any) => {
+            const credentialTypesSummary = Array.isArray(credentials) ? credentials.reduce((acc: any, cred: any) => {
               acc[cred.type] = (acc[cred.type] || 0) + 1;
               return acc;
-            }, {});
+            }, {}) : {};
 
             return (
               <Card key={profile.id} className="hover:shadow-md transition-shadow">
