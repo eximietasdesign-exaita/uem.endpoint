@@ -313,7 +313,7 @@ export const navigationRegistry: NavigationItem[] = [
     children: [
       {
         id: 'asset-change-log',
-        path: '/asset-inventory',
+        path: '/asset-change-log',
         nameKey: 'asset_change_log',
         name: 'Asset Change & Integrity Log',
         icon: Activity,
@@ -325,7 +325,7 @@ export const navigationRegistry: NavigationItem[] = [
       },
       {
         id: 'system-security-audit',
-        path: '/agent-status-reports',
+        path: '/system-security-audit',
         nameKey: 'system_security_audit',
         name: 'System Security Audit Log',
         icon: ScrollText,
@@ -337,7 +337,7 @@ export const navigationRegistry: NavigationItem[] = [
       },
       {
         id: 'exclusion-rules',
-        path: '/settings',
+        path: '/exclusion-access-rules',
         nameKey: 'exclusion_rules',
         name: 'Exclusion & Controlled Access Rules',
         icon: Lock,
@@ -349,7 +349,7 @@ export const navigationRegistry: NavigationItem[] = [
       },
       {
         id: 'enterprise-credential-vault',
-        path: '/enterprise-credential-profiles',
+        path: '/credential-vault',
         nameKey: 'enterprise_credential_vault',
         name: 'Enterprise Credential Vault',
         icon: Shield,
