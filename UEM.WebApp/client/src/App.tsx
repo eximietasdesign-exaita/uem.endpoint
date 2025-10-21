@@ -66,7 +66,9 @@ function AppContent() {
     if (pathname === "/discovery-scripts-marketplace") return { title: "Discovery Scripts Marketplace", subtitle: "Browse and download enterprise-grade discovery scripts from our comprehensive library" };
     if (pathname === "/discovery-probes") return { title: "Discovery Probes", subtitle: "Manage data collectors deployed across your network infrastructure" };
     if (pathname === "/satellite-job-queue") return { title: "Satellite Job Queue", subtitle: "Manage job queue for satellite server operations" };
-    if (pathname === "/credential-profiles") return { title: "Enterprise Credential Vault", subtitle: "Advanced credential management with enterprise-grade security, compliance, and audit capabilities" };
+    if (pathname === "/credential-vault") return { title: "Credential Vault", subtitle: "Manage credential profiles for secure access to enterprise systems" };
+    if (pathname === "/credential-profiles") return { title: "Credential Vault", subtitle: "Manage credential profiles for secure access to enterprise systems" };
+    if (pathname === "/enterprise-credential-profiles") return { title: "Enterprise Credential Vault", subtitle: "Advanced credential management with enterprise-grade security, compliance, and audit capabilities" };
     if (pathname === "/external-integrations") return { title: "External Integrations", subtitle: "Manage bidirectional integrations with external systems" };
     if (pathname === "/domain-management") return { title: "Domain Management", subtitle: "Manage multi-domain configuration and hierarchical relationships" };
     if (pathname === "/tenant-management") return { title: "Tenant Management", subtitle: "Manage multi-tenant configuration and resource allocation" };
@@ -114,7 +116,9 @@ function AppContent() {
             <Route path="/script-policies" component={ScriptPoliciesPage} />
             <Route path="/discovery-probes" component={DiscoveryProbesPage} />
             <Route path="/satellite-job-queue" component={SatelliteJobQueuePage} />
-            <Route path="/credential-profiles" component={EnterpriseCredentialProfilesPage} />
+            <Route path="/credential-vault" component={CredentialProfilesPage} />
+            <Route path="/credential-profiles" component={CredentialProfilesPage} />
+            <Route path="/enterprise-credential-profiles" component={EnterpriseCredentialProfilesPage} />
             <Route path="/external-integrations" component={ExternalIntegrationsPage} />
             <Route path="/domain-management" component={DomainManagementPage} />
             <Route path="/tenant-management" component={TenantManagementPage} />

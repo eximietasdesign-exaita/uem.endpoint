@@ -81,16 +81,23 @@ export default function CredentialProfilesPage() {
   // Fetch credential profiles from API
   const { data: profiles = [], isLoading, error } = useQuery({
     queryKey: ['/api/credential-profiles'],
+    queryFn: async () => {
+      const response = await fetch('/api/credential-profiles');
+      if (!response.ok) throw new Error('Failed to fetch credential profiles');
+      return response.json();
+    },
   });
 
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (profile: { name: string; description: string; credentials: string }) => {
-      return await apiRequest('/api/credential-profiles', {
+      const response = await fetch('/api/credential-profiles', {
         method: 'POST',
         body: JSON.stringify(profile),
         headers: { 'Content-Type': 'application/json' },
       });
+      if (!response.ok) throw new Error('Failed to create profile');
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/credential-profiles'] });
@@ -113,11 +120,13 @@ export default function CredentialProfilesPage() {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...updates }: { id: number; name?: string; description?: string; credentials?: string }) => {
-      return await apiRequest(`/api/credential-profiles/${id}`, {
+      const response = await fetch(`/api/credential-profiles/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
         headers: { 'Content-Type': 'application/json' },
       });
+      if (!response.ok) throw new Error('Failed to update profile');
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/credential-profiles'] });
@@ -139,9 +148,10 @@ export default function CredentialProfilesPage() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest(`/api/credential-profiles/${id}`, {
+      const response = await fetch(`/api/credential-profiles/${id}`, {
         method: 'DELETE',
       });
+      if (!response.ok) throw new Error('Failed to delete profile');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/credential-profiles'] });
@@ -180,12 +190,13 @@ export default function CredentialProfilesPage() {
 
   const handleEditProfile = (profile: CredentialProfile) => {
     setSelectedProfile(profile);
+    const credData = profile.credentialsLegacy ? JSON.stringify(profile.credentialsLegacy) : '[]';
     setNewProfile({
       name: profile.name,
       description: profile.description || '',
-      credentials: profile.credentials || '[]'
+      credentials: credData
     });
-    setEditingCredentials(parseCredentials(profile.credentials));
+    setEditingCredentials(parseCredentials(credData));
     setIsEditDialogOpen(true);
   };
 
@@ -344,7 +355,8 @@ export default function CredentialProfilesPage() {
           </div>
         ) : (
           filteredProfiles.map((profile: CredentialProfile) => {
-            const credentials = parseCredentials(profile.credentials);
+            const credData = profile.credentialsLegacy ? JSON.stringify(profile.credentialsLegacy) : '[]';
+            const credentials = parseCredentials(credData);
             const credentialTypesSummary = credentials.reduce((acc: any, cred: any) => {
               acc[cred.type] = (acc[cred.type] || 0) + 1;
               return acc;
@@ -381,7 +393,7 @@ export default function CredentialProfilesPage() {
 
                     {/* Credential Types */}
                     <div className="flex flex-wrap gap-2">
-                      {Object.entries(credentialTypesSummary).map(([type, count]) => (
+                      {Object.entries(credentialTypesSummary).map(([type, count]: [string, any]) => (
                         <div key={type} className="flex items-center space-x-1">
                           {renderCredentialIcon(type)}
                           <span className="text-xs text-gray-600 dark:text-gray-400">
