@@ -203,7 +203,7 @@ export const navigationRegistry: NavigationItem[] = [
     children: [
       {
         id: 'central-asset-repository',
-        path: '/asset-inventory',
+        path: '/central-asset-repository',
         nameKey: 'central_asset_repository',
         name: 'Central Asset Repository',
         icon: Database,
@@ -215,7 +215,7 @@ export const navigationRegistry: NavigationItem[] = [
       },
       {
         id: 'unmanaged-asset-queue',
-        path: '/assets',
+        path: '/unmanaged-asset-queue',
         nameKey: 'unmanaged_asset_queue',
         name: 'Unmanaged Asset Queue',
         icon: Package,
@@ -227,7 +227,7 @@ export const navigationRegistry: NavigationItem[] = [
       },
       {
         id: 'data-normalization',
-        path: '/asset-inventory',
+        path: '/data-normalization',
         nameKey: 'data_normalization',
         name: 'Data Normalization & Enrichment',
         icon: GitBranch,
@@ -239,7 +239,7 @@ export const navigationRegistry: NavigationItem[] = [
       },
       {
         id: 'software-license-inventory',
-        path: '/asset-inventory',
+        path: '/software-license-inventory',
         nameKey: 'software_license_inventory',
         name: 'Software & License Inventory',
         icon: Boxes,

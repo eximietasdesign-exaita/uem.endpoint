@@ -43,6 +43,10 @@ import CloudDiscoveryPage from "@/pages/cloud-discovery";
 import AssetChangeLogPage from "@/pages/asset-change-log";
 import SystemSecurityAuditPage from "@/pages/system-security-audit";
 import ExclusionAccessRulesPage from "@/pages/exclusion-access-rules";
+import CentralAssetRepositoryPage from "@/pages/central-asset-repository";
+import UnmanagedAssetQueuePage from "@/pages/unmanaged-asset-queue";
+import DataNormalizationPage from "@/pages/data-normalization";
+import SoftwareLicenseInventoryPage from "@/pages/software-license-inventory";
 import { DomainTenantProvider } from "@/contexts/DomainTenantContext";
 import { EnterpriseTopHeader } from "@/components/EnterpriseTopHeader";
 import { cn } from "@/lib/utils";
@@ -86,6 +90,10 @@ function AppContent() {
     if (pathname === "/asset-change-log") return { title: t("asset_change_log"), subtitle: "Immutable audit trail of all asset modifications and integrity checks" };
     if (pathname === "/system-security-audit") return { title: t("system_security_audit"), subtitle: "Comprehensive security event monitoring and compliance logging" };
     if (pathname === "/exclusion-access-rules") return { title: t("exclusion_rules"), subtitle: "Define access control policies and exclusion rules for scalable security management" };
+    if (pathname === "/central-asset-repository") return { title: t("central_asset_repository"), subtitle: "Comprehensive enterprise asset catalog with detailed specifications and lifecycle tracking" };
+    if (pathname === "/unmanaged-asset-queue") return { title: t("unmanaged_asset_queue"), subtitle: "Detected devices awaiting classification, approval, and onboarding to managed inventory" };
+    if (pathname === "/data-normalization") return { title: t("data_normalization"), subtitle: "Automated data quality assurance with vendor sensing, standardization, and enrichment" };
+    if (pathname === "/software-license-inventory") return { title: t("software_license_inventory"), subtitle: "Software Asset Management (SAM) with compliance tracking and cost optimization" };
     if (pathname === "/user-management") return { title: t("user_management"), subtitle: "User accounts and permissions" };
     if (pathname === "/settings") return { title: t("settings"), subtitle: "System configuration" };
     return { title: "Page", subtitle: "Description" };
@@ -140,6 +148,10 @@ function AppContent() {
             <Route path="/asset-change-log" component={AssetChangeLogPage} />
             <Route path="/system-security-audit" component={SystemSecurityAuditPage} />
             <Route path="/exclusion-access-rules" component={ExclusionAccessRulesPage} />
+            <Route path="/central-asset-repository" component={CentralAssetRepositoryPage} />
+            <Route path="/unmanaged-asset-queue" component={UnmanagedAssetQueuePage} />
+            <Route path="/data-normalization" component={DataNormalizationPage} />
+            <Route path="/software-license-inventory" component={SoftwareLicenseInventoryPage} />
             <Route path="/user-management" component={UserManagementPage} />
             <Route path="/alerts" component={() => <div>Alerts & Notifications page</div>} />
             <Route path="/reports" component={() => <div>Reports page</div>} />
