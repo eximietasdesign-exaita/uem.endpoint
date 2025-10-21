@@ -7,6 +7,7 @@ This is a comprehensive enterprise UEM (Unified Endpoint Management) solution wi
 - **September 2025**: Migrated from dual-server architecture (TypeScript + C#) to unified C#-only backend
 - **September 30, 2025**: Implemented unified hierarchical domain-tenant tree selector across all UI components for consistent context selection and display
 - **October 17, 2025**: Implemented enterprise-grade Cloud Discovery infrastructure for AWS, GCP, and Azure with encrypted credentials, scheduled discovery jobs, and comprehensive audit trails
+- **October 21, 2025**: Navigation consolidation - Renamed 5 Discovery-related menu items for clarity and added "Others" menu section containing 16 previously orphaned pages for future organization
 
 ### Unified UEM System - .NET + React Integration
 A robust enterprise UEM system with single-backend architecture, featuring:
