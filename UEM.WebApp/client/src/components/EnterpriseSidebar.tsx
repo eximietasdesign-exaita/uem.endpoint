@@ -344,11 +344,11 @@ export function EnterpriseSidebar({ isOpen, onClose, isCollapsed, onToggleCollap
                     </div>
                     {(!isCollapsed || forMobile) && (
                       <>
-                        <span className="font-medium text-sm flex-1 min-w-0 truncate">
+                        <span className="font-medium text-sm flex-1 min-w-0">
                           {highlightText(item.name, debouncedSearchQuery)}
                         </span>
                         {item.badge && (
-                          <Badge variant="secondary" className="text-xs">
+                          <Badge variant="secondary" className="text-xs shrink-0">
                             {item.badge}
                           </Badge>
                         )}
@@ -395,7 +395,7 @@ export function EnterpriseSidebar({ isOpen, onClose, isCollapsed, onToggleCollap
                           )} />
                         </div>
                         {(!isCollapsed || forMobile) && (
-                          <span className="font-medium text-sm flex-1 min-w-0">
+                          <span className="font-medium text-sm flex-1 min-w-0 leading-tight">
                             {highlightText(item.name, debouncedSearchQuery)}
                           </span>
                         )}
@@ -452,11 +452,11 @@ export function EnterpriseSidebar({ isOpen, onClose, isCollapsed, onToggleCollap
                             </div>
                             {(!isCollapsed || forMobile) && (
                               <>
-                                <span className="text-sm flex-1 min-w-0 truncate">
+                                <span className="text-sm flex-1 min-w-0 leading-tight">
                                   {highlightText(child.name, debouncedSearchQuery)}
                                 </span>
                                 {child.badge && (
-                                  <Badge variant="outline" className="text-xs">
+                                  <Badge variant="outline" className="text-xs shrink-0 ml-1">
                                     {child.badge}
                                   </Badge>
                                 )}
@@ -507,14 +507,14 @@ export function EnterpriseSidebar({ isOpen, onClose, isCollapsed, onToggleCollap
       {/* Desktop Sidebar */}
       <div className={cn(
         "hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:z-50 lg:bg-white lg:dark:bg-gray-900 lg:border-r lg:border-gray-200 lg:dark:border-gray-700 transition-all duration-300",
-        isCollapsed ? "lg:w-16" : "lg:w-64"
+        isCollapsed ? "lg:w-16" : "lg:w-80"
       )}>
         <SidebarContent forMobile={false} />
       </div>
 
       {/* Mobile Sidebar */}
       <Sheet open={isOpen} onOpenChange={onClose}>
-        <SheetContent side="left" className="p-0 w-64">
+        <SheetContent side="left" className="p-0 w-80">
           <SidebarContent forMobile={true} />
         </SheetContent>
       </Sheet>

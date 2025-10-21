@@ -96,7 +96,7 @@ function AppContent() {
       
       <div className={cn(
         "flex-1 flex flex-col overflow-hidden transition-all duration-300",
-        isSidebarCollapsed ? "lg:ml-16" : "lg:ml-64"
+        isSidebarCollapsed ? "lg:ml-16" : "lg:ml-80"
       )}>
         <EnterpriseTopHeader setIsSidebarOpen={setIsSidebarOpen} />
         
