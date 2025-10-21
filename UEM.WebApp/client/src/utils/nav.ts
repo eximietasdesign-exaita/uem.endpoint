@@ -19,7 +19,19 @@ import {
   LucideIcon,
   HardDrive,
   UserCheck,
-  Cloud
+  Cloud,
+  ListChecks,
+  CalendarClock,
+  Activity,
+  Settings2,
+  Target,
+  FileSearch,
+  Package,
+  GitBranch,
+  AlertTriangle,
+  ScrollText,
+  Lock,
+  Boxes
 } from "lucide-react";
 
 export interface NavigationItem {
@@ -57,45 +69,45 @@ export const navigationRegistry: NavigationItem[] = [
   },
   {
     id: 'discovery-group',
-    path: '/discovery', // Discovery landing page
+    path: null,
     nameKey: 'discovery',
     name: 'Discovery',
     icon: Search,
-    searchable: true,
+    searchable: false,
     tags: ['discovery', 'overview'],
     category: 'discovery',
     order: 2,
     children: [
       {
-        id: 'agentless-discovery',
-        path: '/agentless-discovery',
-        nameKey: 'agentless_discovery',
-        name: 'Agentless Discovery',
-        icon: Search,
+        id: 'discovery-dashboard',
+        path: '/discovery',
+        nameKey: 'discovery_dashboard',
+        name: 'Discovery Dashboard',
+        icon: LayoutDashboard,
         searchable: true,
-        tags: ['agentless', 'scan', 'network'],
+        tags: ['dashboard', 'overview', 'status'],
         category: 'discovery',
         order: 1,
         parentId: 'discovery-group'
       },
       {
-        id: 'discovery-scripts',
-        path: '/discovery/scripts',
-        nameKey: 'discovery_scripts',
-        name: 'Discovery Scripts',
-        icon: Code,
+        id: 'discovery-profiles',
+        path: '/credential-vault',
+        nameKey: 'discovery_profiles',
+        name: 'Discovery Profiles',
+        icon: Shield,
         searchable: true,
-        tags: ['scripts', 'templates', 'discovery'],
+        tags: ['profiles', 'credentials', 'vault'],
         category: 'discovery',
         order: 2,
         parentId: 'discovery-group'
       },
       {
-        id: 'agentless-jobs',
+        id: 'discovery-jobs',
         path: '/agentless-jobs',
-        nameKey: 'agentless_jobs',
+        nameKey: 'discovery_jobs',
         name: 'Discovery Jobs',
-        icon: BarChart3,
+        icon: ListChecks,
         searchable: true,
         tags: ['jobs', 'tasks', 'queue'],
         category: 'discovery',
@@ -107,60 +119,60 @@ export const navigationRegistry: NavigationItem[] = [
         path: null,
         nameKey: 'job_details',
         name: 'Job Details',
-        icon: BarChart3,
+        icon: FileSearch,
         searchable: false,
         tags: ['details', 'view'],
         category: 'discovery',
         order: 4,
-        parentId: 'agentless-jobs',
+        parentId: 'discovery-jobs',
         pattern: '/agentless-discovery/view/:id'
       },
       {
-        id: 'agent-discovery',
-        path: '/agent-discovery',
-        nameKey: 'agent_discovery', 
-        name: 'Agent Based Discovery',
-        icon: Monitor,
+        id: 'scheduler',
+        path: '/agentless-discovery',
+        nameKey: 'scheduler',
+        name: 'Scheduler',
+        icon: CalendarClock,
         searchable: true,
-        tags: ['agent', 'endpoint', 'managed'],
-        category: 'discovery',
-        order: 3,
-        parentId: 'discovery-group'
-      },
-      {
-        id: 'agent-status-reports',
-        path: '/agent-status-reports',
-        nameKey: 'agent_status_reports',
-        name: 'Agent Status Reports',
-        icon: BarChart3,
-        searchable: true,
-        tags: ['reports', 'status', 'agents'],
+        tags: ['scheduler', 'jobs', 'time-discovery', 'agentless'],
         category: 'discovery',
         order: 5,
         parentId: 'discovery-group'
       },
       {
-        id: 'discovery-probes',
+        id: 'scan-engine-management',
         path: '/discovery-probes',
-        nameKey: 'discovery_probes',
-        name: 'Discovery Probes',
-        icon: Radar,
+        nameKey: 'scan_engine_management',
+        name: 'Scan Engine Management',
+        icon: Settings2,
         searchable: true,
-        tags: ['probes', 'collectors', 'network'],
+        tags: ['scan', 'engine', 'probes', 'collectors'],
         category: 'discovery',
         order: 6,
         parentId: 'discovery-group'
       },
       {
-        id: 'satellite-job-queue',
-        path: '/satellite-job-queue',
-        nameKey: 'satellite_job_queue',
-        name: 'Satellite Job Queue',
-        icon: BarChart3,
+        id: 'discovery-mode-config',
+        path: '/agent-discovery',
+        nameKey: 'discovery_mode_config',
+        name: 'Discovery Mode Configuration',
+        icon: Target,
         searchable: true,
-        tags: ['satellite', 'jobs', 'queue', 'server'],
+        tags: ['configuration', 'mode', 'agentless', 'agent', 'cloud'],
         category: 'discovery',
         order: 7,
+        parentId: 'discovery-group'
+      },
+      {
+        id: 'discovery-status-audit',
+        path: '/agent-status-reports',
+        nameKey: 'discovery_status_audit',
+        name: 'Discovery Status & Audit',
+        icon: Activity,
+        searchable: true,
+        tags: ['status', 'audit', 'reports', 'health'],
+        category: 'discovery',
+        order: 8,
         parentId: 'discovery-group'
       },
       {
@@ -172,53 +184,78 @@ export const navigationRegistry: NavigationItem[] = [
         searchable: true,
         tags: ['cloud', 'aws', 'azure', 'gcp', 'multi-cloud'],
         category: 'discovery',
-        order: 8,
-        parentId: 'discovery-group'
+        order: 9,
+        parentId: 'discovery-group',
+        badge: 'New'
       }
     ]
   },
   {
-    id: 'assets-group',
-    path: null, // Category grouping node
-    nameKey: 'assets',
-    name: 'Assets',
+    id: 'inventory-group',
+    path: null,
+    nameKey: 'inventory',
+    name: 'Inventory & Asset Management',
     icon: Database,
     searchable: false,
     tags: [],
-    category: 'assets',
+    category: 'inventory',
     order: 3,
     children: [
       {
-        id: 'asset-inventory',
+        id: 'central-asset-repository',
         path: '/asset-inventory',
-        nameKey: 'asset_inventory',
-        name: 'Asset Inventory',
-        icon: HardDrive,
-        searchable: true,
-        tags: ['inventory', 'catalog', 'devices'],
-        category: 'assets',
-        order: 1,
-        parentId: 'assets-group'
-      },
-      {
-        id: 'assets-legacy',
-        path: '/assets',
-        nameKey: 'assets_legacy',
-        name: 'Legacy Assets',
+        nameKey: 'central_asset_repository',
+        name: 'Central Asset Repository',
         icon: Database,
         searchable: true,
-        tags: ['legacy', 'assets', 'endpoints'],
-        category: 'assets',
+        tags: ['repository', 'global', 'inventory', 'catalog'],
+        category: 'inventory',
+        order: 1,
+        parentId: 'inventory-group'
+      },
+      {
+        id: 'unmanaged-asset-queue',
+        path: '/assets',
+        nameKey: 'unmanaged_asset_queue',
+        name: 'Unmanaged Asset Queue',
+        icon: Package,
+        searchable: true,
+        tags: ['unmanaged', 'queue', 'detected', 'unclassified'],
+        category: 'inventory',
         order: 2,
-        parentId: 'assets-group'
+        parentId: 'inventory-group'
+      },
+      {
+        id: 'data-normalization',
+        path: '/asset-inventory',
+        nameKey: 'data_normalization',
+        name: 'Data Normalization & Enrichment',
+        icon: GitBranch,
+        searchable: true,
+        tags: ['normalization', 'enrichment', 'vendor', 'sensing'],
+        category: 'inventory',
+        order: 3,
+        parentId: 'inventory-group'
+      },
+      {
+        id: 'software-license-inventory',
+        path: '/asset-inventory',
+        nameKey: 'software_license_inventory',
+        name: 'Software & License Inventory',
+        icon: Boxes,
+        searchable: true,
+        tags: ['software', 'license', 'compliance', 'sam'],
+        category: 'inventory',
+        order: 4,
+        parentId: 'inventory-group'
       }
     ]
   },
   {
     id: 'automation-group',
-    path: null, // Category grouping node
+    path: null,
     nameKey: 'automation',
-    name: 'Automation',
+    name: 'Automation & Scripts',
     icon: Code,
     searchable: false,
     tags: [],
@@ -226,109 +263,125 @@ export const navigationRegistry: NavigationItem[] = [
     order: 4,
     children: [
       {
-        id: 'scripts',
-        path: '/scripts',
-        nameKey: 'scripts',
-        name: 'Discovery Scripts',
-        icon: Code,
+        id: 'orchestration-repository',
+        path: '/script-policies',
+        nameKey: 'orchestration_repository',
+        name: 'Orchestration Repository',
+        icon: FileText,
         searchable: true,
-        tags: ['scripts', 'templates', 'code'],
+        tags: ['orchestration', 'policies', 'execution', 'workflow'],
         category: 'automation',
         order: 1,
         parentId: 'automation-group'
       },
       {
-        id: 'script-policies',
-        path: '/script-policies',
-        nameKey: 'script_policies',
-        name: 'Script Orchestrator',
-        icon: FileText,
+        id: 'script-repository',
+        path: '/scripts',
+        nameKey: 'script_repository',
+        name: 'Script Repository',
+        icon: Code,
         searchable: true,
-        tags: ['policies', 'orchestrator', 'execution'],
+        tags: ['scripts', 'templates', 'code', 'discovery'],
         category: 'automation',
         order: 2,
         parentId: 'automation-group'
       },
       {
-        id: 'policies-alias',
-        path: '/policies',
-        nameKey: 'policies_alias',
-        name: 'Script Orchestrator (Legacy)',
-        icon: FileText,
+        id: 'enterprise-integrations',
+        path: '/external-integrations',
+        nameKey: 'enterprise_integrations',
+        name: 'Enterprise Integrations',
+        icon: ArrowRightLeft,
         searchable: true,
-        tags: ['policies', 'legacy'],
+        tags: ['integrations', 'external', 'api', 'connectors'],
         category: 'automation',
         order: 3,
-        parentId: 'automation-group'
-      },
-      {
-        id: 'scripts-marketplace',
-        path: '/discovery-scripts-marketplace',
-        nameKey: 'scripts_marketplace',
-        name: 'Scripts Marketplace',
-        icon: ShoppingCart,
-        searchable: true,
-        tags: ['marketplace', 'templates', 'community'],
-        category: 'automation',
-        order: 4,
         parentId: 'automation-group'
       }
     ]
   },
   {
-    id: 'deployment',
-    path: '/remote-agent-deployment',
-    nameKey: 'deployment',
-    name: 'Agent Deployment',
-    icon: Zap,
-    searchable: true,
-    tags: ['deployment', 'agents', 'remote'],
-    category: 'deployment',
-    order: 5
+    id: 'security-group',
+    path: null,
+    nameKey: 'security',
+    name: 'Security & Compliance',
+    icon: Shield,
+    searchable: false,
+    tags: [],
+    category: 'security',
+    order: 5,
+    children: [
+      {
+        id: 'asset-change-log',
+        path: '/asset-inventory',
+        nameKey: 'asset_change_log',
+        name: 'Asset Change & Integrity Log',
+        icon: Activity,
+        searchable: true,
+        tags: ['change', 'integrity', 'audit', 'immutable'],
+        category: 'security',
+        order: 1,
+        parentId: 'security-group'
+      },
+      {
+        id: 'system-security-audit',
+        path: '/agent-status-reports',
+        nameKey: 'system_security_audit',
+        name: 'System Security Audit Log',
+        icon: ScrollText,
+        searchable: true,
+        tags: ['security', 'audit', 'logs', 'compliance'],
+        category: 'security',
+        order: 2,
+        parentId: 'security-group'
+      },
+      {
+        id: 'exclusion-rules',
+        path: '/settings',
+        nameKey: 'exclusion_rules',
+        name: 'Exclusion & Controlled Access Rules',
+        icon: Lock,
+        searchable: true,
+        tags: ['exclusion', 'access', 'rules', 'scalability'],
+        category: 'security',
+        order: 3,
+        parentId: 'security-group'
+      },
+      {
+        id: 'enterprise-credential-vault',
+        path: '/enterprise-credential-profiles',
+        nameKey: 'enterprise_credential_vault',
+        name: 'Enterprise Credential Vault',
+        icon: Shield,
+        searchable: true,
+        tags: ['credentials', 'enterprise', 'vault', 'security'],
+        category: 'security',
+        order: 4,
+        parentId: 'security-group'
+      }
+    ]
   },
   {
-    id: 'credential-profiles',
-    path: '/credential-profiles',
-    nameKey: 'credential_profiles',
-    name: 'Credential Vault',
-    icon: Shield,
+    id: 'agent-lifecycle',
+    path: '/remote-agent-deployment',
+    nameKey: 'agent_lifecycle',
+    name: 'Agent Lifecycle Management',
+    icon: Zap,
     searchable: true,
-    tags: ['credentials', 'vault', 'passwords', 'security'],
-    category: 'security',
+    tags: ['deployment', 'agents', 'remote', 'package', 'lifecycle'],
+    category: 'deployment',
     order: 6
   },
   {
-    id: 'enterprise-credential-profiles', 
-    path: '/enterprise-credential-profiles',
-    nameKey: 'enterprise_credential_profiles',
-    name: 'Enterprise Credential Profiles',
-    icon: Shield,
-    searchable: true,
-    tags: ['credentials', 'enterprise', 'profiles'],
-    category: 'security', 
-    order: 7
-  },
-  {
-    id: 'integrations',
-    path: '/external-integrations',
-    nameKey: 'integrations',
-    name: 'External Integrations',
-    icon: ArrowRightLeft,
-    searchable: true,
-    tags: ['integrations', 'external', 'api'],
-    category: 'integrations',
-    order: 7
-  },
-  {
     id: 'management-group',
-    path: null, // Category grouping node
+    path: null,
     nameKey: 'management',
-    name: 'Management',
+    name: 'Platform Administration',
     icon: Globe,
     searchable: false,
     tags: [],
     category: 'management',
-    order: 8,
+    order: 7,
     children: [
       {
         id: 'domain-management',
@@ -355,13 +408,13 @@ export const navigationRegistry: NavigationItem[] = [
         parentId: 'management-group'
       },
       {
-        id: 'user-management',
+        id: 'user-access-control',
         path: '/user-management',
-        nameKey: 'user_management',
-        name: 'User Management',
+        nameKey: 'user_access_control',
+        name: 'User & Access Control',
         icon: UserCheck,
         searchable: true,
-        tags: ['users', 'permissions', 'roles'],
+        tags: ['users', 'permissions', 'roles', 'rbac'],
         category: 'management',
         order: 3,
         parentId: 'management-group'
@@ -372,12 +425,12 @@ export const navigationRegistry: NavigationItem[] = [
     id: 'settings',
     path: '/settings',
     nameKey: 'settings',
-    name: 'Settings',
+    name: 'System Configuration',
     icon: Settings,
     searchable: true,
     tags: ['settings', 'preferences', 'config', 'system'],
     category: 'system',
-    order: 9
+    order: 8
   }
 ];
 
@@ -472,20 +525,16 @@ function buildMaps() {
   
   function processItems(items: NavigationItem[], parent?: NavigationItem) {
     for (const item of items) {
-      // Store item by ID
       _itemsById!.set(item.id, item);
       
-      // Store exact path mapping
       if (item.path) {
         _pathMap!.set(item.path, item);
       }
       
-      // Store parent relationship (corrected)
       if (parent) {
         _parentMap!.set(item.id, parent);
       }
       
-      // Store pattern routes for dynamic matching
       if (item.pattern) {
         try {
           const pattern = new RegExp('^' + item.pattern.replace(/:([^/]+)/g, '([^/]+)') + '$');
@@ -516,10 +565,8 @@ export function buildBreadcrumbs(pathname: string): { name: string; path: string
 
   let matchedItem: NavigationItem | null = null;
   
-  // 1. Try exact path match
   matchedItem = pathMap.get(pathname) || null;
   
-  // 2. Try pattern matching for dynamic routes
   if (!matchedItem && patternRoutes) {
     for (const { pattern, item } of patternRoutes) {
       if (pattern.test(pathname)) {
@@ -529,7 +576,6 @@ export function buildBreadcrumbs(pathname: string): { name: string; path: string
     }
   }
   
-  // 3. Try prefix matching (longest match first)
   if (!matchedItem) {
     let longestMatch = '';
     pathMap.forEach((item, path) => {
@@ -541,7 +587,6 @@ export function buildBreadcrumbs(pathname: string): { name: string; path: string
   }
   
   if (matchedItem) {
-    // Build parent chain - FIXED: use item.id to get parent
     const chain: NavigationItem[] = [];
     let current: NavigationItem | undefined = matchedItem;
     
@@ -551,7 +596,6 @@ export function buildBreadcrumbs(pathname: string): { name: string; path: string
       current = parent || undefined;
     }
     
-    // Add parent breadcrumbs (excluding root)
     for (const item of chain) {
       if (item.path && item.path !== '/') {
         breadcrumbs.push({
@@ -560,7 +604,6 @@ export function buildBreadcrumbs(pathname: string): { name: string; path: string
           nameKey: item.nameKey
         });
       } else if (!item.path && item.id !== 'root') {
-        // Category node - add to breadcrumb trail but not clickable
         breadcrumbs.push({
           name: item.name,
           path: '#',
@@ -569,12 +612,10 @@ export function buildBreadcrumbs(pathname: string): { name: string; path: string
       }
     }
     
-    // Handle dynamic segments beyond the matched item
     if (matchedItem.path && pathname !== matchedItem.path && pathname.startsWith(matchedItem.path)) {
       const segments = pathname.split('/').filter(Boolean);
       const matchedSegments = matchedItem.path.split('/').filter(Boolean);
       
-      // Add remaining segments as breadcrumbs
       for (let i = matchedSegments.length; i < segments.length; i++) {
         const segment = segments[i];
         const displayName = routeAliases[segment] || 
@@ -587,7 +628,6 @@ export function buildBreadcrumbs(pathname: string): { name: string; path: string
       }
     }
   } else {
-    // Fallback: create breadcrumbs from URL segments
     const segments = pathname.split('/').filter(Boolean);
     let currentPath = '';
     
@@ -619,7 +659,6 @@ export function searchNavigation(query: string): (NavigationItem & { searchableT
       let score = 0;
       const searchText = item.searchableText;
       
-      // Exact name match gets highest score
       if (item.name.toLowerCase() === lowercaseQuery) {
         score += 100;
       } else if (item.name.toLowerCase().startsWith(lowercaseQuery)) {
@@ -628,7 +667,6 @@ export function searchNavigation(query: string): (NavigationItem & { searchableT
         score += 60;
       }
       
-      // Tag matches
       for (const tag of item.tags) {
         if (tag.toLowerCase() === lowercaseQuery) {
           score += 40;
@@ -637,12 +675,10 @@ export function searchNavigation(query: string): (NavigationItem & { searchableT
         }
       }
       
-      // Category match
       if (item.category.toLowerCase().includes(lowercaseQuery)) {
         score += 30;
       }
       
-      // Word-based matching
       for (const word of queryWords) {
         if (searchText.includes(word)) {
           score += 10;
