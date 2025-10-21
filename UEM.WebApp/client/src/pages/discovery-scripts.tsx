@@ -413,7 +413,7 @@ print(f"Release: {platform.release()}")`;
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Discovery Scripts
+            {t("script_repository")}
           </h1>
           <p className="text-gray-500 dark:text-gray-400">
             Manage discovery templates and automation scripts
