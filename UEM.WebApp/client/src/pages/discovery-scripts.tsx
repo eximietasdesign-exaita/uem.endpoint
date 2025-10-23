@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { 
-  Search, 
-  Plus, 
-  Filter, 
-  Play, 
-  Edit, 
-  Copy, 
-  Download, 
+import {
+  Search,
+  Plus,
+  Filter,
+  Play,
+  Edit,
+  Copy,
+  Download,
   Upload,
   Code2,
   FileText,
@@ -28,7 +28,8 @@ import {
   TrendingUp,
   ShoppingCart,
   Globe,
-  Trash2
+  Trash2,
+  RefreshCw
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -124,17 +125,17 @@ export default function DiscoveryScriptsPage() {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [selectedScript, setSelectedScript] = useState<DiscoveryScript | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-  
+
   // AI Feature states
   const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
   const [isAIAnalyzerOpen, setIsAIAnalyzerOpen] = useState(false);
   const [isAIOptimizerOpen, setIsAIOptimizerOpen] = useState(false);
   const [currentAnalysisScript, setCurrentAnalysisScript] = useState<{ code: string; type: string; name: string } | null>(null);
-  
+
   // Publish to Marketplace states
   const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
   const [publishScript, setPublishScript] = useState<DiscoveryScript | null>(null);
-  
+
   // Delete confirmation states
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [scriptToDelete, setScriptToDelete] = useState<DiscoveryScript | null>(null);
@@ -148,46 +149,107 @@ export default function DiscoveryScriptsPage() {
     isPublic: true,
     documentation: ""
   });
-  
+
   const { toast } = useToast();
 
   // Directly use useQuery to bypass any caching issues
-  const { data, isLoading } = useQuery<DiscoveryScript[]>({
-    queryKey: ["/api/discovery-scripts", { v: "2.0" }],
-    staleTime: 0,
-    gcTime: 0,
-    refetchOnMount: true
-  });
-  
+  const { data, isLoading, error, refetch } = useQuery<DiscoveryScript[]>({
+  queryKey: ["/api/discovery-scripts"],
+  queryFn: async () => {
+    try {
+      console.log('[DEBUG] Fetching scripts...');
+      const response = await apiRequest('GET', '/api/discovery-scripts');
+      const result = await response.json();
+      console.log('[DEBUG] Raw API response:', result);
+      
+      if (Array.isArray(result)) {
+        return result;
+      } else if (result && typeof result === 'object') {
+        return Array.isArray(result.data) ? result.data : [];
+      }
+      return [];
+    } catch (error) {
+      console.error('[DEBUG] Scripts API error:', error);
+      throw error;
+    }
+  },
+  staleTime: 0, // Always consider data stale
+  gcTime: 0, // Don't cache results
+  refetchOnMount: true,
+  refetchOnWindowFocus: true,
+  refetchInterval: false, // Don't auto-refetch
+  retry: 1,
+  // Add this to force network requests
+  networkMode: 'always'
+});
+
   const scripts = (Array.isArray(data) ? data : []) as DiscoveryScript[];
   const hasContext = true; // Discovery scripts don't require context
 
   // Debug logging
   console.log('[DEBUG] Scripts data:', scripts, 'isArray:', Array.isArray(scripts), 'length:', scripts.length);
 
-  // Create script mutation
-  const createScriptMutation = useMutation({
-    mutationFn: (scriptData: any) => apiRequest("POST", "/api/discovery-scripts", scriptData),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/discovery-scripts"] });
-      toast({
-        title: "Success",
-        description: "Script created successfully."
-      });
-    }
-  });
+
+// Create script mutation
+// Create script mutation
+const createScriptMutation = useMutation({
+  mutationFn: async (scriptData: any) => {
+    console.log('Creating script with data:', scriptData);
+    const response = await apiRequest("POST", "/api/discovery-scripts", scriptData);
+    const result = await response.json();
+    console.log('Script creation response:', result);
+    return result;
+  },
+  onSuccess: async (data) => {
+    console.log('Script created successfully:', data);
+    
+    // Aggressive cache clearing
+    queryClient.removeQueries({ queryKey: ["/api/discovery-scripts"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/discovery-scripts"] });
+    
+    // Force immediate refetch
+    await queryClient.refetchQueries({ 
+      queryKey: ["/api/discovery-scripts"],
+      type: 'active'
+    });
+
+    toast({
+      title: "Success",
+      description: "Script created successfully"
+    });
+  },
+  onError: (error: any) => {
+    console.error('Create script error:', error);
+    toast({
+      title: "Error",
+      description: `Failed to create script: ${error.message || 'Unknown error'}`,
+      variant: "destructive"
+    });
+  }
+});
 
   // Update script mutation
   const updateScriptMutation = useMutation({
-    mutationFn: ({ id, ...scriptData }: any) => apiRequest("PUT", `/api/discovery-scripts/${id}`, scriptData),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/discovery-scripts"] });
-      toast({
-        title: "Success",
-        description: "Script updated successfully."
-      });
-    }
-  });
+  mutationFn: async ({ id, ...scriptData }: any) => {
+    const response = await apiRequest("PUT", `/api/discovery-scripts/${id}`, scriptData);
+    return await response.json();
+  },
+  onSuccess: (data) => {
+    // Clear cache and refetch
+    queryClient.removeQueries({ queryKey: ["/api/discovery-scripts"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/discovery-scripts"] });
+    
+    console.log('Script updated successfully:', data);
+  },
+  onError: (error) => {
+    console.error('Update script error:', error);
+    toast({
+      title: "Error", 
+      description: "Failed to update script. Please try again.",
+      variant: "destructive"
+    });
+  }
+});
 
   // Delete script mutation
   const deleteScriptMutation = useMutation({
@@ -229,8 +291,8 @@ export default function DiscoveryScriptsPage() {
   const allScripts = scripts;
   const filteredScripts = allScripts.filter(script => {
     const matchesSearch = script.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         script.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (script.tags && script.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())));
+      script.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (script.tags && script.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())));
     const matchesCategory = selectedCategory === "all" || script.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -257,18 +319,35 @@ export default function DiscoveryScriptsPage() {
   };
 
   const handleSaveScript = async (scriptData: any) => {
-    try {
-      if (selectedScript) {
-        await updateScriptMutation.mutateAsync({ id: selectedScript.id, ...scriptData });
-      } else {
-        await createScriptMutation.mutateAsync(scriptData);
-      }
-      setIsEditorOpen(false);
-      setSelectedScript(null);
-    } catch (error) {
-      console.error("Failed to save script:", error);
+  try {
+    let result;
+    
+    if (selectedScript) {
+      result = await updateScriptMutation.mutateAsync({ id: selectedScript.id, ...scriptData });
+      toast({
+        title: "Success",
+        description: "Script updated successfully."
+      });
+    } else {
+      result = await createScriptMutation.mutateAsync(scriptData);
+      // Don't show toast here - it's handled in onSuccess
     }
-  };
+    
+    // Force immediate cache invalidation and refetch
+    await queryClient.invalidateQueries({ queryKey: ["/api/discovery-scripts"] });
+    await queryClient.refetchQueries({ queryKey: ["/api/discovery-scripts"] });
+    
+    // Small delay to ensure backend processing is complete
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    setIsEditorOpen(false);
+    setSelectedScript(null);
+
+  } catch (error: any) {
+    console.error("Failed to save script:", error);
+    // Don't show toast here - it's handled in onError of mutations
+  }
+};
 
   const handleDeleteScript = (script: DiscoveryScript) => {
     setScriptToDelete(script);
@@ -277,7 +356,7 @@ export default function DiscoveryScriptsPage() {
 
   const confirmDeleteScript = async () => {
     if (!scriptToDelete) return;
-    
+
     try {
       await deleteScriptMutation.mutateAsync(scriptToDelete.id);
       toast({
@@ -314,23 +393,23 @@ export default function DiscoveryScriptsPage() {
   // AI Handler Functions
   const handleAIAnalysis = (script: DiscoveryScript) => {
     // For demo purposes, use sample script code
-    const sampleCode = script.type === 'powershell' 
+    const sampleCode = script.type === 'powershell'
       ? `# ${script.name}
 Get-WmiObject -Class Win32_ComputerSystem | Select-Object Name, Manufacturer, Model, TotalPhysicalMemory
 Write-Host "System information collected successfully"`
       : script.type === 'bash'
-      ? `#!/bin/bash
+        ? `#!/bin/bash
 # ${script.name}
 echo "Collecting system information..."
 uname -a
 free -h
 df -h`
-      : `# ${script.name}
+        : `# ${script.name}
 import os
 import platform
 print(f"System: {platform.system()}")
 print(f"Release: {platform.release()}")`;
-    
+
     setCurrentAnalysisScript({
       code: sampleCode,
       type: script.type,
@@ -341,23 +420,23 @@ print(f"Release: {platform.release()}")`;
 
   const handleAIOptimization = (script: DiscoveryScript) => {
     // For demo purposes, use sample script code
-    const sampleCode = script.type === 'powershell' 
+    const sampleCode = script.type === 'powershell'
       ? `# ${script.name}
 Get-WmiObject -Class Win32_ComputerSystem | Select-Object Name, Manufacturer, Model, TotalPhysicalMemory
 Write-Host "System information collected successfully"`
       : script.type === 'bash'
-      ? `#!/bin/bash
+        ? `#!/bin/bash
 # ${script.name}
 echo "Collecting system information..."
 uname -a
 free -h
 df -h`
-      : `# ${script.name}
+        : `# ${script.name}
 import os
 import platform
 print(f"System: {platform.system()}")
 print(f"Release: {platform.release()}")`;
-    
+
     setCurrentAnalysisScript({
       code: sampleCode,
       type: script.type,
@@ -399,6 +478,20 @@ print(f"Release: {platform.release()}")`;
     setPublishScript(null);
   };
 
+  const handleManualRefresh = async () => {
+    try {
+      console.log('Manual refresh triggered');
+      queryClient.removeQueries({ queryKey: ["/api/discovery-scripts"] });
+      await refetch();
+      toast({
+        title: "Refreshed",
+        description: "Scripts list has been refreshed"
+      });
+    } catch (error) {
+      console.error('Manual refresh error:', error);
+    }
+  };
+
   if (!hasContext) {
     return (
       <div className="space-y-6">
@@ -406,9 +499,35 @@ print(f"Release: {platform.release()}")`;
     );
   }
 
+  // Add this before your return statement
+if (isLoading) {
+  return (
+    <div className="flex items-center justify-center h-96">
+      <div className="text-center space-y-2">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+        <p className="text-sm text-gray-500">Loading discovery scripts...</p>
+      </div>
+    </div>
+  );
+}
+
+if (error) {
+  return (
+    <div className="flex items-center justify-center h-96">
+      <div className="text-center space-y-2 text-red-600">
+        <p className="text-lg font-semibold">Failed to load scripts</p>
+        <p className="text-sm">{error.message}</p>
+        <Button onClick={() => window.location.reload()} variant="outline">
+          Retry
+        </Button>
+      </div>
+    </div>
+  );
+}
+
   return (
     <div className="space-y-6">
-      
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -421,8 +540,8 @@ print(f"Release: {platform.release()}")`;
         </div>
         <div className="flex items-center space-x-2">
           {/* AI Features */}
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => setIsAIGeneratorOpen(true)}
             className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800 hover:from-blue-100 hover:to-indigo-100"
           >
@@ -430,7 +549,7 @@ print(f"Release: {platform.release()}")`;
             <Sparkles className="w-3 h-3 mr-1 text-yellow-500" />
             AI Generate
           </Button>
-          
+
           <Button variant="outline">
             <Upload className="w-4 h-4 mr-2" />
             Import Script
@@ -441,6 +560,15 @@ print(f"Release: {platform.release()}")`;
           }}>
             <Plus className="w-4 h-4 mr-2" />
             Create Script
+          </Button>
+
+          <Button 
+            variant="outline" 
+            onClick={handleManualRefresh}
+            className="ml-2"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
           </Button>
         </div>
       </div>
@@ -553,17 +681,16 @@ print(f"Release: {platform.release()}")`;
             <div className="space-y-1">
               <button
                 onClick={() => setSelectedCategory("all")}
-                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
-                  selectedCategory === "all" ? "bg-primary/10 text-primary" : ""
-                }`}
+                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${selectedCategory === "all" ? "bg-primary/10 text-primary" : ""
+                  }`}
               >
                 All Scripts ({allScripts.length})
               </button>
-              
+
               {scriptCategories.map((category) => {
                 const Icon = category.icon;
                 const isExpanded = expandedCategories.has(category.name);
-                
+
                 return (
                   <div key={category.name}>
                     <div className="flex items-center">
@@ -583,16 +710,15 @@ print(f"Release: {platform.release()}")`;
                         </span>
                       </button>
                     </div>
-                    
+
                     {isExpanded && (
                       <div className="pl-8 space-y-1">
                         {category.scripts.map((script) => (
                           <button
                             key={script.id}
                             onClick={() => setSelectedCategory(category.name)}
-                            className={`w-full text-left px-2 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors truncate ${
-                              selectedCategory === category.name ? "text-primary" : "text-gray-600 dark:text-gray-400"
-                            }`}
+                            className={`w-full text-left px-2 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors truncate ${selectedCategory === category.name ? "text-primary" : "text-gray-600 dark:text-gray-400"
+                              }`}
                           >
                             {script.name}
                           </button>
@@ -719,7 +845,7 @@ print(f"Release: {platform.release()}")`;
                               <ShoppingCart className="w-4 h-4 mr-2 text-purple-600" />
                               Publish to Marketplace
                             </DropdownMenuItem>
-                            <DropdownMenuItem 
+                            <DropdownMenuItem
                               onClick={() => handleDeleteScript(script)}
                               className="text-red-600 dark:text-red-400"
                             >
@@ -740,19 +866,12 @@ print(f"Release: {platform.release()}")`;
 
       {/* Script Editor Dialog */}
       <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedScript ? `Edit Script: ${selectedScript.name}` : "Create New Script"}
-            </DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-w-6xl h-[90vh] p-0 flex flex-col">
+          {/* Render the editor directly. DO NOT wrap it in another scrollable div. */}
           <ScriptEditor
             script={selectedScript || undefined}
             onSave={handleSaveScript}
-            onCancel={() => {
-              setIsEditorOpen(false);
-              setSelectedScript(null);
-            }}
+            onCancel={() => setIsEditorOpen(false)}
           />
         </DialogContent>
       </Dialog>
@@ -797,8 +916,8 @@ print(f"Release: {platform.release()}")`;
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="publishCategory">Marketplace Category</Label>
-                  <Select 
-                    value={publishForm.marketplaceCategory} 
+                  <Select
+                    value={publishForm.marketplaceCategory}
                     onValueChange={(value) => setPublishForm(prev => ({ ...prev, marketplaceCategory: value }))}
                   >
                     <SelectTrigger>
@@ -817,8 +936,8 @@ print(f"Release: {platform.release()}")`;
 
                 <div>
                   <Label htmlFor="publishPrice">Pricing</Label>
-                  <Select 
-                    value={publishForm.price} 
+                  <Select
+                    value={publishForm.price}
                     onValueChange={(value) => setPublishForm(prev => ({ ...prev, price: value }))}
                   >
                     <SelectTrigger>
@@ -838,8 +957,8 @@ print(f"Release: {platform.release()}")`;
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="publishSupport">Support Level</Label>
-                  <Select 
-                    value={publishForm.supportLevel} 
+                  <Select
+                    value={publishForm.supportLevel}
                     onValueChange={(value) => setPublishForm(prev => ({ ...prev, supportLevel: value }))}
                   >
                     <SelectTrigger>
@@ -920,14 +1039,14 @@ print(f"Release: {platform.release()}")`;
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Script</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete <span className="font-semibold">{scriptToDelete?.name}</span>? 
+              Are you sure you want to delete <span className="font-semibold">{scriptToDelete?.name}</span>?
               This action will inactivate the script and it will no longer appear in the active scripts list.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={confirmDeleteScript}
               className="bg-red-600 hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700"
             >

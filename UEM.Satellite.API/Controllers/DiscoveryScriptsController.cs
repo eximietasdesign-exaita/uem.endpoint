@@ -3,6 +3,8 @@ using UEM.Satellite.API.Data;
 using Dapper;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Npgsql;
+using NpgsqlTypes;
 
 namespace UEM.Satellite.API.Controllers;
 
@@ -20,44 +22,104 @@ public class DiscoveryScriptsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetDiscoveryScripts([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    public async Task<IActionResult> GetDiscoveryScripts([FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
         try
         {
             using var connection = _dbFactory.Open();
             
+            // First check if table exists
+            var tableExists = await connection.QuerySingleOrDefaultAsync<bool>(@"
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'discovery_scripts'
+                );
+            ");
+
+            if (!tableExists)
+            {
+                _logger.LogWarning("Discovery scripts table does not exist");
+                return Ok(new List<object>());
+            }
+
             var offset = (page - 1) * pageSize;
             
-            var scripts = await connection.QueryAsync<DiscoveryScript>(@"
+            // Query all scripts (including recently saved ones)
+            var scripts = await connection.QueryAsync(@"
                 SELECT 
-                    id, name, description, category, type, target_os AS TargetOs, 
-                    template, version, is_active AS IsActive, tags, vendor, complexity,
-                    estimated_run_time_seconds AS EstimatedRunTimeSeconds,
-                    requires_elevation AS RequiresElevation,
-                    requires_network AS RequiresNetwork,
-                    parameters, output_format AS OutputFormat,
-                    output_processing AS OutputProcessing,
-                    credential_requirements AS CredentialRequirements,
-                    industries, compliance_frameworks AS ComplianceFrameworks,
-                    is_standard AS IsStandard, created_at AS CreatedAt, updated_at AS UpdatedAt
+                    id,
+                    name,
+                    description,
+                    category,
+                    type,
+                    target_os,
+                    template,
+                    version,
+                    is_active,
+                    vendor,
+                    complexity,
+                    estimated_run_time_seconds,
+                    requires_elevation,
+                    requires_network,
+                    parameters,
+                    output_format,
+                    output_processing,
+                    credential_requirements,
+                    tags,
+                    industries,
+                    compliance_frameworks,
+                    is_standard,
+                    created_at,
+                    updated_at
                 FROM discovery_scripts 
                 WHERE is_active = TRUE 
                 ORDER BY created_at DESC 
                 LIMIT @PageSize OFFSET @Offset
             ", new { PageSize = pageSize, Offset = offset });
 
-            var total = await connection.QuerySingleAsync<int>(@"
-                SELECT COUNT(*) FROM discovery_scripts WHERE is_active = TRUE
-            ");
+            // Convert to proper response format that matches your frontend interface
+            var discoveryScripts = scripts.Select(s => new
+            {
+                id = s.id,
+                name = s.name ?? "",
+                description = s.description ?? "",
+                category = s.category ?? "System Discovery",
+                type = s.type ?? "powershell",
+                targetOs = s.target_os ?? "windows",
+                template = s.template ?? "",
+                version = s.version ?? "1.0",
+                isActive = s.is_active ?? true,
+                vendor = s.vendor ?? "Custom",
+                complexity = s.complexity ?? "medium",
+                estimatedRunTimeSeconds = s.estimated_run_time_seconds ?? 30,
+                requiresElevation = s.requires_elevation ?? false,
+                requiresNetwork = s.requires_network ?? false,
+                parameters = s.parameters ?? "{}",
+                outputFormat = s.output_format ?? "json",
+                outputProcessing = s.output_processing,
+                credentialRequirements = s.credential_requirements,
+                tags = ConvertToStringArray(s.tags),
+                industries = ConvertToStringArray(s.industries),
+                complianceFrameworks = ConvertToStringArray(s.compliance_frameworks),
+                isStandard = s.is_standard ?? false,
+                createdAt = s.created_at.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                updatedAt = s.updated_at.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                // Optional frontend fields
+                executionCount = 0,
+                isFavorite = false
+            }).ToList();
 
-            _logger.LogInformation("Retrieved {Count} discovery scripts (page {Page})", scripts.Count(), page);
-
-            return Ok(scripts);
+            _logger.LogInformation("Retrieved {Count} discovery scripts", discoveryScripts.Count);
+            return Ok(discoveryScripts);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to retrieve discovery scripts");
-            return StatusCode(500, new { error = "Failed to retrieve discovery scripts" });
+            _logger.LogError(ex, "Failed to retrieve discovery scripts: {Message}", ex.Message);
+            return StatusCode(500, new { 
+                error = "Failed to retrieve discovery scripts", 
+                message = ex.Message
+            });
         }
     }
 
@@ -93,7 +155,7 @@ public class DiscoveryScriptsController : ControllerBase
     {
         try
         {
-            // Validate required fields
+            // Validation
             if (string.IsNullOrWhiteSpace(request.Name))
                 return BadRequest(new { error = "Name is required" });
 
@@ -103,51 +165,71 @@ public class DiscoveryScriptsController : ControllerBase
             using var connection = _dbFactory.Open();
 
             // Check for duplicate name
-            var existingScript = await connection.QuerySingleOrDefaultAsync<int>(@"
+            var existingCount = await connection.QuerySingleOrDefaultAsync<int>(@"
                 SELECT COUNT(*) FROM discovery_scripts 
                 WHERE name = @Name AND is_active = TRUE
             ", new { Name = request.Name });
 
-            if (existingScript > 0)
+            if (existingCount > 0)
             {
                 return BadRequest(new { error = "A script with this name already exists" });
+            }
+
+            // Prepare JSONB values - ensure they're valid JSON strings
+            var parametersJson = string.IsNullOrEmpty(request.Parameters) ? "{}" : request.Parameters;
+            var outputProcessingJson = string.IsNullOrEmpty(request.OutputProcessing) ? "{}" : request.OutputProcessing;
+            var credentialRequirementsJson = string.IsNullOrEmpty(request.CredentialRequirements) ? "{}" : request.CredentialRequirements;
+
+            // Validate JSON strings
+            try
+            {
+                System.Text.Json.JsonDocument.Parse(parametersJson);
+                System.Text.Json.JsonDocument.Parse(outputProcessingJson);
+                System.Text.Json.JsonDocument.Parse(credentialRequirementsJson);
+            }
+            catch (System.Text.Json.JsonException ex)
+            {
+                return BadRequest(new { error = "Invalid JSON format in parameters", details = ex.Message });
             }
 
             var scriptId = await connection.QuerySingleAsync<int>(@"
                 INSERT INTO discovery_scripts (
                     name, description, category, type, target_os, template, version, 
-                    is_active, tags, vendor, complexity, estimated_run_time_seconds, 
+                    is_active, vendor, complexity, estimated_run_time_seconds, 
                     requires_elevation, requires_network, parameters, output_format, 
-                    output_processing, credential_requirements, industries, 
+                    output_processing, credential_requirements, tags, industries, 
                     compliance_frameworks, is_standard, created_at, updated_at
                 ) VALUES (
                     @Name, @Description, @Category, @Type, @TargetOs, @Template, @Version, 
-                    @IsActive, @Tags, @Vendor, @Complexity, @EstimatedRunTimeSeconds, 
-                    @RequiresElevation, @RequiresNetwork, @Parameters, @OutputFormat, 
-                    @OutputProcessing, @CredentialRequirements, @Industries, 
-                    @ComplianceFrameworks, @IsStandard, @CreatedAt, @UpdatedAt
+                    @IsActive, @Vendor, @Complexity, @EstimatedRunTimeSeconds, 
+                    @RequiresElevation, @RequiresNetwork, 
+                    @Parameters::jsonb, @OutputFormat, 
+                    @OutputProcessing::jsonb, @CredentialRequirements::jsonb, 
+                    @Tags, @Industries, @ComplianceFrameworks, 
+                    @IsStandard, @CreatedAt, @UpdatedAt
                 ) 
                 RETURNING id
             ", new
             {
-                Name = request.Name,
-                Description = request.Description ?? "",
+                Name = request.Name.Trim(),
+                Description = request.Description?.Trim() ?? "",
                 Category = request.Category ?? "System Discovery",
                 Type = request.Type ?? "powershell",
                 TargetOs = request.TargetOs ?? "windows",
-                Template = request.Template,
+                Template = request.Template.Trim(),
                 Version = request.Version ?? "1.0",
                 IsActive = request.IsActive ?? true,
-                Tags = request.Tags ?? new string[0],
                 Vendor = request.Vendor ?? "Custom",
                 Complexity = request.Complexity ?? "medium",
                 EstimatedRunTimeSeconds = request.EstimatedRunTimeSeconds ?? 30,
                 RequiresElevation = request.RequiresElevation ?? false,
                 RequiresNetwork = request.RequiresNetwork ?? false,
-                Parameters = request.Parameters ?? "{}",
+                // Pass as strings and cast to JSONB in SQL using ::jsonb
+                Parameters = parametersJson,
                 OutputFormat = request.OutputFormat ?? "json",
-                OutputProcessing = request.OutputProcessing ?? null,
-                CredentialRequirements = request.CredentialRequirements ?? null,
+                OutputProcessing = outputProcessingJson,
+                CredentialRequirements = credentialRequirementsJson,
+                Tags = request.Tags ?? new string[0],
                 Industries = request.Industries ?? new string[0],
                 ComplianceFrameworks = request.ComplianceFrameworks ?? new string[0],
                 IsStandard = request.IsStandard ?? false,
@@ -157,17 +239,20 @@ public class DiscoveryScriptsController : ControllerBase
 
             _logger.LogInformation("Created discovery script: {ScriptName} (ID: {ScriptId})", request.Name, scriptId);
 
-            // Retrieve and return the created script
-            var createdScript = await connection.QuerySingleAsync<DiscoveryScript>(@"
-                SELECT * FROM discovery_scripts WHERE id = @Id
-            ", new { Id = scriptId });
-
-            return CreatedAtAction(nameof(GetDiscoveryScript), new { id = scriptId }, createdScript);
+            return Ok(new { 
+                id = scriptId, 
+                message = "Script created successfully",
+                name = request.Name 
+            });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create discovery script: {ScriptName}", request.Name);
-            return StatusCode(500, new { error = "Failed to create discovery script" });
+            _logger.LogError(ex, "Failed to create discovery script: {ScriptName} - Error: {Error}", 
+                request?.Name ?? "Unknown", ex.Message);
+            return StatusCode(500, new { 
+                error = "Failed to create discovery script", 
+                details = ex.Message 
+            });
         }
     }
 
@@ -195,6 +280,23 @@ public class DiscoveryScriptsController : ControllerBase
                 return NotFound(new { error = "Discovery script not found" });
             }
 
+            // Prepare JSONB values
+            var parametersJson = string.IsNullOrEmpty(request.Parameters) ? "{}" : request.Parameters;
+            var outputProcessingJson = string.IsNullOrEmpty(request.OutputProcessing) ? "{}" : request.OutputProcessing;
+            var credentialRequirementsJson = string.IsNullOrEmpty(request.CredentialRequirements) ? "{}" : request.CredentialRequirements;
+
+            // Validate JSON strings
+            try
+            {
+                System.Text.Json.JsonDocument.Parse(parametersJson);
+                System.Text.Json.JsonDocument.Parse(outputProcessingJson);
+                System.Text.Json.JsonDocument.Parse(credentialRequirementsJson);
+            }
+            catch (System.Text.Json.JsonException ex)
+            {
+                return BadRequest(new { error = "Invalid JSON format in parameters", details = ex.Message });
+            }
+
             var updateResult = await connection.ExecuteAsync(@"
                 UPDATE discovery_scripts 
                 SET name = @Name, description = @Description, category = @Category, 
@@ -202,8 +304,8 @@ public class DiscoveryScriptsController : ControllerBase
                     version = @Version, is_active = @IsActive, tags = @Tags, vendor = @Vendor, 
                     complexity = @Complexity, estimated_run_time_seconds = @EstimatedRunTimeSeconds, 
                     requires_elevation = @RequiresElevation, requires_network = @RequiresNetwork, 
-                    parameters = @Parameters, output_format = @OutputFormat, 
-                    output_processing = @OutputProcessing, credential_requirements = @CredentialRequirements, 
+                    parameters = @Parameters::jsonb, output_format = @OutputFormat, 
+                    output_processing = @OutputProcessing::jsonb, credential_requirements = @CredentialRequirements::jsonb, 
                     industries = @Industries, compliance_frameworks = @ComplianceFrameworks, 
                     updated_at = @UpdatedAt
                 WHERE id = @Id
@@ -224,35 +326,35 @@ public class DiscoveryScriptsController : ControllerBase
                 EstimatedRunTimeSeconds = request.EstimatedRunTimeSeconds ?? 30,
                 RequiresElevation = request.RequiresElevation ?? false,
                 RequiresNetwork = request.RequiresNetwork ?? false,
-                Parameters = request.Parameters ?? "{}",
+                Parameters = parametersJson,
                 OutputFormat = request.OutputFormat ?? "json",
-                OutputProcessing = request.OutputProcessing ?? null,
-                CredentialRequirements = request.CredentialRequirements ?? null,
+                OutputProcessing = outputProcessingJson,
+                CredentialRequirements = credentialRequirementsJson,
                 Industries = request.Industries ?? new string[0],
                 ComplianceFrameworks = request.ComplianceFrameworks ?? new string[0],
                 UpdatedAt = DateTime.UtcNow
             });
 
-            if (updateResult == 0)
-            {
-                return NotFound(new { error = "Discovery script not found" });
-            }
-
-            _logger.LogInformation("Updated discovery script: {ScriptName} (ID: {ScriptId})", request.Name, id);
-
-            // Retrieve and return the updated script
-            var updatedScript = await connection.QuerySingleAsync<DiscoveryScript>(@"
-                SELECT * FROM discovery_scripts WHERE id = @Id
-            ", new { Id = id });
-
-            return Ok(updatedScript);
-        }
-        catch (Exception ex)
+        if (updateResult == 0)
         {
-            _logger.LogError(ex, "Failed to update discovery script with id {Id}", id);
-            return StatusCode(500, new { error = "Failed to update discovery script" });
+            return NotFound(new { error = "Discovery script not found" });
         }
+
+        _logger.LogInformation("Updated discovery script: {ScriptName} (ID: {ScriptId})", request.Name, id);
+
+        // Retrieve and return the updated script
+        var updatedScript = await connection.QuerySingleAsync<DiscoveryScript>(@"
+            SELECT * FROM discovery_scripts WHERE id = @Id
+        ", new { Id = id });
+
+        return Ok(updatedScript);
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Failed to update discovery script with id {Id}", id);
+        return StatusCode(500, new { error = "Failed to update discovery script" });
+    }
+}
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteScript(int id)
@@ -421,6 +523,36 @@ public class DiscoveryScriptsController : ControllerBase
         }
     }
 
+    [HttpGet("debug/count")]
+    public async Task<IActionResult> GetScriptCount()
+    {
+        try
+        {
+            using var connection = _dbFactory.Open();
+            
+            var totalScripts = await connection.QuerySingleAsync<int>("SELECT COUNT(*) FROM discovery_scripts");
+            var activeScripts = await connection.QuerySingleAsync<int>("SELECT COUNT(*) FROM discovery_scripts WHERE is_active = TRUE");
+            
+            var recentScripts = await connection.QueryAsync(@"
+                SELECT id, name, created_at, is_active 
+                FROM discovery_scripts 
+                ORDER BY created_at DESC 
+                LIMIT 5
+            ");
+
+            return Ok(new {
+                totalScripts,
+                activeScripts,
+                recentScripts,
+                timestamp = DateTime.UtcNow
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     private string ValidateScriptSyntax(string template, string type)
     {
         // Basic syntax validation logic
@@ -518,6 +650,22 @@ public class DiscoveryScriptsController : ControllerBase
                 Timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
             }
         };
+    }
+
+    private string[] ConvertToStringArray(object? field)
+    {
+        if (field == null) return Array.Empty<string>();
+        
+        if (field is string[] stringArray)
+            return stringArray;
+            
+        if (field is string stringValue && !string.IsNullOrEmpty(stringValue))
+            return stringValue.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                              .Select(s => s.Trim())
+                              .Where(s => !string.IsNullOrEmpty(s))
+                              .ToArray();
+            
+        return Array.Empty<string>();
     }
 }
 

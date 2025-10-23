@@ -2,12 +2,12 @@ import React, { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { DomainTenantTree } from "@/components/DomainTenantTree";
-import { 
-  Save, 
-  X, 
-  Play, 
-  Copy, 
-  Download, 
+import {
+  Save,
+  X,
+  Play,
+  Copy,
+  Download,
   Upload,
   Code2,
   FileText,
@@ -52,7 +52,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -124,7 +124,7 @@ const osTargets = [
 
 const categories = [
   'Hardware Discovery',
-  'Software Discovery', 
+  'Software Discovery',
   'Network Discovery',
   'Security Discovery',
   'Services Discovery',
@@ -248,7 +248,7 @@ def main():
 if __name__ == "__main__":
     main()`;
   }
-  
+
   return "// Add your script code here";
 }
 
@@ -258,18 +258,18 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     name: script?.name || '',
     description: script?.description || '',
     category: script?.category || 'System Discovery',
-    type: script?.type || 'powershell',
+    type: (script?.type as 'powershell' | 'bash' | 'python' | 'wmi') || 'powershell',
     os: script?.targetOs || 'windows',
     version: script?.version || '1.0',
     isActive: script?.isActive ?? true,
-    tags: script?.tags?.join(', ') || '',
+    tags: Array.isArray(script?.tags) ? script.tags.join(', ') : (script?.tags || ''),
     vendor: script?.vendor || 'Custom',
     complexity: script?.complexity || 'medium',
     estimatedRunTime: script?.estimatedRunTimeSeconds || 30,
     requiresElevation: script?.requiresElevation || false,
     requiresNetwork: script?.requiresNetwork || false,
-    industries: script?.industries || [],
-    complianceFrameworks: script?.complianceFrameworks || [],
+    industries: Array.isArray(script?.industries) ? script.industries : (script?.industries || []),
+    complianceFrameworks: Array.isArray(script?.complianceFrameworks) ? script.complianceFrameworks : (script?.complianceFrameworks || []),
     code: script?.template || ''
   });
 
@@ -277,7 +277,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     domainId: null,
     tenantId: null
   });
-  
+
   const [activeTab, setActiveTab] = useState<'config' | 'code' | 'processing' | 'test' | 'enterprise'>('config');
   const [isDirty, setIsDirty] = useState(false);
   const [validationResults, setValidationResults] = useState<any[]>([]);
@@ -285,7 +285,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
   const [isValidating, setIsValidating] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
-  
+
   // Enhanced Output Processing Rules
   const [outputRules, setOutputRules] = useState([
     {
@@ -301,7 +301,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     {
       id: 2,
       name: 'Extract Hardware Information',
-      type: 'json_path', 
+      type: 'json_path',
       pattern: '$.Data.Hardware',
       action: 'extract',
       target: 'hardware_info',
@@ -319,20 +319,20 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       priority: 3
     }
   ]);
-  
+
   // Enterprise features state
   const [approvalWorkflow, setApprovalWorkflow] = useState({
     enabled: false,
     approvers: [] as string[],
     requiresTwoApprovals: false
   });
-  
+
   const [versionControl, setVersionControl] = useState({
     enabled: true,
     autoIncrement: true,
     changeDescription: ''
   });
-  
+
   const [auditSettings, setAuditSettings] = useState({
     enabled: true,
     logExecutions: true,
@@ -340,22 +340,26 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
   });
 
   // Fetch available templates
+  // Fix the templates query - missing await
   const { data: templates = [] } = useQuery({
     queryKey: ['/api/discovery-scripts/templates'],
-    queryFn: () => apiRequest('/api/discovery-scripts/templates')
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/discovery-scripts/templates');
+      return response.json();
+    }
   });
-  
+
   // Validation mutation
+  // Fix the validation mutation - missing await and proper response handling
   const validateMutation = useMutation({
-    mutationFn: (scriptId: number) => 
-      apiRequest(`/api/discovery-scripts/${scriptId}/validate`, {
-        method: 'POST',
-        body: JSON.stringify({ 
-          ValidateSyntax: true, 
-          ValidateSecurity: true, 
-          ValidatePerformance: true 
-        })
-      }),
+    mutationFn: async (scriptId: number) => {
+      const response = await apiRequest('POST', `/api/discovery-scripts/${scriptId}/validate`, {
+        ValidateSyntax: true,
+        ValidateSecurity: true,
+        ValidatePerformance: true
+      });
+      return response.json();
+    },
     onSuccess: (data) => {
       setValidationResults(data.Results || []);
       toast({
@@ -364,22 +368,24 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
         variant: data.OverallStatus === 'Pass' ? 'default' : 'destructive'
       });
     },
-    onError: () => {
+    onError: (error) => {
       toast({
         title: "Validation Failed",
-        description: "Unable to validate script. Please try again.",
+        description: error instanceof Error ? error.message : "Unable to validate script. Please try again.",
         variant: "destructive"
       });
     }
   });
-  
-  // Test execution mutation
+
+  // Fix the test mutation - missing await and proper response handling
   const testMutation = useMutation({
-    mutationFn: (scriptId: number) => 
-      apiRequest(`/api/discovery-scripts/${scriptId}/test`, {
-        method: 'POST',
-        body: JSON.stringify({ TestEnvironment: 'sandbox', TimeoutSeconds: 30 })
-      }),
+    mutationFn: async (scriptId: number) => {
+      const response = await apiRequest('POST', `/api/discovery-scripts/${scriptId}/test`, {
+        TestEnvironment: 'sandbox',
+        TimeoutSeconds: 30
+      });
+      return response.json();
+    },
     onSuccess: (data) => {
       setTestResults(data);
       toast({
@@ -388,46 +394,53 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
         variant: data.Status === 'Success' ? 'default' : 'destructive'
       });
     },
-    onError: () => {
+    onError: (error) => {
       toast({
         title: "Test Failed",
-        description: "Unable to execute test. Please try again.",
+        description: error instanceof Error ? error.message : "Unable to execute test. Please try again.",
         variant: "destructive"
       });
     }
   });
-  
+
   useEffect(() => {
     setIsDirty(true);
   }, [formData]);
-  
+
   useEffect(() => {
-    if (templates.length > 0 && !formData.code) {
-      const defaultTemplate = templates.find((t: any) => t.type === formData.type && t.targetOs === formData.os);
-      if (defaultTemplate) {
-        setFormData(prev => ({ ...prev, code: defaultTemplate.template }));
-      }
+    if (!formData.code && formData.type && formData.os) {
+      const boilerplate = getCodeTemplate(formData.type, formData.os);
+      setFormData(prev => ({ ...prev, code: boilerplate }));
     }
-  }, [templates, formData.type, formData.os]);
+  }, [formData.type, formData.os]); // Remove formData.code dependency to prevent infinite loop
 
   const selectedScriptType = scriptTypes.find(t => t.value === formData.type);
   const selectedOS = osTargets.find(o => o.value === formData.os);
   const selectedComplexity = complexityLevels.find(c => c.value === formData.complexity);
-  
+
   const loadTemplate = (template: any) => {
-    setFormData(prev => ({
-      ...prev,
-      code: template.template,
-      category: template.category,
-      type: template.type,
-      os: template.targetOs
-    }));
-    toast({
-      title: "Template Loaded",
-      description: `${template.name} template has been applied.`
-    });
+    try {
+      setFormData(prev => ({
+        ...prev,
+        code: template.template || '',
+        category: template.category || prev.category,
+        type: template.type || prev.type,
+        os: template.targetOs || prev.os
+      }));
+      toast({
+        title: "Template Loaded",
+        description: `${template.name} template has been applied.`
+      });
+    } catch (error) {
+      console.error('Error loading template:', error);
+      toast({
+        title: "Template Load Failed",
+        description: "Failed to load the selected template.",
+        variant: "destructive"
+      });
+    }
   };
-  
+
   const handleValidate = () => {
     if (script?.id) {
       setIsValidating(true);
@@ -442,7 +455,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       });
     }
   };
-  
+
   const handleTest = () => {
     if (script?.id) {
       setIsTesting(true);
@@ -457,7 +470,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       });
     }
   };
-  
+
   const handleCancel = () => {
     if (isDirty) {
       setShowUnsavedChangesDialog(true);
@@ -467,66 +480,55 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
   };
 
   const handleSave = async () => {
-    // Comprehensive validation before save
-    if (!formData.name.trim()) {
-      toast({
-        title: "Validation Error",
-        description: "Script name is required.",
-        variant: "destructive"
-      });
-      return;
+    // Validation
+    if (!formData.name?.trim()) {
+        toast({
+            title: "Validation Error",
+            description: "Script name is required.",
+            variant: "destructive"
+        });
+        return;
     }
-    
-    if (!formData.code.trim()) {
-      toast({
-        title: "Validation Error", 
-        description: "Script code cannot be empty.",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    // Transform form data to match the expected API format
-    const scriptData = {
-      name: formData.name,
-      description: formData.description,
-      category: formData.category,
-      type: formData.type,
-      targetOs: formData.os,
-      template: formData.code,
-      version: formData.version,
-      isActive: formData.isActive,
-      tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0),
-      vendor: formData.vendor,
-      complexity: formData.complexity,
-      estimatedRunTimeSeconds: formData.estimatedRunTime,
-      requiresElevation: formData.requiresElevation,
-      requiresNetwork: formData.requiresNetwork,
-      domainId: domainTenantSelection.domainId,
-      tenantId: domainTenantSelection.tenantId,
-      parameters: JSON.stringify({ outputRules, approvalWorkflow, auditSettings }),
-      outputFormat: "json",
-      outputProcessing: JSON.stringify(outputRules),
-      credentialRequirements: JSON.stringify({}),
-      industries: formData.industries,
-      complianceFrameworks: formData.complianceFrameworks,
-      isStandard: false
+
+    // Construct payload with proper JSON serialization
+    const scriptPayload = {
+        Name: formData.name.trim(),
+        Description: formData.description?.trim() || "",
+        Category: formData.category,
+        Type: formData.type,
+        TargetOs: formData.os,
+        Template: formData.code.trim(),
+        Version: formData.version || "1.0",
+        IsActive: formData.isActive,
+        Tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
+        Industries: Array.isArray(formData.industries) ? formData.industries : [],
+        ComplianceFrameworks: Array.isArray(formData.complianceFrameworks) ? formData.complianceFrameworks : [],
+        Vendor: formData.vendor || "Custom",
+        Complexity: formData.complexity || "medium",
+        EstimatedRunTimeSeconds: parseInt(formData.estimatedRunTime?.toString() || "30") || 30,
+        RequiresElevation: Boolean(formData.requiresElevation),
+        RequiresNetwork: Boolean(formData.requiresNetwork),
+        IsStandard: false,
+        DomainId: domainTenantSelection.domainId || null,
+        TenantId: domainTenantSelection.tenantId || null,
+        
+        // Ensure these are valid JSON strings
+        Parameters: JSON.stringify({
+            outputRules: outputRules || [],
+            approvalWorkflow: approvalWorkflow || {},
+            auditSettings: auditSettings || {}
+        }),
+        OutputFormat: "json",
+        OutputProcessing: JSON.stringify(outputRules || []),
+        CredentialRequirements: JSON.stringify({})
     };
-    
-    console.log('Saving enhanced script:', scriptData);
-    
+
     try {
-      await onSave(scriptData);
-      setIsDirty(false);
+        await onSave(scriptPayload);
     } catch (error) {
-      console.error('Failed to save script:', error);
-      toast({
-        title: "Save Failed",
-        description: error instanceof Error ? error.message : "Failed to save script. Please try again.",
-        variant: "destructive"
-      });
+        console.error("Save error details:", error);
     }
-  };
+};
 
   // Template and code generation utilities
   const applyTemplate = (templateId: string) => {
@@ -535,7 +537,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       loadTemplate(template);
     }
   };
-  
+
   const generateBoilerplate = () => {
     const boilerplate = getCodeTemplate(formData.type, formData.os);
     setFormData(prev => ({ ...prev, code: boilerplate }));
@@ -546,7 +548,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
   };
 
   const updateOutputRule = (ruleId: number, updates: any) => {
-    setOutputRules(prev => prev.map(rule => 
+    setOutputRules(prev => prev.map(rule =>
       rule.id === ruleId ? { ...rule, ...updates } : rule
     ));
   };
@@ -579,8 +581,8 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
   };
 
   return (
-    <div className="flex flex-col bg-white dark:bg-gray-950">
-      {/* Header */}
+    <div className="flex flex-col bg-white dark:bg-gray-950 h-full">
+      {/* Header (flex-shrink-0 is correct, it prevents this div from shrinking) */}
       <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
@@ -593,7 +595,6 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
             </div>
           </div>
         </div>
-        
         <div className="flex items-center space-x-2">
           {isDirty && (
             <Badge variant="secondary" className="text-xs">
@@ -601,9 +602,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
               Unsaved Changes
             </Badge>
           )}
-          <Badge variant="outline">
-            v{formData.version}
-          </Badge>
+          <Badge variant="outline">v{formData.version}</Badge>
         </div>
       </div>
 
@@ -611,55 +610,50 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       <div className="flex border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex-shrink-0">
         <button
           onClick={() => setActiveTab('config')}
-          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'config'
-              ? 'border-primary text-primary bg-white dark:bg-gray-950'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
+          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'config'
+            ? 'border-primary text-primary bg-white dark:bg-gray-950'
+            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
         >
           <Settings className="w-4 h-4 inline mr-2" />
           Configuration
         </button>
         <button
           onClick={() => setActiveTab('code')}
-          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'code'
-              ? 'border-primary text-primary bg-white dark:bg-gray-950'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
+          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'code'
+            ? 'border-primary text-primary bg-white dark:bg-gray-950'
+            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
         >
           <Code2 className="w-4 h-4 inline mr-2" />
           Script Code
         </button>
         <button
           onClick={() => setActiveTab('processing')}
-          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'processing'
-              ? 'border-primary text-primary bg-white dark:bg-gray-950'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
+          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'processing'
+            ? 'border-primary text-primary bg-white dark:bg-gray-950'
+            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
         >
           <Zap className="w-4 h-4 inline mr-2" />
           Output Processing
         </button>
         <button
           onClick={() => setActiveTab('test')}
-          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'test'
-              ? 'border-primary text-primary bg-white dark:bg-gray-950'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
+          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'test'
+            ? 'border-primary text-primary bg-white dark:bg-gray-950'
+            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
         >
           <Play className="w-4 h-4 inline mr-2" />
           Test & Validate
         </button>
         <button
           onClick={() => setActiveTab('enterprise')}
-          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'enterprise'
-              ? 'border-primary text-primary bg-white dark:bg-gray-950'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
+          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'enterprise'
+            ? 'border-primary text-primary bg-white dark:bg-gray-950'
+            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
         >
           <Sparkles className="w-4 h-4 inline mr-2" />
           Enterprise Features
@@ -667,7 +661,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       </div>
 
       {/* Tab Content */}
-      <div className="overflow-y-auto p-6 max-h-[calc(85vh-200px)]">
+      <div className="flex-1 overflow-y-auto p-6">
         {activeTab === 'config' && (
           <div className="space-y-8 max-w-4xl">
             {/* Basic Information */}
@@ -690,7 +684,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                       required
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="version">Version</Label>
                     <Input
@@ -701,7 +695,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="description">Description</Label>
                   <Textarea
@@ -727,7 +721,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="type">Script Type</Label>
-                    <Select value={formData.type} onValueChange={(value) => setFormData(prev => ({ ...prev, type: value }))}>
+                    <Select value={formData.type} onValueChange={(value: 'powershell' | 'bash' | 'python' | 'wmi') => setFormData(prev => ({ ...prev, type: value }))}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -794,7 +788,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="vendor">Vendor</Label>
                     <Input
@@ -804,7 +798,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                       placeholder="Custom, Microsoft, etc."
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="complexity">Complexity Level</Label>
                     <Select value={formData.complexity} onValueChange={(value) => setFormData(prev => ({ ...prev, complexity: value }))}>
@@ -826,16 +820,16 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                     </Select>
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="domainTenant">Domain & Tenant Selection</Label>
-                  <DomainTenantTree 
+                  <DomainTenantTree
                     value={domainTenantSelection}
                     onChange={setDomainTenantSelection}
                   />
                   {domainTenantSelection.domainId && (
                     <p className="text-xs text-gray-500 mt-1">
-                      {domainTenantSelection.tenantId 
+                      {domainTenantSelection.tenantId
                         ? `Selected: Domain ID ${domainTenantSelection.domainId}, Tenant ID ${domainTenantSelection.tenantId}`
                         : `Selected: Domain ID ${domainTenantSelection.domainId} (All Tenants)`
                       }
@@ -853,7 +847,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                       placeholder="windows, discovery, system, enterprise"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="runtime">Estimated Runtime (seconds)</Label>
                     <Input
@@ -866,7 +860,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                     />
                   </div>
                 </div>
-                
+
                 {/* Multi-select for industries and compliance */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
@@ -889,7 +883,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                       ))}
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>Compliance Frameworks</Label>
                     <div className="flex flex-wrap gap-2 p-3 border rounded-md">
@@ -930,7 +924,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                         />
                         <Label htmlFor="active">Active Script</Label>
                       </div>
-                      
+
                       <div className="flex items-center space-x-2">
                         <Switch
                           id="elevation"
@@ -939,7 +933,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                         />
                         <Label htmlFor="elevation">Requires Elevation</Label>
                       </div>
-                      
+
                       <div className="flex items-center space-x-2">
                         <Switch
                           id="network"
@@ -982,19 +976,19 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                
+
                 <Button variant="outline" size="sm">
                   <Upload className="w-4 h-4 mr-2" />
                   Import
                 </Button>
-                
+
                 <Button variant="outline" size="sm">
                   <Download className="w-4 h-4 mr-2" />
                   Export
                 </Button>
               </div>
             </div>
-            
+
             {/* Template Selection */}
             {templates.length > 0 && (
               <Card>
@@ -1027,7 +1021,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 </CardContent>
               </Card>
             )}
-            
+
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="script-code">Script Code</Label>
@@ -1045,7 +1039,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 placeholder="Enter your script code here..."
               />
             </div>
-            
+
             {/* Enhanced Tips */}
             <Card>
               <CardHeader>
@@ -1115,11 +1109,11 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                             className="text-sm"
                           />
                         </div>
-                        
+
                         <div className="space-y-2">
                           <Label>Type</Label>
-                          <Select 
-                            value={rule.type} 
+                          <Select
+                            value={rule.type}
                             onValueChange={(value) => updateOutputRule(rule.id, { type: value })}
                           >
                             <SelectTrigger className="text-sm">
@@ -1132,7 +1126,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                             </SelectContent>
                           </Select>
                         </div>
-                        
+
                         <div className="space-y-2">
                           <Label>Pattern</Label>
                           <Input
@@ -1142,7 +1136,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                             placeholder={rule.type === 'json_path' ? '$.Data.Field' : rule.type === 'regex' ? '\\d+' : 'transform'}
                           />
                         </div>
-                        
+
                         <div className="space-y-2">
                           <Label>Target Field</Label>
                           <Input
@@ -1153,7 +1147,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                           />
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center space-x-2 ml-4">
                         <Switch
                           checked={rule.enabled}
@@ -1217,7 +1211,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 )}
               </div>
             </div>
-            
+
             {/* Validation Results */}
             {validationResults.length > 0 && (
               <Card>
@@ -1232,13 +1226,12 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                     {validationResults.map((result, index) => {
                       const isPass = result.Status === 'Pass';
                       const isWarning = result.Status === 'Warning';
-                      
+
                       return (
-                        <div key={index} className={`flex items-center justify-between p-4 rounded-lg border ${
-                          isPass ? 'bg-green-50 border-green-200' : 
-                          isWarning ? 'bg-yellow-50 border-yellow-200' : 
-                          'bg-red-50 border-red-200'
-                        }`}>
+                        <div key={index} className={`flex items-center justify-between p-4 rounded-lg border ${isPass ? 'bg-green-50 border-green-200' :
+                          isWarning ? 'bg-yellow-50 border-yellow-200' :
+                            'bg-red-50 border-red-200'
+                          }`}>
                           <div className="flex items-center space-x-3">
                             {isPass ? (
                               <CheckCircle className="w-5 h-5 text-green-500" />
@@ -1262,7 +1255,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 </CardContent>
               </Card>
             )}
-            
+
             {/* Test Execution Results */}
             {testResults && (
               <Card>
@@ -1290,7 +1283,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                         {new Date(testResults.TestedAt).toLocaleString()}
                       </div>
                     </div>
-                    
+
                     <div>
                       <Label>Script Output</Label>
                       <Textarea
@@ -1299,7 +1292,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                         className="font-mono text-sm min-h-32 bg-gray-50 dark:bg-gray-800 mt-2"
                       />
                     </div>
-                    
+
                     {testResults.Warnings?.length > 0 && (
                       <div>
                         <Label className="text-yellow-600">Warnings</Label>
@@ -1310,7 +1303,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                         </ul>
                       </div>
                     )}
-                    
+
                     {testResults.Errors?.length > 0 && (
                       <div>
                         <Label className="text-red-600">Errors</Label>
@@ -1327,7 +1320,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
             )}
           </div>
         )}
-        
+
         {activeTab === 'enterprise' && (
           <div className="space-y-6 max-w-4xl">
             {/* Version Control */}
@@ -1364,7 +1357,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 </div>
               </CardContent>
             </Card>
-            
+
             {/* Approval Workflow */}
             <Card>
               <CardHeader>
@@ -1405,7 +1398,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 )}
               </CardContent>
             </Card>
-            
+
             {/* Audit & Monitoring */}
             <Card>
               <CardHeader>
@@ -1438,7 +1431,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 </div>
               </CardContent>
             </Card>
-            
+
             {/* Performance Analytics */}
             <Card>
               <CardHeader>
@@ -1478,7 +1471,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
             <X className="w-4 h-4 mr-2" />
             Cancel
           </Button>
-          
+
           {isDirty && (
             <Badge variant="secondary" className="text-xs">
               <AlertTriangle className="w-3 h-3 mr-1" />
@@ -1486,12 +1479,12 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
             </Badge>
           )}
         </div>
-        
+
         <div className="flex space-x-2">
           {script?.id && (
             <>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={handleValidate}
                 disabled={isValidating}
               >
@@ -1502,9 +1495,9 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 )}
                 Validate
               </Button>
-              
-              <Button 
-                variant="outline" 
+
+              <Button
+                variant="outline"
                 onClick={handleTest}
                 disabled={isTesting}
               >
@@ -1517,14 +1510,14 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
               </Button>
             </>
           )}
-          
+
           <Button onClick={handleSave} className="bg-primary hover:bg-primary/90">
             <Save className="w-4 h-4 mr-2" />
             Save Script
           </Button>
         </div>
       </div>
-      
+
       {/* Unsaved Changes Dialog */}
       <AlertDialog open={showUnsavedChangesDialog} onOpenChange={setShowUnsavedChangesDialog}>
         <AlertDialogContent>
