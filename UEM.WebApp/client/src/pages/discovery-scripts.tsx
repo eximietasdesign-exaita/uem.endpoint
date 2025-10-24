@@ -114,6 +114,55 @@ interface DiscoveryScript {
   isFavorite?: boolean;
 }
 
+// format the timestamp to human readable format for the indian time
+const formatIndianTime = (dateString: string) => {
+  if (!dateString) return 'Never';
+  
+  try {
+    const date = new Date(dateString);
+    
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+      return 'Invalid date';
+    }
+    
+    // Format to Indian Standard Time (IST)
+    const options: Intl.DateTimeFormatOptions = {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    };
+    
+    const istDate = new Intl.DateTimeFormat('en-IN', options).format(date);
+    
+    // Calculate relative time for recent dates
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffMinutes < 1) {
+      return 'Just now';
+    } else if (diffMinutes < 60) {
+      return `${diffMinutes} min ago`;
+    } else if (diffHours < 24) {
+      return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    } else if (diffDays < 7) {
+      return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    } else {
+      return istDate;
+    }
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Invalid date';
+  }
+};
+
 
 
 export default function DiscoveryScriptsPage() {
@@ -805,9 +854,18 @@ if (error) {
                         <span className="text-sm">{script.executionCount || 0}</span>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm text-gray-500">
-                          {script.updatedAt}
-                        </span>
+                        <div className="flex flex-col">
+                          <span className="text-sm text-gray-900 dark:text-gray-100">
+                            {formatIndianTime(script.updatedAt)}
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400" title={script.updatedAt}>
+                            {script.updatedAt && new Date(script.updatedAt).toLocaleString('en-IN', {
+                              timeZone: 'Asia/Kolkata',
+                              dateStyle: 'short',
+                              timeStyle: 'short'
+                            })}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
