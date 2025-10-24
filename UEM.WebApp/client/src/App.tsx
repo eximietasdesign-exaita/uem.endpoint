@@ -45,8 +45,24 @@ import { cn } from "@/lib/utils";
 
 function AppContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('sidebar-collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const { t } = useLanguage();
+
+  const handleToggleCollapse = () => {
+    const newCollapsed = !isSidebarCollapsed;
+    setIsSidebarCollapsed(newCollapsed);
+    try {
+      localStorage.setItem('sidebar-collapsed', String(newCollapsed));
+    } catch (error) {
+      console.warn('Failed to save sidebar state:', error);
+    }
+  };
 
   const getPageInfo = (pathname?: string) => {
     if (!pathname) return { title: "Loading...", subtitle: "Please wait" };
@@ -87,12 +103,12 @@ function AppContent() {
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)}
         isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        onToggleCollapse={handleToggleCollapse}
       />
       
       <div className={cn(
         "flex-1 flex flex-col overflow-hidden transition-all duration-300",
-        isSidebarCollapsed ? "lg:ml-16" : "lg:ml-64"
+        isSidebarCollapsed ? "lg:ml-16" : "lg:ml-80"
       )}>
         <EnterpriseTopHeader setIsSidebarOpen={setIsSidebarOpen} />
         
@@ -111,7 +127,7 @@ function AppContent() {
             <Route path="/discovery-scripts-marketplace" component={DiscoveryScriptsMarketplacePage} />
             <Route path="/script-policies" component={ScriptPoliciesPage} />
             <Route path="/discovery-probes" component={DiscoveryProbesPage} />
-            <Route path="/satellite-job-queue" component={SatelliteJobQueuePage} />
+            <Route path="/satellite-job-queue" component={(routeProps) => <SatelliteJobQueuePage {...(routeProps as any)} />} />
             <Route path="/credential-profiles" component={EnterpriseCredentialProfilesPage} />
             <Route path="/external-integrations" component={ExternalIntegrationsPage} />
             <Route path="/domain-management" component={DomainManagementPage} />

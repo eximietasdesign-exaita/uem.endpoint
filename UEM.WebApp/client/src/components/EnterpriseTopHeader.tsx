@@ -66,6 +66,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useDomainTenant } from '@/contexts/DomainTenantContext';
 import { DomainTenantTree } from '@/components/DomainTenantTree';
+import { DomainTenantSearch } from '@/components/ui/domain-tenant-search';
 import { cn } from '@/lib/utils';
 
 interface EnterpriseTopHeaderProps {
@@ -287,7 +288,7 @@ const getTenantsForDomain = (domainId: number | null) => {
                 </Button>
               </PopoverTrigger>
               <PopoverContent 
-                className="w-[400px] p-0" 
+                className="w-[500px] p-0" 
                 align="start"
                 sideOffset={8}
               >
@@ -296,28 +297,61 @@ const getTenantsForDomain = (domainId: number | null) => {
                     Domain & Tenant Selection
                   </h3>
                   <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
-                    Select your operational context
+                    Search and select your operational context
                   </p>
                 </div>
-                <div className="p-3 max-h-[400px] overflow-y-auto">
-                  <DomainTenantTree
-                    value={{
-                      domainId: selectedDomain?.id || null,
-                      tenantId: selectedTenant?.id || null
+                
+                <div className="p-4 space-y-4">
+                  {/* Domain-Tenant Search Component */}
+                  <DomainTenantSearch
+                    domains={domains}
+                    tenants={tenants}
+                    selectedDomainId={selectedDomain?.id || null}
+                    selectedTenantId={selectedTenant?.id || null}
+                    onSelect={(value) => {
+                      handleDomainTenantChange(value);
                     }}
-                    onChange={handleDomainTenantChange}
                   />
+
+                  {/* Divider */}
+                  <div className="border-t border-gray-200 dark:border-gray-700 my-4" />
+
+                  {/* Original Tree View (fallback for browsing) */}
+                  <div className="space-y-2">
+                    <div className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Browse Hierarchy
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto">
+                      <DomainTenantTree
+                        value={{
+                          domainId: selectedDomain?.id || null,
+                          tenantId: selectedTenant?.id || null
+                        }}
+                        onChange={handleDomainTenantChange}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="border-t bg-gray-50 dark:bg-gray-900 px-4 py-2 flex items-center justify-between">
+
+                <div className="border-t bg-gray-50 dark:bg-gray-900 px-4 py-3 flex items-center justify-between">
                   <span className="text-xs text-gray-600 dark:text-gray-400">
                     {selectedDomain && selectedTenant ? (
-                      <>Viewing: <span className="font-medium">{(selectedDomain as any).displayname || selectedDomain.displayName} / {(selectedTenant as any).displayname || selectedTenant.displayName}</span></>
+                      <><span className="font-medium">{(selectedDomain as any).displayname || selectedDomain.displayName} / {(selectedTenant as any).displayname || selectedTenant.displayName}</span></>
                     ) : selectedDomain ? (
-                      <>Viewing: <span className="font-medium">{(selectedDomain as any).displayname || selectedDomain.displayName} (All Tenants)</span></>
+                      <><span className="font-medium">{(selectedDomain as any).displayname || selectedDomain.displayName} (All Tenants)</span></>
                     ) : (
-                      'No selection'
+                      'No selection - viewing all domains'
                     )}
                   </span>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="outline" className="text-xs">
+                      {domains.length} Domains
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {tenants.length} Tenants
+                    </Badge>
+                  </div>
                 </div>
               </PopoverContent>
             </Popover>
