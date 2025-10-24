@@ -273,9 +273,39 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     code: script?.template || ''
   });
 
-  const [domainTenantSelection, setDomainTenantSelection] = useState<{ domainId: number | null; tenantId: number | null }>({
-    domainId: null,
-    tenantId: null
+  // Fix: Initialize domain/tenant selection from existing script data
+  const [domainTenantSelection, setDomainTenantSelection] = useState<{ domainId: number | null; tenantId: number | null }>(() => {
+    if (script) {
+      try {
+        // Try to get domain/tenant selection from the script's parameters
+        if (script.parameters) {
+          const params = typeof script.parameters === 'string'
+            ? JSON.parse(script.parameters)
+            : script.parameters;
+
+          if (params.domainTenantSelection) {
+            return {
+              domainId: params.domainTenantSelection.domainId || null,
+              tenantId: params.domainTenantSelection.tenantId || null
+            };
+          }
+        }
+
+        // Fallback to direct fields if they exist on the script object
+        return {
+          domainId: (script as any).domainId || null,
+          tenantId: (script as any).tenantId || null
+        };
+      } catch (error) {
+        console.warn('Failed to parse domain/tenant selection from script:', error);
+      }
+    }
+
+    // Default to no selection for new scripts
+    return {
+      domainId: null,
+      tenantId: null
+    };
   });
 
   const [activeTab, setActiveTab] = useState<'config' | 'code' | 'processing' | 'test' | 'enterprise'>('config');
@@ -287,38 +317,42 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
   const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
 
   // Enhanced Output Processing Rules
-  const [outputRules, setOutputRules] = useState([
-    {
-      id: 1,
-      name: 'Extract System Information',
-      type: 'json_path',
-      pattern: '$.Data.System',
-      action: 'extract',
-      target: 'system_info',
-      enabled: true,
-      priority: 1
-    },
-    {
-      id: 2,
-      name: 'Extract Hardware Information',
-      type: 'json_path',
-      pattern: '$.Data.Hardware',
-      action: 'extract',
-      target: 'hardware_info',
-      enabled: true,
-      priority: 2
-    },
-    {
-      id: 3,
-      name: 'Process Memory Values',
-      type: 'transform',
-      pattern: 'TotalMemoryGB',
-      action: 'convert_to_mb',
-      target: 'memory_mb',
-      enabled: true,
-      priority: 3
+  interface OutputRule {
+    id: number;
+    name: string;
+    type: 'json_path' | 'regex' | 'transform' | string;
+    pattern: string;
+    action?: string;
+    target: string;
+    enabled: boolean;
+    priority?: number;
+    [key: string]: any;
+  }
+
+  const [outputRules, setOutputRules] = useState<OutputRule[]>(() => {
+    if (script) {
+      try {
+        // First try to parse from the dedicated outputProcessing field
+        if (script.outputProcessing) {
+          const rules = typeof script.outputProcessing === 'string'
+            ? JSON.parse(script.outputProcessing)
+            : script.outputProcessing;
+          if (Array.isArray(rules) && rules.length > 0) return rules as OutputRule[];
+        }
+        // Fallback to the parameters field for older scripts
+        if (script.parameters) {
+          const params = JSON.parse(script.parameters);
+          if (Array.isArray(params.outputRules) && params.outputRules.length > 0) {
+            return params.outputRules as OutputRule[];
+          }
+        }
+      } catch (error) {
+        console.warn("Could not parse existing output rules.", error);
+      }
     }
-  ]);
+    // Return default rules if creating a new script or if parsing fails
+    return [{ id: 1, name: 'Default Rule', type: 'json_path', pattern: '$.Data', action: 'extract', target: 'default_output', enabled: true, priority: 1 }];
+  });
 
   // Enterprise features state
   const [approvalWorkflow, setApprovalWorkflow] = useState({
@@ -339,6 +373,10 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     logChanges: true
   });
 
+  const selectedScriptType = scriptTypes.find(t => t.value === formData.type);
+  const selectedOS = osTargets.find(o => o.value === formData.os);
+  const selectedComplexity = complexityLevels.find(c => c.value === formData.complexity);
+
   // Fetch available templates
   // Fix the templates query - missing await
   const { data: templates = [] } = useQuery({
@@ -349,8 +387,8 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     }
   });
 
-  // Validation mutation
-  // Fix the validation mutation - missing await and proper response handling
+
+  // Update the validation mutation in ScriptEditor.tsx
   const validateMutation = useMutation({
     mutationFn: async (scriptId: number) => {
       const response = await apiRequest('POST', `/api/discovery-scripts/${scriptId}/validate`, {
@@ -361,14 +399,52 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       return response.json();
     },
     onSuccess: (data) => {
-      setValidationResults(data.Results || []);
+      console.log('Validation response:', data); // Debug log to see actual structure
+
+      // Handle different possible response structures
+      let overallStatus = 'Unknown';
+      let results = [];
+
+      if (data) {
+        overallStatus = data.OverallStatus ||
+          data.overallStatus ||
+          data.Status ||
+          data.status ||
+          (typeof data.IsValid === 'boolean' ? (data.IsValid ? 'Pass' : 'Fail') : undefined) ||
+          'Unknown';
+
+        // Try different possible property names for results
+        results = data.Results ||
+          data.results ||
+          data.ValidationResults ||
+          data.validationResults ||
+          [];
+
+        // If no explicit overall status, derive it from results
+        if (overallStatus === 'Unknown' && Array.isArray(results)) {
+          const hasErrors = results.some(r => r.Status === 'Fail' || r.status === 'Fail' || r.Status === 'Error' || r.status === 'Error');
+          const hasWarnings = results.some(r => r.Status === 'Warning' || r.status === 'Warning');
+
+          if (hasErrors) {
+            overallStatus = 'Fail';
+          } else if (hasWarnings) {
+            overallStatus = 'Warning';
+          } else if (results.length > 0) {
+            overallStatus = 'Pass';
+          }
+        }
+      }
+
+      setValidationResults(results);
+
       toast({
         title: "Validation Complete",
-        description: `Overall status: ${data.OverallStatus}`,
-        variant: data.OverallStatus === 'Pass' ? 'default' : 'destructive'
+        description: `Overall status: ${overallStatus}`,
+        variant: overallStatus === 'Pass' ? 'default' : 'destructive'
       });
     },
     onError: (error) => {
+      console.error('Validation error:', error);
       toast({
         title: "Validation Failed",
         description: error instanceof Error ? error.message : "Unable to validate script. Please try again.",
@@ -377,7 +453,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     }
   });
 
-  // Fix the test mutation - missing await and proper response handling
+  // Also update the test mutation for consistency
   const testMutation = useMutation({
     mutationFn: async (scriptId: number) => {
       const response = await apiRequest('POST', `/api/discovery-scripts/${scriptId}/test`, {
@@ -387,14 +463,29 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       return response.json();
     },
     onSuccess: (data) => {
+      console.log('Test response:', data); // Debug log to see actual structure
+
+      // Handle different possible response structures
+      let status = 'Unknown';
+      if (data) {
+        status = data.Status ||
+          data.status ||
+          data.ExecutionStatus ||
+          data.executionStatus ||
+          (data.Success ? 'Success' : 'Failed') ||
+          'Unknown';
+      }
+
       setTestResults(data);
+
       toast({
         title: "Test Complete",
-        description: `Execution status: ${data.Status}`,
-        variant: data.Status === 'Success' ? 'default' : 'destructive'
+        description: `Execution status: ${status}`,
+        variant: status === 'Success' ? 'default' : 'destructive'
       });
     },
     onError: (error) => {
+      console.error('Test error:', error);
       toast({
         title: "Test Failed",
         description: error instanceof Error ? error.message : "Unable to execute test. Please try again.",
@@ -405,7 +496,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
 
   useEffect(() => {
     setIsDirty(true);
-  }, [formData]);
+  }, [formData, outputRules]);
 
   useEffect(() => {
     if (!formData.code && formData.type && formData.os) {
@@ -413,10 +504,6 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       setFormData(prev => ({ ...prev, code: boilerplate }));
     }
   }, [formData.type, formData.os]); // Remove formData.code dependency to prevent infinite loop
-
-  const selectedScriptType = scriptTypes.find(t => t.value === formData.type);
-  const selectedOS = osTargets.find(o => o.value === formData.os);
-  const selectedComplexity = complexityLevels.find(c => c.value === formData.complexity);
 
   const loadTemplate = (template: any) => {
     try {
@@ -479,64 +566,181 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     }
   };
 
-  const handleSave = async () => {
-    // Validation
-    if (!formData.name?.trim()) {
-        toast({
-            title: "Validation Error",
-            description: "Script name is required.",
-            variant: "destructive"
-        });
-        return;
+  // Enhanced rule management functions
+  const updateOutputRule = (ruleId: number, updates: any) => {
+    setOutputRules(prev => prev.map(rule =>
+      rule.id === ruleId ? { ...rule, ...updates } : rule
+    ));
+    setIsDirty(true); // Mark as dirty when rules change
+  };
+
+  const addOutputRule = () => {
+    const newRule = {
+      id: Math.max(...outputRules.map(r => r.id), 0) + 1,
+      name: `Rule ${outputRules.length + 1}`,
+      type: 'json_path',
+      pattern: '$.Data',
+      action: 'extract',
+      target: `output_field_${outputRules.length + 1}`,
+      enabled: true,
+      priority: outputRules.length + 1
+    };
+    setOutputRules(prev => [...prev, newRule]);
+    setIsDirty(true); // Mark as dirty when adding rules
+
+    toast({
+      title: "Rule Added",
+      description: "New output processing rule added. Don't forget to save your changes."
+    });
+  };
+
+  const removeOutputRule = (ruleId: number) => {
+    setOutputRules(prev => prev.filter(rule => rule.id !== ruleId));
+    setIsDirty(true); // Mark as dirty when removing rules
+
+    toast({
+      title: "Rule Removed",
+      description: "Output processing rule removed. Don't forget to save your changes."
+    });
+  };
+
+  const validateRules = () => {
+    const invalidRules = outputRules.filter(rule =>
+      !rule.name?.trim() ||
+      !rule.pattern?.trim() ||
+      !rule.target?.trim()
+    );
+
+    if (invalidRules.length > 0) {
+      toast({
+        title: "Validation Failed",
+        description: `${invalidRules.length} rule(s) have missing required fields.`,
+        variant: "destructive"
+      });
+      return false;
     }
 
-    // Construct payload with proper JSON serialization
+    toast({
+      title: "Rules Validated",
+      description: "All output processing rules are valid."
+    });
+    return true;
+  };
+
+  const handleSave = async () => {
+    if (!formData.name?.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Script name is required.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!formData.code?.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Script code cannot be empty.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validate output rules
+    const validRules = outputRules.filter(rule =>
+      rule.name?.trim() &&
+      rule.pattern?.trim() &&
+      rule.target?.trim()
+    );
+
+    if (outputRules.length > 0 && validRules.length === 0) {
+      toast({
+        title: "Validation Error",
+        description: "Please complete or remove invalid output processing rules.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    console.log('Saving script with output rules and domain/tenant selection:', {
+      validRules,
+      domainTenantSelection
+    });
+
     const scriptPayload = {
-        Name: formData.name.trim(),
-        Description: formData.description?.trim() || "",
-        Category: formData.category,
-        Type: formData.type,
-        TargetOs: formData.os,
-        Template: formData.code.trim(),
-        Version: formData.version || "1.0",
-        IsActive: formData.isActive,
-        Tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
-        Industries: Array.isArray(formData.industries) ? formData.industries : [],
-        ComplianceFrameworks: Array.isArray(formData.complianceFrameworks) ? formData.complianceFrameworks : [],
-        Vendor: formData.vendor || "Custom",
-        Complexity: formData.complexity || "medium",
-        EstimatedRunTimeSeconds: parseInt(formData.estimatedRunTime?.toString() || "30") || 30,
-        RequiresElevation: Boolean(formData.requiresElevation),
-        RequiresNetwork: Boolean(formData.requiresNetwork),
-        IsStandard: false,
-        DomainId: domainTenantSelection.domainId || null,
-        TenantId: domainTenantSelection.tenantId || null,
-        
-        // Ensure these are valid JSON strings
-        Parameters: JSON.stringify({
-            outputRules: outputRules || [],
-            approvalWorkflow: approvalWorkflow || {},
-            auditSettings: auditSettings || {}
-        }),
-        OutputFormat: "json",
-        OutputProcessing: JSON.stringify(outputRules || []),
-        CredentialRequirements: JSON.stringify({})
+      Name: formData.name.trim(),
+      Description: formData.description?.trim() || "",
+      Category: formData.category,
+      Type: formData.type,
+      TargetOs: formData.os,
+      Template: formData.code.trim(),
+      Version: formData.version || "1.0",
+      IsActive: formData.isActive,
+      Tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
+      Industries: formData.industries || [],
+      ComplianceFrameworks: formData.complianceFrameworks || [],
+      Vendor: formData.vendor || "Custom",
+      Complexity: formData.complexity || "medium",
+      EstimatedRunTimeSeconds: parseInt(formData.estimatedRunTime.toString()) || 30,
+      RequiresElevation: formData.requiresElevation,
+      RequiresNetwork: formData.requiresNetwork,
+      IsStandard: false,
+      DomainId: domainTenantSelection.domainId,
+      TenantId: domainTenantSelection.tenantId,
+
+      // Enhanced parameters with proper domain/tenant selection persistence
+      Parameters: JSON.stringify({
+        outputRules: validRules,
+        approvalWorkflow: approvalWorkflow,
+        auditSettings: auditSettings,
+        versionControl: versionControl,
+        domainTenantSelection: domainTenantSelection // Add this line to persist selection
+      }),
+
+      // Save output processing rules in both fields for compatibility
+      OutputFormat: "json",
+      OutputProcessing: JSON.stringify(validRules),
+      CredentialRequirements: JSON.stringify({})
     };
 
-    try {
-        await onSave(scriptPayload);
-    } catch (error) {
-        console.error("Save error details:", error);
-    }
-};
+    // If updating, add the ID to the payload
+    const finalPayload = script?.id ? { ...scriptPayload, Id: script.id } : scriptPayload;
 
-  // Template and code generation utilities
-  const applyTemplate = (templateId: string) => {
-    const template = templates.find((t: any) => t.id === templateId);
-    if (template) {
-      loadTemplate(template);
+    console.log('Final payload being sent to API:', finalPayload);
+
+    try {
+      await onSave(finalPayload);
+      setIsDirty(false);
+
+      toast({
+        title: "Script Saved",
+        description: `Script saved successfully with ${validRules.length} output processing rules${domainTenantSelection.domainId ? ` for domain ${domainTenantSelection.domainId}` : ''
+          }${domainTenantSelection.tenantId ? ` and tenant ${domainTenantSelection.tenantId}` : ''}.`,
+      });
+    } catch (error) {
+      console.error("Save error details:", error);
+      toast({
+        title: "Save Failed",
+        description: "Failed to save script. Please check the console for details.",
+        variant: "destructive"
+      });
     }
   };
+
+  // Add debugging effect to track domain/tenant selection changes
+  useEffect(() => {
+    console.log('Domain/Tenant selection changed:', domainTenantSelection);
+    setIsDirty(true);
+  }, [domainTenantSelection]);
+
+  // Enhanced rule management functions
+
+  // Watch for changes in output rules to mark as dirty
+  useEffect(() => {
+    if (outputRules.length > 0) {
+      setIsDirty(true);
+    }
+  }, [outputRules]);
 
   const generateBoilerplate = () => {
     const boilerplate = getCodeTemplate(formData.type, formData.os);
@@ -544,39 +748,6 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     toast({
       title: "Boilerplate Generated",
       description: "Basic script template has been generated."
-    });
-  };
-
-  const updateOutputRule = (ruleId: number, updates: any) => {
-    setOutputRules(prev => prev.map(rule =>
-      rule.id === ruleId ? { ...rule, ...updates } : rule
-    ));
-  };
-
-  const addOutputRule = () => {
-    const newRule = {
-      id: Math.max(...outputRules.map(r => r.id), 0) + 1,
-      name: 'New Rule',
-      type: 'json_path',
-      pattern: '$.Data',
-      action: 'extract',
-      target: 'new_field',
-      enabled: true,
-      priority: outputRules.length + 1
-    };
-    setOutputRules([...outputRules, newRule]);
-  };
-
-  const removeOutputRule = (ruleId: number) => {
-    setOutputRules(prev => prev.filter(rule => rule.id !== ruleId));
-  };
-
-  const validateRules = () => {
-    console.log('Validating output rules:', outputRules);
-    // Mock validation - in real implementation this would test the rules
-    toast({
-      title: "Rules Validated",
-      description: "All output processing rules are valid."
     });
   };
 
@@ -821,19 +992,31 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                   </div>
                 </div>
 
+                
                 <div className="space-y-2">
                   <Label htmlFor="domainTenant">Domain & Tenant Selection</Label>
-                  <DomainTenantTree
-                    value={domainTenantSelection}
-                    onChange={setDomainTenantSelection}
-                  />
+                  <div className="border rounded-lg p-3 bg-gray-50 dark:bg-gray-900">
+                    <DomainTenantTree
+                      value={domainTenantSelection}
+                      onChange={(newSelection) => {
+                        console.log('Domain/Tenant selection changing to:', newSelection);
+                        setDomainTenantSelection(newSelection);
+                      }}
+                    />
+                  </div>
                   {domainTenantSelection.domainId && (
-                    <p className="text-xs text-gray-500 mt-1">
+                    <div className="text-xs text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-950 p-2 rounded">
+                      <strong>Selected:</strong>{' '}
                       {domainTenantSelection.tenantId
-                        ? `Selected: Domain ID ${domainTenantSelection.domainId}, Tenant ID ${domainTenantSelection.tenantId}`
-                        : `Selected: Domain ID ${domainTenantSelection.domainId} (All Tenants)`
+                        ? `Domain ID ${domainTenantSelection.domainId}, Tenant ID ${domainTenantSelection.tenantId}`
+                        : `Domain ID ${domainTenantSelection.domainId} (All Tenants)`
                       }
-                    </p>
+                    </div>
+                  )}
+                  {!domainTenantSelection.domainId && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400 bg-yellow-50 dark:bg-yellow-950 p-2 rounded">
+                      No domain/tenant selected
+                    </div>
                   )}
                 </div>
 
@@ -1081,7 +1264,9 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-medium">Output Processing Rules</h3>
-                <p className="text-sm text-gray-500">Configure how script output is processed and extracted</p>
+                <p className="text-sm text-gray-500">
+                  Configure how script output is processed and extracted ({outputRules.length} rules)
+                </p>
               </div>
               <div className="flex space-x-2">
                 <Button variant="outline" size="sm" onClick={validateRules}>
@@ -1097,16 +1282,17 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
 
             <div className="space-y-4">
               {outputRules.map((rule) => (
-                <Card key={rule.id}>
+                <Card key={rule.id} className={`${!rule.enabled ? 'opacity-60' : ''}`}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="space-y-2">
-                          <Label>Rule Name</Label>
+                          <Label>Rule Name *</Label>
                           <Input
-                            value={rule.name}
+                            value={rule.name || ''}
                             onChange={(e) => updateOutputRule(rule.id, { name: e.target.value })}
                             className="text-sm"
+                            placeholder="Enter rule name"
                           />
                         </div>
 
@@ -1128,9 +1314,9 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                         </div>
 
                         <div className="space-y-2">
-                          <Label>Pattern</Label>
+                          <Label>Pattern *</Label>
                           <Input
-                            value={rule.pattern}
+                            value={rule.pattern || ''}
                             onChange={(e) => updateOutputRule(rule.id, { pattern: e.target.value })}
                             className="text-sm font-mono"
                             placeholder={rule.type === 'json_path' ? '$.Data.Field' : rule.type === 'regex' ? '\\d+' : 'transform'}
@@ -1138,9 +1324,9 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                         </div>
 
                         <div className="space-y-2">
-                          <Label>Target Field</Label>
+                          <Label>Target Field *</Label>
                           <Input
-                            value={rule.target}
+                            value={rule.target || ''}
                             onChange={(e) => updateOutputRule(rule.id, { target: e.target.value })}
                             className="text-sm"
                             placeholder="output_field_name"
@@ -1224,33 +1410,63 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 <CardContent>
                   <div className="space-y-3">
                     {validationResults.map((result, index) => {
-                      const isPass = result.Status === 'Pass';
-                      const isWarning = result.Status === 'Warning';
+                      // Handle different possible property names in validation results
+                      const status = result.Status || result.status || 'Unknown';
+                      const type = result.Type || result.type || result.Category || result.category || 'Validation';
+                      const message = result.Message || result.message || result.Description || result.description || 'No details available';
+
+                      const isPass = status === 'Pass' || status === 'Success' || status === 'Valid';
+                      const isWarning = status === 'Warning' || status === 'Warn';
+                      const isFail = status === 'Fail' || status === 'Failed' || status === 'Error' || status === 'Invalid';
 
                       return (
-                        <div key={index} className={`flex items-center justify-between p-4 rounded-lg border ${isPass ? 'bg-green-50 border-green-200' :
-                          isWarning ? 'bg-yellow-50 border-yellow-200' :
-                            'bg-red-50 border-red-200'
-                          }`}>
+                        <div
+                          key={index}
+                          className={`flex items-center justify-between p-4 rounded-lg border ${isPass ? 'bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800' :
+                              isWarning ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950 dark:border-yellow-800' :
+                                isFail ? 'bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800' :
+                                  'bg-gray-50 border-gray-200 dark:bg-gray-800 dark:border-gray-700'
+                            }`}
+                        >
                           <div className="flex items-center space-x-3">
                             {isPass ? (
                               <CheckCircle className="w-5 h-5 text-green-500" />
                             ) : isWarning ? (
                               <AlertTriangle className="w-5 h-5 text-yellow-500" />
-                            ) : (
+                            ) : isFail ? (
                               <XCircle className="w-5 h-5 text-red-500" />
+                            ) : (
+                              <Eye className="w-5 h-5 text-gray-500" />
                             )}
                             <div>
-                              <div className="font-medium text-sm">{result.Type} Validation</div>
-                              <div className="text-xs text-gray-600">{result.Message}</div>
+                              <div className="font-medium text-sm">{type} Validation</div>
+                              <div className="text-xs text-gray-600 dark:text-gray-400">{message}</div>
+                              {result.Details && (
+                                <div className="text-xs text-gray-500 mt-1">{result.Details}</div>
+                              )}
                             </div>
                           </div>
-                          <Badge variant={isPass ? 'default' : isWarning ? 'secondary' : 'destructive'}>
-                            {result.Status}
+                          <Badge
+                            variant={
+                              isPass ? 'default' :
+                                isWarning ? 'secondary' :
+                                  isFail ? 'destructive' :
+                                    'outline'
+                            }
+                          >
+                            {status}
                           </Badge>
                         </div>
                       );
                     })}
+
+                    {validationResults.length === 0 && (
+                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                        <Shield className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                        <p className="text-sm">No validation results available</p>
+                        <p className="text-xs mt-1">Run a security check to see validation results</p>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

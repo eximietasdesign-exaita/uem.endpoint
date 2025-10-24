@@ -435,6 +435,7 @@ const createScriptMutation = useMutation({
   };
 
   const handleEditScript = (script: DiscoveryScript) => {
+    console.log('Opening script for editing:', script);
     setSelectedScript(script);
     setIsEditorOpen(true);
   };

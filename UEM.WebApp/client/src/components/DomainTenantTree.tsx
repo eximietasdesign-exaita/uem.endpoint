@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ChevronDown, ChevronRight, Building2, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -34,6 +34,26 @@ export function DomainTenantTree({ value, onChange }: DomainTenantTreeProps) {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Auto-expand domain when tenant is selected or when component receives initial value
+  useEffect(() => {
+    if (value?.tenantId && value?.domainId) {
+      setExpandedDomains(prev => {
+        const next = new Set<number>();
+        prev.forEach(v => next.add(v));
+        next.add(value.domainId!);
+        return next;
+      });
+    } else if (value?.domainId && !value?.tenantId) {
+      // Also expand when only domain is selected
+      setExpandedDomains(prev => {
+        const next = new Set<number>();
+        prev.forEach(v => next.add(v));
+        next.add(value.domainId!);
+        return next;
+      });
+    }
+  }, [value?.domainId, value?.tenantId]);
+
   const toggleDomain = (domainId: number) => {
     const newExpanded = new Set(expandedDomains);
     if (newExpanded.has(domainId)) {
@@ -45,10 +65,12 @@ export function DomainTenantTree({ value, onChange }: DomainTenantTreeProps) {
   };
   
   const handleDomainSelect = (domainId: number) => {
+    console.log('Domain selected:', domainId);
     onChange({ domainId, tenantId: null });
   };
 
   const handleTenantSelect = (domainId: number, tenantId: number) => {
+    console.log('Tenant selected:', { domainId, tenantId });
     onChange({ domainId, tenantId });
   };
 
@@ -65,13 +87,19 @@ export function DomainTenantTree({ value, onChange }: DomainTenantTreeProps) {
           {domains.map((domain) => {
             const domainTenants = getTenantsByDomain(domain.id);
             const isExpanded = expandedDomains.has(domain.id);
+            
+            // Enhanced selection logic: highlight domain if it's selected OR if one of its tenants is selected
             const isDomainSelected = value?.domainId === domain.id && value?.tenantId === null;
+            const hasTenantSelected = value?.tenantId && value?.domainId === domain.id && domainTenants.some(t => t.id === value.tenantId);
+            const isDomainHighlighted = isDomainSelected || hasTenantSelected;
 
             return (
               <div key={domain.id}>
                 <div
                   className={`flex items-center space-x-2 p-3 hover:bg-gray-50 dark:hover:bg-gray-900 cursor-pointer transition-colors ${
-                    isDomainSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                    isDomainHighlighted 
+                      ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500' 
+                      : ''
                   }`}
                   onClick={() => handleDomainSelect(domain.id)}
                 >
@@ -91,14 +119,37 @@ export function DomainTenantTree({ value, onChange }: DomainTenantTreeProps) {
                     </button>
                   )}
                   {domainTenants.length === 0 && <div className="w-5" />}
-                  <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  <span className="flex-1 text-sm font-medium text-gray-900 dark:text-gray-100">
+                  
+                  <Building2 className={`w-4 h-4 ${
+                    isDomainHighlighted 
+                      ? 'text-blue-600 dark:text-blue-400' 
+                      : 'text-blue-600 dark:text-blue-400'
+                  }`} />
+                  
+                  <span className={`flex-1 text-sm font-medium ${
+                    isDomainHighlighted 
+                      ? 'text-blue-900 dark:text-blue-100 font-semibold' 
+                      : 'text-gray-900 dark:text-gray-100'
+                  }`}>
                     {domain.displayname}
                   </span>
+                  
                   {domainTenants.length > 0 && (
-                    <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      isDomainHighlighted 
+                        ? 'text-blue-700 bg-blue-100 dark:bg-blue-800 dark:text-blue-200' 
+                        : 'text-gray-500 bg-gray-100 dark:bg-gray-800'
+                    }`}>
                       {domainTenants.length} {domainTenants.length === 1 ? 'tenant' : 'tenants'}
                     </span>
+                  )}
+
+                  {/* Selection indicator */}
+                  {isDomainSelected && (
+                    <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" />
+                  )}
+                  {hasTenantSelected && (
+                    <div className="w-2 h-2 bg-blue-400 rounded-full flex-shrink-0" />
                   )}
                 </div>
 
@@ -111,14 +162,30 @@ export function DomainTenantTree({ value, onChange }: DomainTenantTreeProps) {
                         <div
                           key={tenant.id}
                           className={`flex items-center space-x-2 p-3 pl-12 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors ${
-                            isTenantSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-500' : ''
+                            isTenantSelected 
+                              ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 ml-4' 
+                              : ''
                           }`}
                           onClick={() => handleTenantSelect(domain.id, tenant.id)}
                         >
-                          <Users className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
-                          <span className="text-sm text-gray-700 dark:text-gray-300">
+                          <Users className={`w-3.5 h-3.5 ${
+                            isTenantSelected 
+                              ? 'text-blue-600 dark:text-blue-400' 
+                              : 'text-gray-500 dark:text-gray-400'
+                          }`} />
+                          
+                          <span className={`text-sm flex-1 ${
+                            isTenantSelected 
+                              ? 'text-blue-900 dark:text-blue-100 font-medium' 
+                              : 'text-gray-700 dark:text-gray-300'
+                          }`}>
                             {tenant.displayname}
                           </span>
+
+                          {/* Selection indicator for tenant */}
+                          {isTenantSelected && (
+                            <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" />
+                          )}
                         </div>
                       );
                     })}
