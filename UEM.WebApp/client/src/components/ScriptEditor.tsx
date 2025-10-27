@@ -1,7 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { DomainTenantTree } from "@/components/DomainTenantTree";
+import { 
+  Globe,
+  ChevronDown,
+  ChevronRight,
+  Building2,
+  Search
+} from "lucide-react";
 import {
   Save,
   X,
@@ -494,6 +501,40 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     }
   });
 
+  // Add search state for script domain/tenant selection
+  const [scriptDomainTenantSearchQuery, setScriptDomainTenantSearchQuery] = useState('');
+
+  // Fetch domains and tenants specifically for script editor (isolated from header)
+    const { data: scriptDomains = [], isLoading: scriptDomainsLoading } = useQuery({
+      queryKey: ['script-editor-domains'],
+      queryFn: async () => {
+        const response = await apiRequest('GET', '/api/domains');
+        try {
+          const data = await response.json();
+          return Array.isArray(data) ? data : [];
+        } catch (err) {
+          console.error('Failed to parse domains JSON', err);
+          return [];
+        }
+      },
+      staleTime: 5 * 60 * 1000,
+    });
+  
+    const { data: scriptTenants = [], isLoading: scriptTenantsLoading } = useQuery({
+      queryKey: ['script-editor-tenants'],
+      queryFn: async () => {
+        const response = await apiRequest('GET', '/api/tenants');
+        try {
+          const data = await response.json();
+          return Array.isArray(data) ? data : [];
+        } catch (err) {
+          console.error('Failed to parse tenants JSON', err);
+          return [];
+        }
+      },
+      staleTime: 5 * 60 * 1000,
+    });
+
   useEffect(() => {
     setIsDirty(true);
   }, [formData, outputRules]);
@@ -751,6 +792,259 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     });
   };
 
+  // Isolated Domain/Tenant Tree Component for Script Editor
+  const ScriptDomainTenantTree = React.memo(function ScriptDomainTenantTree({
+    value,
+    onChange,
+    domains,
+    tenants,
+    searchQuery = ""
+  }: {
+    value: { domainId: number | null; tenantId: number | null; domain?: any; tenant?: any };
+    onChange: (selection: { domainId: number | null; tenantId: number | null; domain?: any; tenant?: any }) => void;
+    domains: any[];
+    tenants: any[];
+    searchQuery?: string;
+  }) {
+    const [expandedDomains, setExpandedDomains] = useState<Set<number>>(new Set());
+
+    // Helper functions
+    const getDisplayName = useCallback((item: any) => {
+      return item.displayname || item.name || `Item ${item.id}`;
+    }, []);
+
+    const getTenantsForDomain = useCallback((domainId: number) => {
+      return tenants.filter(t => t.domainid === domainId);
+    }, [tenants]);
+
+    const matchesSearch = useCallback((text: string, query: string) => {
+      return text.toLowerCase().includes(query.toLowerCase());
+    }, []);
+
+    // Filter domains and tenants based on search
+    const filteredData = useMemo(() => {
+      const query = searchQuery.trim();
+
+      if (!query) {
+        return domains.map(domain => ({
+          domain,
+          tenants: getTenantsForDomain(domain.id),
+          matches: false,
+          hasMatchingTenants: false
+        }));
+      }
+
+      return domains.map(domain => {
+        const domainName = getDisplayName(domain);
+        const domainMatches = matchesSearch(domainName, query) || 
+                             matchesSearch(domain.description || '', query) ||
+                             matchesSearch(domain.id.toString(), query);
+
+        const domainTenants = getTenantsForDomain(domain.id);
+        const matchingTenants = domainTenants.filter(tenant => {
+          const tenantName = getDisplayName(tenant);
+          return matchesSearch(tenantName, query) ||
+                 matchesSearch(tenant.description || '', query) ||
+                 matchesSearch(tenant.id.toString(), query);
+        });
+
+        if (domainMatches || matchingTenants.length > 0) {
+          return {
+            domain,
+            tenants: matchingTenants,
+            matches: domainMatches,
+            hasMatchingTenants: matchingTenants.length > 0
+          };
+        }
+        return null;
+      }).filter(Boolean);
+    }, [searchQuery, domains, tenants, getDisplayName, getTenantsForDomain, matchesSearch]);
+
+    // Auto-expand domains with matching tenants
+    useEffect(() => {
+      if (searchQuery.trim()) {
+        const domainsToExpand = new Set<number>();
+        filteredData.forEach(item => {
+          if (item && item.hasMatchingTenants) {
+            domainsToExpand.add(item.domain.id);
+          }
+        });
+        setExpandedDomains(domainsToExpand);
+      }
+    }, [searchQuery, filteredData]);
+
+    // Auto-expand selected domain
+    useEffect(() => {
+      if (value.domainId) {
+        setExpandedDomains(prev => {
+          const next = new Set(prev);
+          next.add(value.domainId!);
+          return next;
+        });
+      }
+    }, [value.domainId]);
+
+    const toggleDomain = (domainId: number) => {
+      setExpandedDomains(prev => {
+        const next = new Set(prev);
+        if (next.has(domainId)) {
+          next.delete(domainId);
+        } else {
+          next.add(domainId);
+        }
+        return next;
+      });
+    };
+
+    const handleDomainSelect = (domain: any) => {
+      onChange({
+        domainId: domain.id,
+        tenantId: null,
+        domain: domain,
+        tenant: null
+      });
+    };
+
+    const handleTenantSelect = (domain: any, tenant: any) => {
+      onChange({
+        domainId: domain.id,
+        tenantId: tenant.id,
+        domain: domain,
+        tenant: tenant
+      });
+    };
+
+    const highlightText = (text: string, query: string) => {
+      if (!query.trim()) return text;
+      const regex = new RegExp(`(${query})`, 'gi');
+      return text.split(regex).map((part, index) =>
+        regex.test(part) ? (
+          <mark key={index} className="bg-yellow-200 dark:bg-yellow-800 rounded px-0.5">
+            {part}
+          </mark>
+        ) : part
+      );
+    };
+
+    if (domains.length === 0) {
+      return (
+        <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+          <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+          <p className="text-sm">No domains available</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-1">
+        {filteredData.length === 0 && searchQuery.trim() ? (
+          <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+            <Search className="h-6 w-6 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No results found for "{searchQuery}"</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-200 dark:divide-gray-800">
+            {filteredData.map((item) => {
+              if (!item) return null;
+              
+              const { domain, tenants: domainTenants } = item;
+              const isExpanded = expandedDomains.has(domain.id);
+              const isDomainSelected = value.domainId === domain.id && !value.tenantId;
+              const hasTenantSelected = value.tenantId && domainTenants.some(t => t.id === value.tenantId);
+              const isDomainHighlighted = isDomainSelected || hasTenantSelected;
+
+              return (
+                <div key={domain.id}>
+                  {/* Domain Row */}
+                  <div
+                    className={`flex items-center space-x-2 p-3 hover:bg-gray-50 dark:hover:bg-gray-900 cursor-pointer transition-colors ${
+                      isDomainHighlighted && 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500'
+                    }`}
+                    onClick={() => handleDomainSelect(domain)}
+                  >
+                    {domainTenants.length > 0 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleDomain(domain.id);
+                        }}
+                        className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                        )}
+                      </button>
+                    )}
+                    {domainTenants.length === 0 && <div className="w-5" />}
+
+                    <Globe className={`w-4 h-4 ${
+                      isDomainHighlighted ? "text-blue-600 dark:text-blue-400" : "text-blue-600 dark:text-blue-400"
+                    }`} />
+
+                    <span className={`flex-1 text-sm font-medium ${
+                      isDomainHighlighted ? "text-blue-900 dark:text-blue-100" : "text-gray-900 dark:text-gray-100"
+                    }`}>
+                      {searchQuery ? highlightText(getDisplayName(domain), searchQuery) : getDisplayName(domain)}
+                    </span>
+
+                    {domainTenants.length > 0 && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        isDomainHighlighted 
+                          ? 'text-blue-700 bg-blue-100 dark:bg-blue-800 dark:text-blue-200' 
+                          : 'text-gray-500 bg-gray-100 dark:bg-gray-800'
+                      }`}>
+                        {domainTenants.length} {domainTenants.length === 1 ? 'tenant' : 'tenants'}
+                      </span>
+                    )}
+
+                    {isDomainSelected && (
+                      <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" />
+                    )}
+                  </div>
+
+                  {/* Tenants */}
+                  {isExpanded && domainTenants.length > 0 && (
+                    <div className="bg-gray-50 dark:bg-gray-900/50">
+                      {domainTenants.map((tenant) => {
+                        const isTenantSelected = value.domainId === domain.id && value.tenantId === tenant.id;
+                        
+                        return (
+                          <div
+                            key={tenant.id}
+                            className={`flex items-center space-x-2 p-3 pl-12 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors ${
+                              isTenantSelected && 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 border-l-offset-8'
+                            }`}
+                            onClick={() => handleTenantSelect(domain, tenant)}
+                          >
+                            <Users className={`w-3.5 h-3.5 ${
+                              isTenantSelected ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400"
+                            }`} />
+
+                            <span className={`text-sm flex-1 ${
+                              isTenantSelected ? "text-blue-900 dark:text-blue-100 font-medium" : "text-gray-700 dark:text-gray-300"
+                            }`}>
+                              {searchQuery ? highlightText(getDisplayName(tenant), searchQuery) : getDisplayName(tenant)}
+                            </span>
+
+                            {isTenantSelected && (
+                              <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  });
+
   return (
     <div className="flex flex-col bg-white dark:bg-gray-950 h-full">
       {/* Header (flex-shrink-0 is correct, it prevents this div from shrinking) */}
@@ -994,33 +1288,105 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
 
                 
                 <div className="space-y-2">
-                  <Label htmlFor="domainTenant">Domain & Tenant Selection</Label>
-                  <div className="border rounded-lg p-3 bg-gray-50 dark:bg-gray-900">
-                    <DomainTenantTree
-                      value={domainTenantSelection}
-                      onChange={(newSelection) => {
-                        console.log('Domain/Tenant selection changing to:', newSelection);
-                        setDomainTenantSelection(newSelection);
-                      }}
-                      domains={[]}
-                      tenants={[]}
-                    />
-                  </div>
-                  {domainTenantSelection.domainId && (
-                    <div className="text-xs text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-950 p-2 rounded">
-                      <strong>Selected:</strong>{' '}
-                      {domainTenantSelection.tenantId
-                        ? `Domain ID ${domainTenantSelection.domainId}, Tenant ID ${domainTenantSelection.tenantId}`
-                        : `Domain ID ${domainTenantSelection.domainId} (All Tenants)`
-                      }
-                    </div>
-                  )}
-                  {!domainTenantSelection.domainId && (
-                    <div className="text-xs text-gray-500 dark:text-gray-400 bg-yellow-50 dark:bg-yellow-950 p-2 rounded">
-                      No domain/tenant selected
-                    </div>
-                  )}
-                </div>
+  <Label htmlFor="domainTenant">Script Domain & Tenant Assignment</Label>
+  <p className="text-sm text-gray-600 dark:text-gray-400">
+    Assign this script to specific domains and tenants. This is independent of your current session context.
+  </p>
+  
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="space-y-2">
+      <Label htmlFor="domain">Domain</Label>
+      <Select 
+        value={domainTenantSelection.domainId?.toString() || "none"} 
+        onValueChange={(value) => {
+          const domainId = value === "none" ? null : parseInt(value);
+          setDomainTenantSelection({
+            domainId,
+            tenantId: null // Reset tenant when domain changes
+          });
+        }}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="Select domain" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">No Domain (Global)</SelectItem>
+          {scriptDomains.map((domain: any) => (
+            <SelectItem key={domain.id} value={domain.id.toString()}>
+              {domain.displayname || domain.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+
+    <div className="space-y-2">
+      <Label htmlFor="tenant">Tenant</Label>
+      <Select 
+        value={domainTenantSelection.tenantId?.toString() || "none"}
+        onValueChange={(value) => {
+          const tenantId = value === "none" ? null : parseInt(value);
+          setDomainTenantSelection(prev => ({
+            ...prev,
+            tenantId
+          }));
+        }}
+        disabled={!domainTenantSelection.domainId}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder={domainTenantSelection.domainId ? "Select tenant" : "Select domain first"} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">All Tenants</SelectItem>
+          {scriptTenants
+            .filter(tenant => tenant.domainid === domainTenantSelection.domainId)
+            .map((tenant) => (
+              <SelectItem key={tenant.id} value={tenant.id.toString()}>
+                {tenant.displayname || tenant.name}
+              </SelectItem>
+            ))}
+        </SelectContent>
+      </Select>
+    </div>
+  </div>
+
+  {/* Current Selection Display */}
+  <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border">
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+          Script Assignment:
+        </p>
+        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+          {domainTenantSelection.tenantId ? (
+            <span className="text-blue-600 dark:text-blue-400 font-medium">
+              Domain {domainTenantSelection.domainId} / Tenant {domainTenantSelection.tenantId}
+            </span>
+          ) : domainTenantSelection.domainId ? (
+            <span className="text-blue-600 dark:text-blue-400 font-medium">
+              Domain {domainTenantSelection.domainId} (All Tenants)
+            </span>
+          ) : (
+            <span className="text-gray-500">Global - Available to all domains and tenants</span>
+          )}
+        </p>
+      </div>
+      {(domainTenantSelection.domainId || domainTenantSelection.tenantId) && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setDomainTenantSelection({
+            domainId: null,
+            tenantId: null
+          })}
+          className="text-red-600 hover:text-red-700"
+        >
+          Clear Assignment
+        </Button>
+      )}
+    </div>
+  </div>
+</div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
