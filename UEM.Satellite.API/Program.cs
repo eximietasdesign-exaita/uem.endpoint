@@ -1,121 +1,228 @@
-using System.Security.Claims;
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Hosting;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
-using Serilog;
 using System.Text;
-using UEM.Satellite.API;
 using UEM.Satellite.API.Data;
-using UEM.Satellite.API.Hubs;
+using Dapper;
+using UEM.Satellite.API.Data.Repositories;
 using UEM.Satellite.API.Services;
-using UEM.Satellite.API.Hubs;
+using UEM.Satellite.API.Store;
+using Serilog;
 
-
-//var builder = WebApplication.CreateBuilder(args);
 var builder = WebApplication.CreateBuilder(args);
-builder.Host.UseSerilog((ctx, lc) => lc
-    .ReadFrom.Configuration(ctx.Configuration)
-    .Enrich.FromLogContext()
-    .WriteTo.Console()
-    .WriteTo.File("logs/uem-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14));
 
-
-// Keep host alive if a background service throws
-builder.Services.Configure<HostOptions>(o => {
-    o.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
+// Configure Serilog
+builder.Host.UseSerilog((context, configuration) =>
+{
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .WriteTo.Console()
+        .WriteTo.File("logs/satellite-api-.log", rollingInterval: RollingInterval.Day)
+        .Enrich.FromLogContext();
 });
 
-// Logging
-builder.Logging.ClearProviders();
-builder.Logging.AddSimpleConsole(o => o.TimestampFormat = "HH:mm:ss ");
-builder.Logging.SetMinimumLevel(LogLevel.Information);
-
-// Controllers/Swagger
+// Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c => c.SwaggerDoc("v1", new OpenApiInfo { Title = "UEM Satellite API", Version = "v1" }));
-
-// CORS for UI
-const string DevCors = "DevCors";
-builder.Services.AddCors(opt => {
-    opt.AddPolicy(DevCors, p => p
-        .WithOrigins("http://localhost:5173", "https://localhost:5173")
-        .AllowAnyHeader().AllowAnyMethod().AllowCredentials());
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new() { 
+        Title = "UEM Satellite API", 
+        Version = "v1",
+        Description = "Enterprise-grade Unified Endpoint Management Satellite API"
+    });
+    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme",
+        Name = "Authorization",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey
+    });
 });
 
-//  JWT auth (key length ≥ 32 bytes)
-var signingKey = builder.Configuration["Jwt:SigningKey"] ?? "ThisIsA32+ByteMinimumDemoSigningKey!!!";
-var keyBytes = Encoding.UTF8.GetBytes(signingKey);
-if (keyBytes.Length < 32) throw new Exception("Jwt:SigningKey must be ≥ 32 bytes");
+// Database configuration
+var connectionString = builder.Configuration.GetConnectionString("Postgres") 
+    ?? Environment.GetEnvironmentVariable("DATABASE_URL") 
+    ?? throw new InvalidOperationException("Database connection string not found");
 
-builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+// Database repositories with Dapper
+builder.Services.AddScoped<IAgentRepository, AgentRepository>();
+builder.Services.AddScoped<IHardwareRepository, HardwareRepository>();
+builder.Services.AddScoped<ISoftwareRepository, SoftwareRepository>();
+builder.Services.AddScoped<IProcessRepository, ProcessRepository>();
+builder.Services.AddScoped<INetworkRepository, NetworkRepository>();
+builder.Services.AddScoped<IEnhancedHeartbeatRepository, EnhancedHeartbeatRepository>();
+
+// Agent simulation service for testing
+builder.Services.AddHostedService<UEM.Satellite.API.Services.AgentSimulationService>();
+
+// Dapper factory for legacy repository compatibility
+builder.Services.AddSingleton<IDbFactory>(provider => new DbFactory(builder.Configuration));
+
+// Authentication
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
         {
-            RoleClaimType = ClaimTypes.Role,
-            ValidateIssuer = false,
-            ValidateAudience = false,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(keyBytes)
-        };
-        //allow SignalR WebSockets to send token via query string `access_token`
-        options.Events = new JwtBearerEvents
-        {
-            OnMessageReceived = ctx =>
-            {
-                var accessToken = ctx.Request.Query["access_token"];
-                var path = ctx.HttpContext.Request.Path;
-                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/agent-hub"))
-                    ctx.Token = accessToken;
-                return Task.CompletedTask;
-            }
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SecretKey"] ?? "your-super-secret-jwt-key-here")),
+            ValidateIssuer = false,
+            ValidateAudience = false
         };
     });
 
-builder.Services.AddAuthorization();
-builder.Services.AddSingleton<AgentRegistry>();
-builder.Services.AddSingleton<TokenService>();
+// CORS for UI
+builder.Services.AddCors(options => {
+    options.AddPolicy("AllowAnyOrigin", policy => { // Renamed policy for clarity
+        policy
+            .AllowAnyOrigin()      // Allows any origin
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
 
-builder.Services.AddSingleton<IDbFactory, DbFactory>();
-builder.Services.AddSingleton<HeartbeatRepository>();
+// Add CORS configuration before adding controllers
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy
+            .WithOrigins(
+                "http://localhost:5000",  // WebApp
+                "http://localhost:5173",  // Vite dev server
+                "http://localhost:3000"   // Alternative dev port
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
 
-// Correlation ID middleware
-builder.Services.AddSingleton<ICorrelationIdAccessor, CorrelationIdAccessor>();
-// SignalR
-builder.Services.AddSignalR();
+// Register services
+builder.Services.AddScoped<AgentRegistry>();
+builder.Services.AddScoped<TokenService>();
+builder.Services.AddScoped<HeartbeatRepository>();
+builder.Services.AddScoped<AgentStore>();
+builder.Services.AddScoped<DiscoveryScriptPopulationService>();
 
-// Kafka services (your resilient versions)
-builder.Services.AddHostedService<KafkaTopicProvisioner>();
-builder.Services.AddHostedService<KafkaCommandConsumer>();
-builder.Services.AddSingleton<KafkaResponseProducer>();
-builder.Services.AddHttpContextAccessor();
+// Policy deployment services
+builder.Services.AddScoped<IPolicyDeploymentService, PolicyDeploymentService>();
+builder.Services.AddScoped<IAgentStatusService, AgentStatusService>();
+
+// Health checks
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-app.UseCors(DevCors);
-app.UseHttpsRedirection();
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c => 
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "UEM Satellite API v1");
+        c.RoutePrefix = "swagger";
+    });
+}
 
-app.UseMiddleware<CorrelationIdMiddleware>();
-app.UseSerilogRequestLogging(); // logs method, path, status, duration
+app.UseSerilogRequestLogging();
+app.UseRouting();
+app.UseCors("AllowAll"); // Use the new policy name
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapControllers();
 
-////  put auth in the pipeline
-//app.UseAuthentication();
-//app.UseAuthorization();
+// Serve static files from built frontend
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(
+        Path.Combine(Directory.GetCurrentDirectory(), "../UEM.WebApp/dist/public")),
+    RequestPath = ""
+});
 
 app.MapControllers();
-app.MapHub<AgentHub>("/agent-hub");
+app.MapHealthChecks("/health");
 
-// Protect hub (requires JWT)
-//app.MapHub<HeartbeatDtos>("/agent-hub").RequireAuthorization();
+// Serve index.html for SPA routes (everything that's not API or static files)
+app.MapFallback(async (HttpContext context) =>
+{
+    var indexPath = Path.Combine(Directory.GetCurrentDirectory(), "../UEM.WebApp/dist/public/index.html");
+    if (File.Exists(indexPath))
+    {
+        context.Response.ContentType = "text/html";
+        await context.Response.SendFileAsync(indexPath);
+    }
+    else
+    {
+        context.Response.StatusCode = 404;
+        await context.Response.WriteAsync("Frontend files not found. Please build the frontend first.");
+    }
+});
 
-// Public health
-//app.MapGet("/health", () => Results.Ok(new { ok = true, ts = DateTime.UtcNow }));
+app.MapGet("/api/status", () => new { 
+    status = "healthy", 
+    timestamp = DateTime.UtcNow,
+    version = "v1.0.0",
+    environment = app.Environment.EnvironmentName
+});
 
-app.UseSwagger();
-app.UseSwaggerUI();
+// Additional Swagger endpoints
+app.MapGet("/swagger", () => Results.Redirect("/swagger/index.html"));
 
+// Initialize database tables through repositories if needed
+try
+{
+    using var scope = app.Services.CreateScope();
+    var agentRepo = scope.ServiceProvider.GetRequiredService<IAgentRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    
+    // Test database connection
+    var dbFactory = scope.ServiceProvider.GetRequiredService<IDbFactory>();
+    using var connection = dbFactory.Open();
+    await connection.ExecuteAsync("SELECT 1");
+    
+    logger.LogInformation("Database connection and repositories initialized successfully");
+}
+catch (Exception ex)
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogError(ex, "Failed to initialize database connection");
+    throw; // Fail fast if database connection fails
+}
+
+// Test database connection endpoint
+app.MapGet("/api/database-test", async (IDbFactory dbFactory) =>
+{
+    try
+    {
+        using var connection = dbFactory.Open();
+        await connection.ExecuteAsync("SELECT 1");
+        return Results.Ok(new { status = "Database connection successful" });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { status = "Database connection failed", error = ex.Message });
+    }
+});
+
+app.Use(async (context, next) => {
+    try
+    {
+        await next();
+    }
+    catch (Exception ex) when (ex is InvalidOperationException && ex.Message.Contains("CORS"))
+    {
+        context.Response.StatusCode = 500;
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "CORS error occurred");
+        await context.Response.WriteAsJsonAsync(new { 
+            error = "CORS error", 
+            message = ex.Message,
+            allowedOrigins = builder.Configuration.GetSection("CorsOrigins").Get<string[]>() 
+        });
+    }
+});
+
+// Start the application (respects --urls command-line parameter)
 app.Run();

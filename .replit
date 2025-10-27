@@ -1,0 +1,75 @@
+modules = ["dotnet-7.0", "nodejs-20", "web", "dotnet-8.0", "postgresql-16"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
+packages = ["unzip", "postgresql", "dotnet-sdk"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "ServiceBroker API"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "UEM WebApp + API"
+
+[[workflows.workflow]]
+name = "ServiceBroker API"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd UEM.ServiceBroker.API && dotnet run --no-launch-profile"
+
+[[workflows.workflow]]
+name = "UEM WebApp + API"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd UEM.Satellite.API && dotnet run --no-launch-profile --urls \"http://0.0.0.0:5000\""
+waitForPort = 5000
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 8000
+externalPort = 8000
+
+[[ports]]
+localPort = 8099
+externalPort = 8099
+
+[[ports]]
+localPort = 34465
+externalPort = 3002
+
+[[ports]]
+localPort = 35723
+externalPort = 3001
+
+[[ports]]
+localPort = 38629
+externalPort = 3000
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["bash", "-c", "cd UEM.Web.UI && npm run preview -- --host=0.0.0.0 --port=5000"]
+build = ["bash", "-c", "cd UEM.Web.UI && npm run build"]
