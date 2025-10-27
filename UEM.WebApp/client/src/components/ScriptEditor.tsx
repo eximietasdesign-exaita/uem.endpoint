@@ -1002,6 +1002,8 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                         console.log('Domain/Tenant selection changing to:', newSelection);
                         setDomainTenantSelection(newSelection);
                       }}
+                      domains={[]}
+                      tenants={[]}
                     />
                   </div>
                   {domainTenantSelection.domainId && (

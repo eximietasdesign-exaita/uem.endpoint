@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ChevronDown, ChevronRight, Building2, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { highlightText } from '@/utils/highlight';
 
 interface Domain {
   id: number;
@@ -17,22 +18,16 @@ interface Tenant {
 }
 
 interface DomainTenantTreeProps {
-  value?: { domainId: number | null; tenantId: number | null };
+  domains: Domain[];
+  tenants: Tenant[];
+  value: { domainId: number | null; tenantId: number | null };
   onChange: (value: { domainId: number | null; tenantId: number | null }) => void;
+  searchQuery?: string; // Add this prop for highlighting
 }
 
-export function DomainTenantTree({ value, onChange }: DomainTenantTreeProps) {
+export function DomainTenantTree({ domains, tenants, value, onChange, searchQuery }: DomainTenantTreeProps) {
   const [expandedDomains, setExpandedDomains] = useState<Set<number>>(new Set());
-
-  const { data: domains = [] } = useQuery<Domain[]>({
-    queryKey: ['/api/domains'],
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const { data: tenants = [] } = useQuery<Tenant[]>({
-    queryKey: ['/api/tenants'],
-    staleTime: 5 * 60 * 1000,
-  });
+  const [manuallyExpandedDomains, setManuallyExpandedDomains] = useState<Set<number>>(new Set());
 
   // Auto-expand domain when tenant is selected or when component receives initial value
   useEffect(() => {
@@ -40,6 +35,12 @@ export function DomainTenantTree({ value, onChange }: DomainTenantTreeProps) {
       setExpandedDomains(prev => {
         const next = new Set<number>();
         prev.forEach(v => next.add(v));
+        next.add(value.domainId!);
+        return next;
+      });
+      // Also track this as manually expanded since user selected it
+      setManuallyExpandedDomains(prev => {
+        const next = new Set(prev);
         next.add(value.domainId!);
         return next;
       });
@@ -51,17 +52,56 @@ export function DomainTenantTree({ value, onChange }: DomainTenantTreeProps) {
         next.add(value.domainId!);
         return next;
       });
+      // Track this as manually expanded
+      setManuallyExpandedDomains(prev => {
+        const next = new Set(prev);
+        next.add(value.domainId!);
+        return next;
+      });
     }
   }, [value?.domainId, value?.tenantId]);
 
+  // Auto-expand domains that have matching tenants when searching
+  useEffect(() => {
+    if (searchQuery && searchQuery.trim()) {
+      const domainsToExpand = new Set<number>();
+      
+      // Find all tenants that match the search query
+      const matchingTenants = tenants.filter(tenant => {
+        return tenant.displayname.toLowerCase().includes(searchQuery.toLowerCase());
+      });
+      
+      // Get domain IDs for those matching tenants
+      matchingTenants.forEach(tenant => {
+        domainsToExpand.add(tenant.domainid);
+      });
+      
+      // Auto-expand these domains (preserve manually expanded ones)
+      setExpandedDomains(prev => {
+        const next = new Set(manuallyExpandedDomains); // Start with manually expanded
+        domainsToExpand.forEach(domainId => next.add(domainId)); // Add search results
+        return next;
+      });
+    } else if (searchQuery === '' || !searchQuery) {
+      // When search is cleared, collapse all domains except manually expanded ones
+      setExpandedDomains(new Set(manuallyExpandedDomains));
+    }
+  }, [searchQuery, tenants, manuallyExpandedDomains]);
+
   const toggleDomain = (domainId: number) => {
     const newExpanded = new Set(expandedDomains);
+    const newManuallyExpanded = new Set(manuallyExpandedDomains);
+    
     if (newExpanded.has(domainId)) {
       newExpanded.delete(domainId);
+      newManuallyExpanded.delete(domainId); // Remove from manually expanded too
     } else {
       newExpanded.add(domainId);
+      newManuallyExpanded.add(domainId); // Track as manually expanded
     }
+    
     setExpandedDomains(newExpanded);
+    setManuallyExpandedDomains(newManuallyExpanded);
   };
   
   const handleDomainSelect = (domainId: number) => {
@@ -76,6 +116,15 @@ export function DomainTenantTree({ value, onChange }: DomainTenantTreeProps) {
 
   const getTenantsByDomain = (domainId: number) => {
     return tenants.filter(t => t.domainid === domainId);
+  };
+
+  const getDisplayName = (domain: Domain) => {
+    return searchQuery ? highlightText(domain.displayname, searchQuery) : domain.displayname;
+  };
+
+  // Add highlighting function for tenants
+  const getTenantDisplayName = (tenant: Tenant) => {
+    return searchQuery ? highlightText(tenant.displayname, searchQuery) : tenant.displayname;
   };
 
   return (
@@ -131,7 +180,7 @@ export function DomainTenantTree({ value, onChange }: DomainTenantTreeProps) {
                       ? 'text-blue-900 dark:text-blue-100 font-semibold' 
                       : 'text-gray-900 dark:text-gray-100'
                   }`}>
-                    {domain.displayname}
+                    {getDisplayName(domain)}
                   </span>
                   
                   {domainTenants.length > 0 && (
@@ -179,7 +228,7 @@ export function DomainTenantTree({ value, onChange }: DomainTenantTreeProps) {
                               ? 'text-blue-900 dark:text-blue-100 font-medium' 
                               : 'text-gray-700 dark:text-gray-300'
                           }`}>
-                            {tenant.displayname}
+                            {getTenantDisplayName(tenant)}
                           </span>
 
                           {/* Selection indicator for tenant */}
