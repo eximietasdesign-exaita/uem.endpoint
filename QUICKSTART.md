@@ -42,8 +42,8 @@ npm run dev
 ```bash
 cd UEM.Endpoint.Agent
 # optional: set Satellite base URL (defaults to https://localhost:8000, auto-fallbacks to http)
-setx SATELLITE_BASE_URL "https://localhost:8000"   # Windows
-export SATELLITE_BASE_URL="https://localhost:8000" # macOS/Linux
+setx SATELLITE_BASE_URL "http://localhost:8000"   # Windows
+export SATELLITE_BASE_URL="http://localhost:8000" # macOS/Linux
 
 dotnet run
 ```

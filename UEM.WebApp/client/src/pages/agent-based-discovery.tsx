@@ -714,7 +714,7 @@ export default function AgentBasedDiscovery() {
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{policy.description}</p>
                         <div className="flex items-center justify-between">
-                          <Badge variant="secondary">{policy.targetOS}</Badge>
+                          <Badge variant="secondary">{policy.targetOs}</Badge>
                           <Button variant="outline" size="sm">
                             <Settings className="w-3 h-3 mr-1" />
                             Configure
@@ -852,7 +852,7 @@ export default function AgentBasedDiscovery() {
                               <h4 className="font-medium text-gray-900 dark:text-white">{policy.name}</h4>
                               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{policy.description}</p>
                               <div className="flex items-center space-x-2 mt-2">
-                                <Badge variant="secondary" className="text-xs">{policy.targetOS}</Badge>
+                                <Badge variant="secondary" className="text-xs">{policy.targetOs}</Badge>
                                 <Badge variant="outline" className="text-xs">{policy.publishStatus}</Badge>
                               </div>
                             </div>
@@ -1087,7 +1087,7 @@ export default function AgentBasedDiscovery() {
                       <SelectContent>
                         {(credentialProfiles as CredentialProfile[]).map(profile => (
                           <SelectItem key={profile.id} value={profile.id.toString()}>
-                            {profile.name} - {profile.type}
+                            {profile.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
