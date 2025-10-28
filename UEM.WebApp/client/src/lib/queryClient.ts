@@ -12,22 +12,9 @@ const getApiBaseUrl = (endpoint?: string) => {
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol;
     const hostname = window.location.hostname;
-    const port = window.location.port;
-    
-    // In Replit environment, use the current hostname without specifying ports
-    // since all APIs are served through the main app on port 5000
-    if (hostname.includes('replit.dev') || hostname.includes('replit.app')) {
-      return `${protocol}//${hostname}${port ? ':' + port : ''}`;
-    }
-    
-    // For local development, use specific ports
-    // All APIs are now served on port 5000 (unified architecture)
-    return `${protocol}//${hostname}:5000`;
+    return `http://${hostname}:8000`; // Match Satellite API port
   }
-  
-  // For Node.js environment (fallback)
-  // All APIs are now served on port 5000 (unified architecture)
-  return 'http://localhost:5000';
+  return 'http://localhost:8000'; // Match Satellite API port
 };
 
 export async function apiRequest(

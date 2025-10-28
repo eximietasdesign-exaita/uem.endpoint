@@ -23,6 +23,13 @@ public sealed class AgentInitializationService : BackgroundService
         await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); // Delay for service startup
 
         using var scope = _provider.CreateScope();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            _log.LogWarning("EnterpriseHardwareDiscoveryService is only supported on Windows. Skipping hardware discovery.");
+            return;
+        }
+
         var hardwareDiscovery = scope.ServiceProvider.GetRequiredService<EnterpriseHardwareDiscoveryService>();
         var hardwareInfo = await hardwareDiscovery.DiscoverAsync();
 
@@ -152,7 +159,7 @@ sealed class AgentWorkerService : BackgroundService
             catch (Exception ex)
             {
                 _log.LogError(ex, "Unhandled exception in AgentWorker loop: {Message}", ex.Message);
-                _log.LogWarning(ex, "Agent loop error; retrying in 5s…");
+                _log.LogWarning(ex, "Agent loop error; retrying in 5sï¿½");
                 await Task.Delay(1000 * 120, stoppingToken);
             }
         }

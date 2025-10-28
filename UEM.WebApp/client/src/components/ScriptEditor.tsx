@@ -1,13 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { DomainTenantTree } from "@/components/DomainTenantTree";
 import { 
-  Save, 
-  X, 
-  Play, 
-  Copy, 
-  Download, 
+  Globe,
+  ChevronDown,
+  ChevronRight,
+  Building2,
+  Search
+} from "lucide-react";
+import {
+  Save,
+  X,
+  Play,
+  Copy,
+  Download,
   Upload,
   Code2,
   FileText,
@@ -52,7 +59,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -124,7 +131,7 @@ const osTargets = [
 
 const categories = [
   'Hardware Discovery',
-  'Software Discovery', 
+  'Software Discovery',
   'Network Discovery',
   'Security Discovery',
   'Services Discovery',
@@ -248,7 +255,7 @@ def main():
 if __name__ == "__main__":
     main()`;
   }
-  
+
   return "// Add your script code here";
 }
 
@@ -258,26 +265,56 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     name: script?.name || '',
     description: script?.description || '',
     category: script?.category || 'System Discovery',
-    type: script?.type || 'powershell',
+    type: (script?.type as 'powershell' | 'bash' | 'python' | 'wmi') || 'powershell',
     os: script?.targetOs || 'windows',
     version: script?.version || '1.0',
     isActive: script?.isActive ?? true,
-    tags: script?.tags?.join(', ') || '',
+    tags: Array.isArray(script?.tags) ? script.tags.join(', ') : (script?.tags || ''),
     vendor: script?.vendor || 'Custom',
     complexity: script?.complexity || 'medium',
     estimatedRunTime: script?.estimatedRunTimeSeconds || 30,
     requiresElevation: script?.requiresElevation || false,
     requiresNetwork: script?.requiresNetwork || false,
-    industries: script?.industries || [],
-    complianceFrameworks: script?.complianceFrameworks || [],
+    industries: Array.isArray(script?.industries) ? script.industries : (script?.industries || []),
+    complianceFrameworks: Array.isArray(script?.complianceFrameworks) ? script.complianceFrameworks : (script?.complianceFrameworks || []),
     code: script?.template || ''
   });
 
-  const [domainTenantSelection, setDomainTenantSelection] = useState<{ domainId: number | null; tenantId: number | null }>({
-    domainId: null,
-    tenantId: null
+  // Fix: Initialize domain/tenant selection from existing script data
+  const [domainTenantSelection, setDomainTenantSelection] = useState<{ domainId: number | null; tenantId: number | null }>(() => {
+    if (script) {
+      try {
+        // Try to get domain/tenant selection from the script's parameters
+        if (script.parameters) {
+          const params = typeof script.parameters === 'string'
+            ? JSON.parse(script.parameters)
+            : script.parameters;
+
+          if (params.domainTenantSelection) {
+            return {
+              domainId: params.domainTenantSelection.domainId || null,
+              tenantId: params.domainTenantSelection.tenantId || null
+            };
+          }
+        }
+
+        // Fallback to direct fields if they exist on the script object
+        return {
+          domainId: (script as any).domainId || null,
+          tenantId: (script as any).tenantId || null
+        };
+      } catch (error) {
+        console.warn('Failed to parse domain/tenant selection from script:', error);
+      }
+    }
+
+    // Default to no selection for new scripts
+    return {
+      domainId: null,
+      tenantId: null
+    };
   });
-  
+
   const [activeTab, setActiveTab] = useState<'config' | 'code' | 'processing' | 'test' | 'enterprise'>('config');
   const [isDirty, setIsDirty] = useState(false);
   const [validationResults, setValidationResults] = useState<any[]>([]);
@@ -285,149 +322,253 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
   const [isValidating, setIsValidating] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
-  
+
   // Enhanced Output Processing Rules
-  const [outputRules, setOutputRules] = useState([
-    {
-      id: 1,
-      name: 'Extract System Information',
-      type: 'json_path',
-      pattern: '$.Data.System',
-      action: 'extract',
-      target: 'system_info',
-      enabled: true,
-      priority: 1
-    },
-    {
-      id: 2,
-      name: 'Extract Hardware Information',
-      type: 'json_path', 
-      pattern: '$.Data.Hardware',
-      action: 'extract',
-      target: 'hardware_info',
-      enabled: true,
-      priority: 2
-    },
-    {
-      id: 3,
-      name: 'Process Memory Values',
-      type: 'transform',
-      pattern: 'TotalMemoryGB',
-      action: 'convert_to_mb',
-      target: 'memory_mb',
-      enabled: true,
-      priority: 3
+  interface OutputRule {
+    id: number;
+    name: string;
+    type: 'json_path' | 'regex' | 'transform' | string;
+    pattern: string;
+    action?: string;
+    target: string;
+    enabled: boolean;
+    priority?: number;
+    [key: string]: any;
+  }
+
+  const [outputRules, setOutputRules] = useState<OutputRule[]>(() => {
+    if (script) {
+      try {
+        // First try to parse from the dedicated outputProcessing field
+        if (script.outputProcessing) {
+          const rules = typeof script.outputProcessing === 'string'
+            ? JSON.parse(script.outputProcessing)
+            : script.outputProcessing;
+          if (Array.isArray(rules) && rules.length > 0) return rules as OutputRule[];
+        }
+        // Fallback to the parameters field for older scripts
+        if (script.parameters) {
+          const params = JSON.parse(script.parameters);
+          if (Array.isArray(params.outputRules) && params.outputRules.length > 0) {
+            return params.outputRules as OutputRule[];
+          }
+        }
+      } catch (error) {
+        console.warn("Could not parse existing output rules.", error);
+      }
     }
-  ]);
-  
+    // Return default rules if creating a new script or if parsing fails
+    return [{ id: 1, name: 'Default Rule', type: 'json_path', pattern: '$.Data', action: 'extract', target: 'default_output', enabled: true, priority: 1 }];
+  });
+
   // Enterprise features state
   const [approvalWorkflow, setApprovalWorkflow] = useState({
     enabled: false,
     approvers: [] as string[],
     requiresTwoApprovals: false
   });
-  
+
   const [versionControl, setVersionControl] = useState({
     enabled: true,
     autoIncrement: true,
     changeDescription: ''
   });
-  
+
   const [auditSettings, setAuditSettings] = useState({
     enabled: true,
     logExecutions: true,
     logChanges: true
   });
 
-  // Fetch available templates
-  const { data: templates = [] } = useQuery({
-    queryKey: ['/api/discovery-scripts/templates'],
-    queryFn: () => apiRequest('/api/discovery-scripts/templates')
-  });
-  
-  // Validation mutation
-  const validateMutation = useMutation({
-    mutationFn: (scriptId: number) => 
-      apiRequest(`/api/discovery-scripts/${scriptId}/validate`, {
-        method: 'POST',
-        body: JSON.stringify({ 
-          ValidateSyntax: true, 
-          ValidateSecurity: true, 
-          ValidatePerformance: true 
-        })
-      }),
-    onSuccess: (data) => {
-      setValidationResults(data.Results || []);
-      toast({
-        title: "Validation Complete",
-        description: `Overall status: ${data.OverallStatus}`,
-        variant: data.OverallStatus === 'Pass' ? 'default' : 'destructive'
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Validation Failed",
-        description: "Unable to validate script. Please try again.",
-        variant: "destructive"
-      });
-    }
-  });
-  
-  // Test execution mutation
-  const testMutation = useMutation({
-    mutationFn: (scriptId: number) => 
-      apiRequest(`/api/discovery-scripts/${scriptId}/test`, {
-        method: 'POST',
-        body: JSON.stringify({ TestEnvironment: 'sandbox', TimeoutSeconds: 30 })
-      }),
-    onSuccess: (data) => {
-      setTestResults(data);
-      toast({
-        title: "Test Complete",
-        description: `Execution status: ${data.Status}`,
-        variant: data.Status === 'Success' ? 'default' : 'destructive'
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Test Failed",
-        description: "Unable to execute test. Please try again.",
-        variant: "destructive"
-      });
-    }
-  });
-  
-  useEffect(() => {
-    setIsDirty(true);
-  }, [formData]);
-  
-  useEffect(() => {
-    if (templates.length > 0 && !formData.code) {
-      const defaultTemplate = templates.find((t: any) => t.type === formData.type && t.targetOs === formData.os);
-      if (defaultTemplate) {
-        setFormData(prev => ({ ...prev, code: defaultTemplate.template }));
-      }
-    }
-  }, [templates, formData.type, formData.os]);
-
   const selectedScriptType = scriptTypes.find(t => t.value === formData.type);
   const selectedOS = osTargets.find(o => o.value === formData.os);
   const selectedComplexity = complexityLevels.find(c => c.value === formData.complexity);
-  
-  const loadTemplate = (template: any) => {
-    setFormData(prev => ({
-      ...prev,
-      code: template.template,
-      category: template.category,
-      type: template.type,
-      os: template.targetOs
-    }));
-    toast({
-      title: "Template Loaded",
-      description: `${template.name} template has been applied.`
+
+  // Fetch available templates
+  // Fix the templates query - missing await
+  const { data: templates = [] } = useQuery({
+    queryKey: ['/api/discovery-scripts/templates'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/discovery-scripts/templates');
+      return response.json();
+    }
+  });
+
+
+  // Update the validation mutation in ScriptEditor.tsx
+  const validateMutation = useMutation({
+    mutationFn: async (scriptId: number) => {
+      const response = await apiRequest('POST', `/api/discovery-scripts/${scriptId}/validate`, {
+        ValidateSyntax: true,
+        ValidateSecurity: true,
+        ValidatePerformance: true
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      console.log('Validation response:', data); // Debug log to see actual structure
+
+      // Handle different possible response structures
+      let overallStatus = 'Unknown';
+      let results = [];
+
+      if (data) {
+        overallStatus = data.OverallStatus ||
+          data.overallStatus ||
+          data.Status ||
+          data.status ||
+          (typeof data.IsValid === 'boolean' ? (data.IsValid ? 'Pass' : 'Fail') : undefined) ||
+          'Unknown';
+
+        // Try different possible property names for results
+        results = data.Results ||
+          data.results ||
+          data.ValidationResults ||
+          data.validationResults ||
+          [];
+
+        // If no explicit overall status, derive it from results
+        if (overallStatus === 'Unknown' && Array.isArray(results)) {
+          const hasErrors = results.some(r => r.Status === 'Fail' || r.status === 'Fail' || r.Status === 'Error' || r.status === 'Error');
+          const hasWarnings = results.some(r => r.Status === 'Warning' || r.status === 'Warning');
+
+          if (hasErrors) {
+            overallStatus = 'Fail';
+          } else if (hasWarnings) {
+            overallStatus = 'Warning';
+          } else if (results.length > 0) {
+            overallStatus = 'Pass';
+          }
+        }
+      }
+
+      setValidationResults(results);
+
+      toast({
+        title: "Validation Complete",
+        description: `Overall status: ${overallStatus}`,
+        variant: overallStatus === 'Pass' ? 'default' : 'destructive'
+      });
+    },
+    onError: (error) => {
+      console.error('Validation error:', error);
+      toast({
+        title: "Validation Failed",
+        description: error instanceof Error ? error.message : "Unable to validate script. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Also update the test mutation for consistency
+  const testMutation = useMutation({
+    mutationFn: async (scriptId: number) => {
+      const response = await apiRequest('POST', `/api/discovery-scripts/${scriptId}/test`, {
+        TestEnvironment: 'sandbox',
+        TimeoutSeconds: 30
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      console.log('Test response:', data); // Debug log to see actual structure
+
+      // Handle different possible response structures
+      let status = 'Unknown';
+      if (data) {
+        status = data.Status ||
+          data.status ||
+          data.ExecutionStatus ||
+          data.executionStatus ||
+          (data.Success ? 'Success' : 'Failed') ||
+          'Unknown';
+      }
+
+      setTestResults(data);
+
+      toast({
+        title: "Test Complete",
+        description: `Execution status: ${status}`,
+        variant: status === 'Success' ? 'default' : 'destructive'
+      });
+    },
+    onError: (error) => {
+      console.error('Test error:', error);
+      toast({
+        title: "Test Failed",
+        description: error instanceof Error ? error.message : "Unable to execute test. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Add search state for script domain/tenant selection
+  const [scriptDomainTenantSearchQuery, setScriptDomainTenantSearchQuery] = useState('');
+
+  // Fetch domains and tenants specifically for script editor (isolated from header)
+    const { data: scriptDomains = [], isLoading: scriptDomainsLoading } = useQuery({
+      queryKey: ['script-editor-domains'],
+      queryFn: async () => {
+        const response = await apiRequest('GET', '/api/domains');
+        try {
+          const data = await response.json();
+          return Array.isArray(data) ? data : [];
+        } catch (err) {
+          console.error('Failed to parse domains JSON', err);
+          return [];
+        }
+      },
+      staleTime: 5 * 60 * 1000,
     });
-  };
   
+    const { data: scriptTenants = [], isLoading: scriptTenantsLoading } = useQuery({
+      queryKey: ['script-editor-tenants'],
+      queryFn: async () => {
+        const response = await apiRequest('GET', '/api/tenants');
+        try {
+          const data = await response.json();
+          return Array.isArray(data) ? data : [];
+        } catch (err) {
+          console.error('Failed to parse tenants JSON', err);
+          return [];
+        }
+      },
+      staleTime: 5 * 60 * 1000,
+    });
+
+  useEffect(() => {
+    setIsDirty(true);
+  }, [formData, outputRules]);
+
+  useEffect(() => {
+    if (!formData.code && formData.type && formData.os) {
+      const boilerplate = getCodeTemplate(formData.type, formData.os);
+      setFormData(prev => ({ ...prev, code: boilerplate }));
+    }
+  }, [formData.type, formData.os]); // Remove formData.code dependency to prevent infinite loop
+
+  const loadTemplate = (template: any) => {
+    try {
+      setFormData(prev => ({
+        ...prev,
+        code: template.template || '',
+        category: template.category || prev.category,
+        type: template.type || prev.type,
+        os: template.targetOs || prev.os
+      }));
+      toast({
+        title: "Template Loaded",
+        description: `${template.name} template has been applied.`
+      });
+    } catch (error) {
+      console.error('Error loading template:', error);
+      toast({
+        title: "Template Load Failed",
+        description: "Failed to load the selected template.",
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleValidate = () => {
     if (script?.id) {
       setIsValidating(true);
@@ -442,7 +583,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       });
     }
   };
-  
+
   const handleTest = () => {
     if (script?.id) {
       setIsTesting(true);
@@ -457,7 +598,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       });
     }
   };
-  
+
   const handleCancel = () => {
     if (isDirty) {
       setShowUnsavedChangesDialog(true);
@@ -466,9 +607,69 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     }
   };
 
+  // Enhanced rule management functions
+  const updateOutputRule = (ruleId: number, updates: any) => {
+    setOutputRules(prev => prev.map(rule =>
+      rule.id === ruleId ? { ...rule, ...updates } : rule
+    ));
+    setIsDirty(true); // Mark as dirty when rules change
+  };
+
+  const addOutputRule = () => {
+    const newRule = {
+      id: Math.max(...outputRules.map(r => r.id), 0) + 1,
+      name: `Rule ${outputRules.length + 1}`,
+      type: 'json_path',
+      pattern: '$.Data',
+      action: 'extract',
+      target: `output_field_${outputRules.length + 1}`,
+      enabled: true,
+      priority: outputRules.length + 1
+    };
+    setOutputRules(prev => [...prev, newRule]);
+    setIsDirty(true); // Mark as dirty when adding rules
+
+    toast({
+      title: "Rule Added",
+      description: "New output processing rule added. Don't forget to save your changes."
+    });
+  };
+
+  const removeOutputRule = (ruleId: number) => {
+    setOutputRules(prev => prev.filter(rule => rule.id !== ruleId));
+    setIsDirty(true); // Mark as dirty when removing rules
+
+    toast({
+      title: "Rule Removed",
+      description: "Output processing rule removed. Don't forget to save your changes."
+    });
+  };
+
+  const validateRules = () => {
+    const invalidRules = outputRules.filter(rule =>
+      !rule.name?.trim() ||
+      !rule.pattern?.trim() ||
+      !rule.target?.trim()
+    );
+
+    if (invalidRules.length > 0) {
+      toast({
+        title: "Validation Failed",
+        description: `${invalidRules.length} rule(s) have missing required fields.`,
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    toast({
+      title: "Rules Validated",
+      description: "All output processing rules are valid."
+    });
+    return true;
+  };
+
   const handleSave = async () => {
-    // Comprehensive validation before save
-    if (!formData.name.trim()) {
+    if (!formData.name?.trim()) {
       toast({
         title: "Validation Error",
         description: "Script name is required.",
@@ -476,66 +677,112 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       });
       return;
     }
-    
-    if (!formData.code.trim()) {
+
+    if (!formData.code?.trim()) {
       toast({
-        title: "Validation Error", 
+        title: "Validation Error",
         description: "Script code cannot be empty.",
         variant: "destructive"
       });
       return;
     }
-    
-    // Transform form data to match the expected API format
-    const scriptData = {
-      name: formData.name,
-      description: formData.description,
-      category: formData.category,
-      type: formData.type,
-      targetOs: formData.os,
-      template: formData.code,
-      version: formData.version,
-      isActive: formData.isActive,
-      tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0),
-      vendor: formData.vendor,
-      complexity: formData.complexity,
-      estimatedRunTimeSeconds: formData.estimatedRunTime,
-      requiresElevation: formData.requiresElevation,
-      requiresNetwork: formData.requiresNetwork,
-      domainId: domainTenantSelection.domainId,
-      tenantId: domainTenantSelection.tenantId,
-      parameters: JSON.stringify({ outputRules, approvalWorkflow, auditSettings }),
-      outputFormat: "json",
-      outputProcessing: JSON.stringify(outputRules),
-      credentialRequirements: JSON.stringify({}),
-      industries: formData.industries,
-      complianceFrameworks: formData.complianceFrameworks,
-      isStandard: false
+
+    // Validate output rules
+    const validRules = outputRules.filter(rule =>
+      rule.name?.trim() &&
+      rule.pattern?.trim() &&
+      rule.target?.trim()
+    );
+
+    if (outputRules.length > 0 && validRules.length === 0) {
+      toast({
+        title: "Validation Error",
+        description: "Please complete or remove invalid output processing rules.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    console.log('Saving script with output rules and domain/tenant selection:', {
+      validRules,
+      domainTenantSelection
+    });
+
+    const scriptPayload = {
+      Name: formData.name.trim(),
+      Description: formData.description?.trim() || "",
+      Category: formData.category,
+      Type: formData.type,
+      TargetOs: formData.os,
+      Template: formData.code.trim(),
+      Version: formData.version || "1.0",
+      IsActive: formData.isActive,
+      Tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
+      Industries: formData.industries || [],
+      ComplianceFrameworks: formData.complianceFrameworks || [],
+      Vendor: formData.vendor || "Custom",
+      Complexity: formData.complexity || "medium",
+      EstimatedRunTimeSeconds: parseInt(formData.estimatedRunTime.toString()) || 30,
+      RequiresElevation: formData.requiresElevation,
+      RequiresNetwork: formData.requiresNetwork,
+      IsStandard: false,
+      DomainId: domainTenantSelection.domainId,
+      TenantId: domainTenantSelection.tenantId,
+
+      // Enhanced parameters with proper domain/tenant selection persistence
+      Parameters: JSON.stringify({
+        outputRules: validRules,
+        approvalWorkflow: approvalWorkflow,
+        auditSettings: auditSettings,
+        versionControl: versionControl,
+        domainTenantSelection: domainTenantSelection // Add this line to persist selection
+      }),
+
+      // Save output processing rules in both fields for compatibility
+      OutputFormat: "json",
+      OutputProcessing: JSON.stringify(validRules),
+      CredentialRequirements: JSON.stringify({})
     };
-    
-    console.log('Saving enhanced script:', scriptData);
-    
+
+    // If updating, add the ID to the payload
+    const finalPayload = script?.id ? { ...scriptPayload, Id: script.id } : scriptPayload;
+
+    console.log('Final payload being sent to API:', finalPayload);
+
     try {
-      await onSave(scriptData);
+      await onSave(finalPayload);
       setIsDirty(false);
+
+      toast({
+        title: "Script Saved",
+        description: `Script saved successfully with ${validRules.length} output processing rules${domainTenantSelection.domainId ? ` for domain ${domainTenantSelection.domainId}` : ''
+          }${domainTenantSelection.tenantId ? ` and tenant ${domainTenantSelection.tenantId}` : ''}.`,
+      });
     } catch (error) {
-      console.error('Failed to save script:', error);
+      console.error("Save error details:", error);
       toast({
         title: "Save Failed",
-        description: error instanceof Error ? error.message : "Failed to save script. Please try again.",
+        description: "Failed to save script. Please check the console for details.",
         variant: "destructive"
       });
     }
   };
 
-  // Template and code generation utilities
-  const applyTemplate = (templateId: string) => {
-    const template = templates.find((t: any) => t.id === templateId);
-    if (template) {
-      loadTemplate(template);
+  // Add debugging effect to track domain/tenant selection changes
+  useEffect(() => {
+    console.log('Domain/Tenant selection changed:', domainTenantSelection);
+    setIsDirty(true);
+  }, [domainTenantSelection]);
+
+  // Enhanced rule management functions
+
+  // Watch for changes in output rules to mark as dirty
+  useEffect(() => {
+    if (outputRules.length > 0) {
+      setIsDirty(true);
     }
-  };
-  
+  }, [outputRules]);
+
   const generateBoilerplate = () => {
     const boilerplate = getCodeTemplate(formData.type, formData.os);
     setFormData(prev => ({ ...prev, code: boilerplate }));
@@ -545,42 +792,262 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
     });
   };
 
-  const updateOutputRule = (ruleId: number, updates: any) => {
-    setOutputRules(prev => prev.map(rule => 
-      rule.id === ruleId ? { ...rule, ...updates } : rule
-    ));
-  };
+  // Isolated Domain/Tenant Tree Component for Script Editor
+  const ScriptDomainTenantTree = React.memo(function ScriptDomainTenantTree({
+    value,
+    onChange,
+    domains,
+    tenants,
+    searchQuery = ""
+  }: {
+    value: { domainId: number | null; tenantId: number | null; domain?: any; tenant?: any };
+    onChange: (selection: { domainId: number | null; tenantId: number | null; domain?: any; tenant?: any }) => void;
+    domains: any[];
+    tenants: any[];
+    searchQuery?: string;
+  }) {
+    const [expandedDomains, setExpandedDomains] = useState<Set<number>>(new Set());
 
-  const addOutputRule = () => {
-    const newRule = {
-      id: Math.max(...outputRules.map(r => r.id), 0) + 1,
-      name: 'New Rule',
-      type: 'json_path',
-      pattern: '$.Data',
-      action: 'extract',
-      target: 'new_field',
-      enabled: true,
-      priority: outputRules.length + 1
+    // Helper functions
+    const getDisplayName = useCallback((item: any) => {
+      return item.displayname || item.name || `Item ${item.id}`;
+    }, []);
+
+    const getTenantsForDomain = useCallback((domainId: number) => {
+      return tenants.filter(t => t.domainid === domainId);
+    }, [tenants]);
+
+    const matchesSearch = useCallback((text: string, query: string) => {
+      return text.toLowerCase().includes(query.toLowerCase());
+    }, []);
+
+    // Filter domains and tenants based on search
+    const filteredData = useMemo(() => {
+      const query = searchQuery.trim();
+
+      if (!query) {
+        return domains.map(domain => ({
+          domain,
+          tenants: getTenantsForDomain(domain.id),
+          matches: false,
+          hasMatchingTenants: false
+        }));
+      }
+
+      return domains.map(domain => {
+        const domainName = getDisplayName(domain);
+        const domainMatches = matchesSearch(domainName, query) || 
+                             matchesSearch(domain.description || '', query) ||
+                             matchesSearch(domain.id.toString(), query);
+
+        const domainTenants = getTenantsForDomain(domain.id);
+        const matchingTenants = domainTenants.filter(tenant => {
+          const tenantName = getDisplayName(tenant);
+          return matchesSearch(tenantName, query) ||
+                 matchesSearch(tenant.description || '', query) ||
+                 matchesSearch(tenant.id.toString(), query);
+        });
+
+        if (domainMatches || matchingTenants.length > 0) {
+          return {
+            domain,
+            tenants: matchingTenants,
+            matches: domainMatches,
+            hasMatchingTenants: matchingTenants.length > 0
+          };
+        }
+        return null;
+      }).filter(Boolean);
+    }, [searchQuery, domains, tenants, getDisplayName, getTenantsForDomain, matchesSearch]);
+
+    // Auto-expand domains with matching tenants
+    useEffect(() => {
+      if (searchQuery.trim()) {
+        const domainsToExpand = new Set<number>();
+        filteredData.forEach(item => {
+          if (item && item.hasMatchingTenants) {
+            domainsToExpand.add(item.domain.id);
+          }
+        });
+        setExpandedDomains(domainsToExpand);
+      }
+    }, [searchQuery, filteredData]);
+
+    // Auto-expand selected domain
+    useEffect(() => {
+      if (value.domainId) {
+        setExpandedDomains(prev => {
+          const next = new Set(prev);
+          next.add(value.domainId!);
+          return next;
+        });
+      }
+    }, [value.domainId]);
+
+    const toggleDomain = (domainId: number) => {
+      setExpandedDomains(prev => {
+        const next = new Set(prev);
+        if (next.has(domainId)) {
+          next.delete(domainId);
+        } else {
+          next.add(domainId);
+        }
+        return next;
+      });
     };
-    setOutputRules([...outputRules, newRule]);
-  };
 
-  const removeOutputRule = (ruleId: number) => {
-    setOutputRules(prev => prev.filter(rule => rule.id !== ruleId));
-  };
+    const handleDomainSelect = (domain: any) => {
+      onChange({
+        domainId: domain.id,
+        tenantId: null,
+        domain: domain,
+        tenant: null
+      });
+    };
 
-  const validateRules = () => {
-    console.log('Validating output rules:', outputRules);
-    // Mock validation - in real implementation this would test the rules
-    toast({
-      title: "Rules Validated",
-      description: "All output processing rules are valid."
-    });
-  };
+    const handleTenantSelect = (domain: any, tenant: any) => {
+      onChange({
+        domainId: domain.id,
+        tenantId: tenant.id,
+        domain: domain,
+        tenant: tenant
+      });
+    };
+
+    const highlightText = (text: string, query: string) => {
+      if (!query.trim()) return text;
+      const regex = new RegExp(`(${query})`, 'gi');
+      return text.split(regex).map((part, index) =>
+        regex.test(part) ? (
+          <mark key={index} className="bg-yellow-200 dark:bg-yellow-800 rounded px-0.5">
+            {part}
+          </mark>
+        ) : part
+      );
+    };
+
+    if (domains.length === 0) {
+      return (
+        <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+          <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+          <p className="text-sm">No domains available</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-1">
+        {filteredData.length === 0 && searchQuery.trim() ? (
+          <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+            <Search className="h-6 w-6 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No results found for "{searchQuery}"</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-200 dark:divide-gray-800">
+            {filteredData.map((item) => {
+              if (!item) return null;
+              
+              const { domain, tenants: domainTenants } = item;
+              const isExpanded = expandedDomains.has(domain.id);
+              const isDomainSelected = value.domainId === domain.id && !value.tenantId;
+              const hasTenantSelected = value.tenantId && domainTenants.some(t => t.id === value.tenantId);
+              const isDomainHighlighted = isDomainSelected || hasTenantSelected;
+
+              return (
+                <div key={domain.id}>
+                  {/* Domain Row */}
+                  <div
+                    className={`flex items-center space-x-2 p-3 hover:bg-gray-50 dark:hover:bg-gray-900 cursor-pointer transition-colors ${
+                      isDomainHighlighted && 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500'
+                    }`}
+                    onClick={() => handleDomainSelect(domain)}
+                  >
+                    {domainTenants.length > 0 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleDomain(domain.id);
+                        }}
+                        className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                        )}
+                      </button>
+                    )}
+                    {domainTenants.length === 0 && <div className="w-5" />}
+
+                    <Globe className={`w-4 h-4 ${
+                      isDomainHighlighted ? "text-blue-600 dark:text-blue-400" : "text-blue-600 dark:text-blue-400"
+                    }`} />
+
+                    <span className={`flex-1 text-sm font-medium ${
+                      isDomainHighlighted ? "text-blue-900 dark:text-blue-100" : "text-gray-900 dark:text-gray-100"
+                    }`}>
+                      {searchQuery ? highlightText(getDisplayName(domain), searchQuery) : getDisplayName(domain)}
+                    </span>
+
+                    {domainTenants.length > 0 && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        isDomainHighlighted 
+                          ? 'text-blue-700 bg-blue-100 dark:bg-blue-800 dark:text-blue-200' 
+                          : 'text-gray-500 bg-gray-100 dark:bg-gray-800'
+                      }`}>
+                        {domainTenants.length} {domainTenants.length === 1 ? 'tenant' : 'tenants'}
+                      </span>
+                    )}
+
+                    {isDomainSelected && (
+                      <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" />
+                    )}
+                  </div>
+
+                  {/* Tenants */}
+                  {isExpanded && domainTenants.length > 0 && (
+                    <div className="bg-gray-50 dark:bg-gray-900/50">
+                      {domainTenants.map((tenant) => {
+                        const isTenantSelected = value.domainId === domain.id && value.tenantId === tenant.id;
+                        
+                        return (
+                          <div
+                            key={tenant.id}
+                            className={`flex items-center space-x-2 p-3 pl-12 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors ${
+                              isTenantSelected && 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 border-l-offset-8'
+                            }`}
+                            onClick={() => handleTenantSelect(domain, tenant)}
+                          >
+                            <Users className={`w-3.5 h-3.5 ${
+                              isTenantSelected ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400"
+                            }`} />
+
+                            <span className={`text-sm flex-1 ${
+                              isTenantSelected ? "text-blue-900 dark:text-blue-100 font-medium" : "text-gray-700 dark:text-gray-300"
+                            }`}>
+                              {searchQuery ? highlightText(getDisplayName(tenant), searchQuery) : getDisplayName(tenant)}
+                            </span>
+
+                            {isTenantSelected && (
+                              <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  });
 
   return (
-    <div className="flex flex-col bg-white dark:bg-gray-950">
-      {/* Header */}
+    <div className="flex flex-col bg-white dark:bg-gray-950 h-full">
+      {/* Header (flex-shrink-0 is correct, it prevents this div from shrinking) */}
       <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
@@ -593,7 +1060,6 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
             </div>
           </div>
         </div>
-        
         <div className="flex items-center space-x-2">
           {isDirty && (
             <Badge variant="secondary" className="text-xs">
@@ -601,9 +1067,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
               Unsaved Changes
             </Badge>
           )}
-          <Badge variant="outline">
-            v{formData.version}
-          </Badge>
+          <Badge variant="outline">v{formData.version}</Badge>
         </div>
       </div>
 
@@ -611,55 +1075,50 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       <div className="flex border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex-shrink-0">
         <button
           onClick={() => setActiveTab('config')}
-          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'config'
-              ? 'border-primary text-primary bg-white dark:bg-gray-950'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
+          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'config'
+            ? 'border-primary text-primary bg-white dark:bg-gray-950'
+            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
         >
           <Settings className="w-4 h-4 inline mr-2" />
           Configuration
         </button>
         <button
           onClick={() => setActiveTab('code')}
-          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'code'
-              ? 'border-primary text-primary bg-white dark:bg-gray-950'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
+          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'code'
+            ? 'border-primary text-primary bg-white dark:bg-gray-950'
+            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
         >
           <Code2 className="w-4 h-4 inline mr-2" />
           Script Code
         </button>
         <button
           onClick={() => setActiveTab('processing')}
-          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'processing'
-              ? 'border-primary text-primary bg-white dark:bg-gray-950'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
+          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'processing'
+            ? 'border-primary text-primary bg-white dark:bg-gray-950'
+            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
         >
           <Zap className="w-4 h-4 inline mr-2" />
           Output Processing
         </button>
         <button
           onClick={() => setActiveTab('test')}
-          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'test'
-              ? 'border-primary text-primary bg-white dark:bg-gray-950'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
+          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'test'
+            ? 'border-primary text-primary bg-white dark:bg-gray-950'
+            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
         >
           <Play className="w-4 h-4 inline mr-2" />
           Test & Validate
         </button>
         <button
           onClick={() => setActiveTab('enterprise')}
-          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'enterprise'
-              ? 'border-primary text-primary bg-white dark:bg-gray-950'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
+          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'enterprise'
+            ? 'border-primary text-primary bg-white dark:bg-gray-950'
+            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
         >
           <Sparkles className="w-4 h-4 inline mr-2" />
           Enterprise Features
@@ -667,7 +1126,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
       </div>
 
       {/* Tab Content */}
-      <div className="overflow-y-auto p-6 max-h-[calc(85vh-200px)]">
+      <div className="flex-1 overflow-y-auto p-6">
         {activeTab === 'config' && (
           <div className="space-y-8 max-w-4xl">
             {/* Basic Information */}
@@ -690,7 +1149,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                       required
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="version">Version</Label>
                     <Input
@@ -701,7 +1160,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="description">Description</Label>
                   <Textarea
@@ -727,7 +1186,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="type">Script Type</Label>
-                    <Select value={formData.type} onValueChange={(value) => setFormData(prev => ({ ...prev, type: value }))}>
+                    <Select value={formData.type} onValueChange={(value: 'powershell' | 'bash' | 'python' | 'wmi') => setFormData(prev => ({ ...prev, type: value }))}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -794,7 +1253,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="vendor">Vendor</Label>
                     <Input
@@ -804,7 +1263,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                       placeholder="Custom, Microsoft, etc."
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="complexity">Complexity Level</Label>
                     <Select value={formData.complexity} onValueChange={(value) => setFormData(prev => ({ ...prev, complexity: value }))}>
@@ -826,22 +1285,108 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                     </Select>
                   </div>
                 </div>
+
                 
                 <div className="space-y-2">
-                  <Label htmlFor="domainTenant">Domain & Tenant Selection</Label>
-                  <DomainTenantTree 
-                    value={domainTenantSelection}
-                    onChange={setDomainTenantSelection}
-                  />
-                  {domainTenantSelection.domainId && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      {domainTenantSelection.tenantId 
-                        ? `Selected: Domain ID ${domainTenantSelection.domainId}, Tenant ID ${domainTenantSelection.tenantId}`
-                        : `Selected: Domain ID ${domainTenantSelection.domainId} (All Tenants)`
-                      }
-                    </p>
-                  )}
-                </div>
+  <Label htmlFor="domainTenant">Script Domain & Tenant Assignment</Label>
+  <p className="text-sm text-gray-600 dark:text-gray-400">
+    Assign this script to specific domains and tenants. This is independent of your current session context.
+  </p>
+  
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="space-y-2">
+      <Label htmlFor="domain">Domain</Label>
+      <Select 
+        value={domainTenantSelection.domainId?.toString() || "none"} 
+        onValueChange={(value) => {
+          const domainId = value === "none" ? null : parseInt(value);
+          setDomainTenantSelection({
+            domainId,
+            tenantId: null // Reset tenant when domain changes
+          });
+        }}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="Select domain" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">No Domain (Global)</SelectItem>
+          {scriptDomains.map((domain: any) => (
+            <SelectItem key={domain.id} value={domain.id.toString()}>
+              {domain.displayname || domain.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+
+    <div className="space-y-2">
+      <Label htmlFor="tenant">Tenant</Label>
+      <Select 
+        value={domainTenantSelection.tenantId?.toString() || "none"}
+        onValueChange={(value) => {
+          const tenantId = value === "none" ? null : parseInt(value);
+          setDomainTenantSelection(prev => ({
+            ...prev,
+            tenantId
+          }));
+        }}
+        disabled={!domainTenantSelection.domainId}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder={domainTenantSelection.domainId ? "Select tenant" : "Select domain first"} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">All Tenants</SelectItem>
+          {scriptTenants
+            .filter(tenant => tenant.domainid === domainTenantSelection.domainId)
+            .map((tenant) => (
+              <SelectItem key={tenant.id} value={tenant.id.toString()}>
+                {tenant.displayname || tenant.name}
+              </SelectItem>
+            ))}
+        </SelectContent>
+      </Select>
+    </div>
+  </div>
+
+  {/* Current Selection Display */}
+  <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border">
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+          Script Assignment:
+        </p>
+        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+          {domainTenantSelection.tenantId ? (
+            <span className="text-blue-600 dark:text-blue-400 font-medium">
+              Domain {domainTenantSelection.domainId} / Tenant {domainTenantSelection.tenantId}
+            </span>
+          ) : domainTenantSelection.domainId ? (
+            <span className="text-blue-600 dark:text-blue-400 font-medium">
+              Domain {domainTenantSelection.domainId} (All Tenants)
+            </span>
+          ) : (
+            <span className="text-gray-500">Global - Available to all domains and tenants</span>
+          )}
+        </p>
+      </div>
+      {(domainTenantSelection.domainId || domainTenantSelection.tenantId) && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setDomainTenantSelection({
+            domainId: null,
+            tenantId: null
+          })}
+          className="text-red-600 hover:text-red-700"
+        >
+          Clear Assignment
+        </Button>
+      )}
+    </div>
+  </div>
+</div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
@@ -853,7 +1398,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                       placeholder="windows, discovery, system, enterprise"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="runtime">Estimated Runtime (seconds)</Label>
                     <Input
@@ -866,7 +1411,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                     />
                   </div>
                 </div>
-                
+
                 {/* Multi-select for industries and compliance */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
@@ -889,7 +1434,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                       ))}
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>Compliance Frameworks</Label>
                     <div className="flex flex-wrap gap-2 p-3 border rounded-md">
@@ -930,7 +1475,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                         />
                         <Label htmlFor="active">Active Script</Label>
                       </div>
-                      
+
                       <div className="flex items-center space-x-2">
                         <Switch
                           id="elevation"
@@ -939,7 +1484,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                         />
                         <Label htmlFor="elevation">Requires Elevation</Label>
                       </div>
-                      
+
                       <div className="flex items-center space-x-2">
                         <Switch
                           id="network"
@@ -982,19 +1527,19 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                
+
                 <Button variant="outline" size="sm">
                   <Upload className="w-4 h-4 mr-2" />
                   Import
                 </Button>
-                
+
                 <Button variant="outline" size="sm">
                   <Download className="w-4 h-4 mr-2" />
                   Export
                 </Button>
               </div>
             </div>
-            
+
             {/* Template Selection */}
             {templates.length > 0 && (
               <Card>
@@ -1027,7 +1572,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 </CardContent>
               </Card>
             )}
-            
+
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="script-code">Script Code</Label>
@@ -1045,7 +1590,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 placeholder="Enter your script code here..."
               />
             </div>
-            
+
             {/* Enhanced Tips */}
             <Card>
               <CardHeader>
@@ -1087,7 +1632,9 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-medium">Output Processing Rules</h3>
-                <p className="text-sm text-gray-500">Configure how script output is processed and extracted</p>
+                <p className="text-sm text-gray-500">
+                  Configure how script output is processed and extracted ({outputRules.length} rules)
+                </p>
               </div>
               <div className="flex space-x-2">
                 <Button variant="outline" size="sm" onClick={validateRules}>
@@ -1103,23 +1650,24 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
 
             <div className="space-y-4">
               {outputRules.map((rule) => (
-                <Card key={rule.id}>
+                <Card key={rule.id} className={`${!rule.enabled ? 'opacity-60' : ''}`}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="space-y-2">
-                          <Label>Rule Name</Label>
+                          <Label>Rule Name *</Label>
                           <Input
-                            value={rule.name}
+                            value={rule.name || ''}
                             onChange={(e) => updateOutputRule(rule.id, { name: e.target.value })}
                             className="text-sm"
+                            placeholder="Enter rule name"
                           />
                         </div>
-                        
+
                         <div className="space-y-2">
                           <Label>Type</Label>
-                          <Select 
-                            value={rule.type} 
+                          <Select
+                            value={rule.type}
                             onValueChange={(value) => updateOutputRule(rule.id, { type: value })}
                           >
                             <SelectTrigger className="text-sm">
@@ -1132,28 +1680,28 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                             </SelectContent>
                           </Select>
                         </div>
-                        
+
                         <div className="space-y-2">
-                          <Label>Pattern</Label>
+                          <Label>Pattern *</Label>
                           <Input
-                            value={rule.pattern}
+                            value={rule.pattern || ''}
                             onChange={(e) => updateOutputRule(rule.id, { pattern: e.target.value })}
                             className="text-sm font-mono"
                             placeholder={rule.type === 'json_path' ? '$.Data.Field' : rule.type === 'regex' ? '\\d+' : 'transform'}
                           />
                         </div>
-                        
+
                         <div className="space-y-2">
-                          <Label>Target Field</Label>
+                          <Label>Target Field *</Label>
                           <Input
-                            value={rule.target}
+                            value={rule.target || ''}
                             onChange={(e) => updateOutputRule(rule.id, { target: e.target.value })}
                             className="text-sm"
                             placeholder="output_field_name"
                           />
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center space-x-2 ml-4">
                         <Switch
                           checked={rule.enabled}
@@ -1217,7 +1765,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 )}
               </div>
             </div>
-            
+
             {/* Validation Results */}
             {validationResults.length > 0 && (
               <Card>
@@ -1230,39 +1778,68 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 <CardContent>
                   <div className="space-y-3">
                     {validationResults.map((result, index) => {
-                      const isPass = result.Status === 'Pass';
-                      const isWarning = result.Status === 'Warning';
-                      
+                      // Handle different possible property names in validation results
+                      const status = result.Status || result.status || 'Unknown';
+                      const type = result.Type || result.type || result.Category || result.category || 'Validation';
+                      const message = result.Message || result.message || result.Description || result.description || 'No details available';
+
+                      const isPass = status === 'Pass' || status === 'Success' || status === 'Valid';
+                      const isWarning = status === 'Warning' || status === 'Warn';
+                      const isFail = status === 'Fail' || status === 'Failed' || status === 'Error' || status === 'Invalid';
+
                       return (
-                        <div key={index} className={`flex items-center justify-between p-4 rounded-lg border ${
-                          isPass ? 'bg-green-50 border-green-200' : 
-                          isWarning ? 'bg-yellow-50 border-yellow-200' : 
-                          'bg-red-50 border-red-200'
-                        }`}>
+                        <div
+                          key={index}
+                          className={`flex items-center justify-between p-4 rounded-lg border ${isPass ? 'bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800' :
+                              isWarning ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950 dark:border-yellow-800' :
+                                isFail ? 'bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800' :
+                                  'bg-gray-50 border-gray-200 dark:bg-gray-800 dark:border-gray-700'
+                            }`}
+                        >
                           <div className="flex items-center space-x-3">
                             {isPass ? (
                               <CheckCircle className="w-5 h-5 text-green-500" />
                             ) : isWarning ? (
                               <AlertTriangle className="w-5 h-5 text-yellow-500" />
-                            ) : (
+                            ) : isFail ? (
                               <XCircle className="w-5 h-5 text-red-500" />
+                            ) : (
+                              <Eye className="w-5 h-5 text-gray-500" />
                             )}
                             <div>
-                              <div className="font-medium text-sm">{result.Type} Validation</div>
-                              <div className="text-xs text-gray-600">{result.Message}</div>
+                              <div className="font-medium text-sm">{type} Validation</div>
+                              <div className="text-xs text-gray-600 dark:text-gray-400">{message}</div>
+                              {result.Details && (
+                                <div className="text-xs text-gray-500 mt-1">{result.Details}</div>
+                              )}
                             </div>
                           </div>
-                          <Badge variant={isPass ? 'default' : isWarning ? 'secondary' : 'destructive'}>
-                            {result.Status}
+                          <Badge
+                            variant={
+                              isPass ? 'default' :
+                                isWarning ? 'secondary' :
+                                  isFail ? 'destructive' :
+                                    'outline'
+                            }
+                          >
+                            {status}
                           </Badge>
                         </div>
                       );
                     })}
+
+                    {validationResults.length === 0 && (
+                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                        <Shield className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                        <p className="text-sm">No validation results available</p>
+                        <p className="text-xs mt-1">Run a security check to see validation results</p>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
             )}
-            
+
             {/* Test Execution Results */}
             {testResults && (
               <Card>
@@ -1290,7 +1867,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                         {new Date(testResults.TestedAt).toLocaleString()}
                       </div>
                     </div>
-                    
+
                     <div>
                       <Label>Script Output</Label>
                       <Textarea
@@ -1299,7 +1876,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                         className="font-mono text-sm min-h-32 bg-gray-50 dark:bg-gray-800 mt-2"
                       />
                     </div>
-                    
+
                     {testResults.Warnings?.length > 0 && (
                       <div>
                         <Label className="text-yellow-600">Warnings</Label>
@@ -1310,7 +1887,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                         </ul>
                       </div>
                     )}
-                    
+
                     {testResults.Errors?.length > 0 && (
                       <div>
                         <Label className="text-red-600">Errors</Label>
@@ -1327,7 +1904,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
             )}
           </div>
         )}
-        
+
         {activeTab === 'enterprise' && (
           <div className="space-y-6 max-w-4xl">
             {/* Version Control */}
@@ -1364,7 +1941,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 </div>
               </CardContent>
             </Card>
-            
+
             {/* Approval Workflow */}
             <Card>
               <CardHeader>
@@ -1405,7 +1982,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 )}
               </CardContent>
             </Card>
-            
+
             {/* Audit & Monitoring */}
             <Card>
               <CardHeader>
@@ -1438,7 +2015,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 </div>
               </CardContent>
             </Card>
-            
+
             {/* Performance Analytics */}
             <Card>
               <CardHeader>
@@ -1478,7 +2055,7 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
             <X className="w-4 h-4 mr-2" />
             Cancel
           </Button>
-          
+
           {isDirty && (
             <Badge variant="secondary" className="text-xs">
               <AlertTriangle className="w-3 h-3 mr-1" />
@@ -1486,12 +2063,12 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
             </Badge>
           )}
         </div>
-        
+
         <div className="flex space-x-2">
           {script?.id && (
             <>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={handleValidate}
                 disabled={isValidating}
               >
@@ -1502,9 +2079,9 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
                 )}
                 Validate
               </Button>
-              
-              <Button 
-                variant="outline" 
+
+              <Button
+                variant="outline"
                 onClick={handleTest}
                 disabled={isTesting}
               >
@@ -1517,14 +2094,14 @@ export function ScriptEditor({ script, onSave, onCancel }: ScriptEditorProps) {
               </Button>
             </>
           )}
-          
+
           <Button onClick={handleSave} className="bg-primary hover:bg-primary/90">
             <Save className="w-4 h-4 mr-2" />
             Save Script
           </Button>
         </div>
       </div>
-      
+
       {/* Unsaved Changes Dialog */}
       <AlertDialog open={showUnsavedChangesDialog} onOpenChange={setShowUnsavedChangesDialog}>
         <AlertDialogContent>

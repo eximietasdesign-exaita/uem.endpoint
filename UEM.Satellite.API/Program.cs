@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using UEM.Satellite.API.Data;
+using Dapper;
 using UEM.Satellite.API.Data.Repositories;
 using UEM.Satellite.API.Services;
 using UEM.Satellite.API.Store;
@@ -51,11 +52,6 @@ builder.Services.AddScoped<IProcessRepository, ProcessRepository>();
 builder.Services.AddScoped<INetworkRepository, NetworkRepository>();
 builder.Services.AddScoped<IEnhancedHeartbeatRepository, EnhancedHeartbeatRepository>();
 
-// Cloud discovery repositories
-builder.Services.AddScoped<UEM.Satellite.API.Repositories.CloudCredentialsRepository>();
-builder.Services.AddScoped<UEM.Satellite.API.Repositories.CloudProvidersRepository>();
-builder.Services.AddScoped<UEM.Satellite.API.Repositories.CloudDiscoveryJobsRepository>();
-
 // Agent simulation service for testing
 builder.Services.AddHostedService<UEM.Satellite.API.Services.AgentSimulationService>();
 
@@ -77,11 +73,30 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 // CORS for UI
-builder.Services.AddCors(opt => {
-    opt.AddPolicy("AllowAll", p => p
-        .AllowAnyOrigin()
-        .AllowAnyHeader()
-        .AllowAnyMethod());
+builder.Services.AddCors(options => {
+    options.AddPolicy("AllowAnyOrigin", policy => { // Renamed policy for clarity
+        policy
+            .AllowAnyOrigin()      // Allows any origin
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
+// Add CORS configuration before adding controllers
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy
+            .WithOrigins(
+                "http://localhost:5000",  // WebApp
+                "http://localhost:5173",  // Vite dev server
+                "http://localhost:3000"   // Alternative dev port
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
 });
 
 // Register services
@@ -94,13 +109,6 @@ builder.Services.AddScoped<DiscoveryScriptPopulationService>();
 // Policy deployment services
 builder.Services.AddScoped<IPolicyDeploymentService, PolicyDeploymentService>();
 builder.Services.AddScoped<IAgentStatusService, AgentStatusService>();
-
-// Cloud discovery services
-builder.Services.AddSingleton<UEM.Satellite.API.Services.Cloud.ICredentialEncryptionService, UEM.Satellite.API.Services.Cloud.CredentialEncryptionService>();
-builder.Services.AddScoped<UEM.Satellite.API.Services.Cloud.AwsDiscoveryService>();
-builder.Services.AddScoped<UEM.Satellite.API.Services.Cloud.GcpDiscoveryService>();
-builder.Services.AddScoped<UEM.Satellite.API.Services.Cloud.AzureDiscoveryService>();
-builder.Services.AddScoped<UEM.Satellite.API.Services.Cloud.CloudDiscoveryServiceFactory>();
 
 // Health checks
 builder.Services.AddHealthChecks();
@@ -119,9 +127,11 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseSerilogRequestLogging();
-app.UseCors("AllowAll");
+app.UseRouting();
+app.UseCors("AllowAll"); // Use the new policy name
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapControllers();
 
 // Serve static files from built frontend
 app.UseStaticFiles(new StaticFileOptions
@@ -165,30 +175,54 @@ try
 {
     using var scope = app.Services.CreateScope();
     var agentRepo = scope.ServiceProvider.GetRequiredService<IAgentRepository>();
-    // Tables will be created on first use
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    logger.LogInformation("Database repositories initialized successfully");
+    
+    // Test database connection
+    var dbFactory = scope.ServiceProvider.GetRequiredService<IDbFactory>();
+    using var connection = dbFactory.Open();
+    await connection.ExecuteAsync("SELECT 1");
+    
+    logger.LogInformation("Database connection and repositories initialized successfully");
 }
 catch (Exception ex)
 {
     var logger = app.Services.GetRequiredService<ILogger<Program>>();
-    logger.LogWarning(ex, "Could not initialize database repositories, continuing with fallback storage");
+    logger.LogError(ex, "Failed to initialize database connection");
+    throw; // Fail fast if database connection fails
 }
 
-// Initialize default cloud providers (AWS, GCP, Azure)
-try
+// Test database connection endpoint
+app.MapGet("/api/database-test", async (IDbFactory dbFactory) =>
 {
-    using var scope = app.Services.CreateScope();
-    var cloudProvidersRepo = scope.ServiceProvider.GetRequiredService<UEM.Satellite.API.Repositories.CloudProvidersRepository>();
-    await cloudProvidersRepo.InitializeDefaultProvidersAsync();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    logger.LogInformation("Cloud providers initialized successfully");
-}
-catch (Exception ex)
-{
-    var logger = app.Services.GetRequiredService<ILogger<Program>>();
-    logger.LogWarning(ex, "Could not initialize cloud providers: {Message}", ex.Message);
-}
+    try
+    {
+        using var connection = dbFactory.Open();
+        await connection.ExecuteAsync("SELECT 1");
+        return Results.Ok(new { status = "Database connection successful" });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { status = "Database connection failed", error = ex.Message });
+    }
+});
+
+app.Use(async (context, next) => {
+    try
+    {
+        await next();
+    }
+    catch (Exception ex) when (ex is InvalidOperationException && ex.Message.Contains("CORS"))
+    {
+        context.Response.StatusCode = 500;
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "CORS error occurred");
+        await context.Response.WriteAsJsonAsync(new { 
+            error = "CORS error", 
+            message = ex.Message,
+            allowedOrigins = builder.Configuration.GetSection("CorsOrigins").Get<string[]>() 
+        });
+    }
+});
 
 // Start the application (respects --urls command-line parameter)
 app.Run();

@@ -65,7 +65,7 @@ public sealed class HeartbeatService : BackgroundService
                 }
 
                 // Send heartbeat to satellite API
-                var baseUrl = Environment.GetEnvironmentVariable("SATELLITE_BASE_URL") ?? "https://localhost:7200";
+                var baseUrl = Environment.GetEnvironmentVariable("SATELLITE_BASE_URL") ?? "https://localhost:8000";
                 var endpoint = $"{baseUrl}/api/agents/{_reg.AgentId}/heartbeat";
                 
                 using var req = new HttpRequestMessage(HttpMethod.Post, endpoint)

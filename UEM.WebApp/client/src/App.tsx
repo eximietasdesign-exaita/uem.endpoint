@@ -39,22 +39,30 @@ import DomainManagementPage from "@/pages/domain-management";
 import TenantManagementPage from "@/pages/tenant-management";
 import AssetInventoryPage from "@/pages/asset-inventory";
 import RemoteAgentDeploymentPage from "@/pages/remote-agent-deployment";
-import CloudDiscoveryPage from "@/pages/cloud-discovery";
-import AssetChangeLogPage from "@/pages/asset-change-log";
-import SystemSecurityAuditPage from "@/pages/system-security-audit";
-import ExclusionAccessRulesPage from "@/pages/exclusion-access-rules";
-import CentralAssetRepositoryPage from "@/pages/central-asset-repository";
-import UnmanagedAssetQueuePage from "@/pages/unmanaged-asset-queue";
-import DataNormalizationPage from "@/pages/data-normalization";
-import SoftwareLicenseInventoryPage from "@/pages/software-license-inventory";
 import { DomainTenantProvider } from "@/contexts/DomainTenantContext";
 import { EnterpriseTopHeader } from "@/components/EnterpriseTopHeader";
 import { cn } from "@/lib/utils";
 
 function AppContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('sidebar-collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const { t } = useLanguage();
+
+  const handleToggleCollapse = () => {
+    const newCollapsed = !isSidebarCollapsed;
+    setIsSidebarCollapsed(newCollapsed);
+    try {
+      localStorage.setItem('sidebar-collapsed', String(newCollapsed));
+    } catch (error) {
+      console.warn('Failed to save sidebar state:', error);
+    }
+  };
 
   const getPageInfo = (pathname?: string) => {
     if (!pathname) return { title: "Loading...", subtitle: "Please wait" };
@@ -71,29 +79,19 @@ function AppContent() {
     if (pathname === "/scripts") return { title: "Scripts", subtitle: "Discovery scripts and automation templates" };
     if (pathname === "/policies") return { title: "Policies", subtitle: "Group scripts into policies for streamlined deployment" };
     if (pathname === "/discovery-scripts-marketplace") return { title: "Discovery Scripts Marketplace", subtitle: "Browse and download enterprise-grade discovery scripts from our comprehensive library" };
-    if (pathname === "/discovery-probes") return { title: t("satellite_server"), subtitle: "Manage data collectors deployed across your network infrastructure" };
+    if (pathname === "/discovery-probes") return { title: "Discovery Probes", subtitle: "Manage data collectors deployed across your network infrastructure" };
     if (pathname === "/satellite-job-queue") return { title: "Satellite Job Queue", subtitle: "Manage job queue for satellite server operations" };
-    if (pathname === "/credential-vault") return { title: "Credential Vault", subtitle: "Manage credential profiles for secure access to enterprise systems" };
-    if (pathname === "/credential-profiles") return { title: "Credential Vault", subtitle: "Manage credential profiles for secure access to enterprise systems" };
-    if (pathname === "/enterprise-credential-profiles") return { title: "Enterprise Credential Vault", subtitle: "Advanced credential management with enterprise-grade security, compliance, and audit capabilities" };
+    if (pathname === "/credential-profiles") return { title: "Enterprise Credential Vault", subtitle: "Advanced credential management with enterprise-grade security, compliance, and audit capabilities" };
     if (pathname === "/external-integrations") return { title: "External Integrations", subtitle: "Manage bidirectional integrations with external systems" };
     if (pathname === "/domain-management") return { title: "Domain Management", subtitle: "Manage multi-domain configuration and hierarchical relationships" };
     if (pathname === "/tenant-management") return { title: "Tenant Management", subtitle: "Manage multi-tenant configuration and resource allocation" };
     if (pathname === "/asset-inventory") return { title: "Asset Inventory", subtitle: "Comprehensive enterprise asset inventory management with dynamic fields and hierarchical reporting" };
-    if (pathname === "/agentless-discovery") return { title: t("agentless_discovery"), subtitle: "Manage automated network discovery and compliance scanning" };
-    if (pathname === "/agentless-jobs") return { title: t("agent_discovery_job"), subtitle: "Manage and monitor automated network discovery jobs with enterprise-grade filtering" };
+    if (pathname === "/agentless-discovery") return { title: "Agentless Discovery", subtitle: "Manage automated network discovery and compliance scanning" };
+    if (pathname === "/agentless-jobs") return { title: "Agentless Discovery Jobs", subtitle: "Manage and monitor automated network discovery jobs with enterprise-grade filtering" };
     if (pathname.startsWith("/agentless-discovery/view/")) return { title: "Job Details", subtitle: "View discovery job results and configuration" };
-    if (pathname === "/agent-discovery") return { title: t("agent_discovery"), subtitle: "Deploy discovery policies to agent-based endpoints" };
-    if (pathname === "/agent-status-reports") return { title: t("agent_status_report"), subtitle: "Comprehensive analysis of agent discovery effectiveness and policy compliance" };
+    if (pathname === "/agent-discovery") return { title: "Agent-Based Discovery", subtitle: "Deploy discovery policies to agent-based endpoints" };
+    if (pathname === "/agent-status-reports") return { title: "Agent Status Reports", subtitle: "Comprehensive analysis of agent discovery effectiveness and policy compliance" };
     if (pathname === "/remote-agent-deployment") return { title: "Remote Agent Deployment", subtitle: "Enterprise-grade remote agent deployment with multi-OS support and comprehensive monitoring" };
-    if (pathname === "/cloud-discovery") return { title: "Cloud Discovery", subtitle: "Discover and manage resources across AWS, GCP, and Azure cloud platforms" };
-    if (pathname === "/asset-change-log") return { title: t("asset_change_log"), subtitle: "Immutable audit trail of all asset modifications and integrity checks" };
-    if (pathname === "/system-security-audit") return { title: t("system_security_audit"), subtitle: "Comprehensive security event monitoring and compliance logging" };
-    if (pathname === "/exclusion-access-rules") return { title: t("exclusion_rules"), subtitle: "Define access control policies and exclusion rules for scalable security management" };
-    if (pathname === "/central-asset-repository") return { title: t("central_asset_repository"), subtitle: "Comprehensive enterprise asset catalog with detailed specifications and lifecycle tracking" };
-    if (pathname === "/unmanaged-asset-queue") return { title: t("unmanaged_asset_queue"), subtitle: "Detected devices awaiting classification, approval, and onboarding to managed inventory" };
-    if (pathname === "/data-normalization") return { title: t("data_normalization"), subtitle: "Automated data quality assurance with vendor sensing, standardization, and enrichment" };
-    if (pathname === "/software-license-inventory") return { title: t("software_license_inventory"), subtitle: "Software Asset Management (SAM) with compliance tracking and cost optimization" };
     if (pathname === "/user-management") return { title: t("user_management"), subtitle: "User accounts and permissions" };
     if (pathname === "/settings") return { title: t("settings"), subtitle: "System configuration" };
     return { title: "Page", subtitle: "Description" };
@@ -105,7 +103,7 @@ function AppContent() {
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)}
         isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        onToggleCollapse={handleToggleCollapse}
       />
       
       <div className={cn(
@@ -129,10 +127,8 @@ function AppContent() {
             <Route path="/discovery-scripts-marketplace" component={DiscoveryScriptsMarketplacePage} />
             <Route path="/script-policies" component={ScriptPoliciesPage} />
             <Route path="/discovery-probes" component={DiscoveryProbesPage} />
-            <Route path="/satellite-job-queue" component={SatelliteJobQueuePage} />
-            <Route path="/credential-vault" component={CredentialProfilesPage} />
-            <Route path="/credential-profiles" component={CredentialProfilesPage} />
-            <Route path="/enterprise-credential-profiles" component={EnterpriseCredentialProfilesPage} />
+            <Route path="/satellite-job-queue" component={(routeProps) => <SatelliteJobQueuePage {...(routeProps as any)} />} />
+            <Route path="/credential-profiles" component={EnterpriseCredentialProfilesPage} />
             <Route path="/external-integrations" component={ExternalIntegrationsPage} />
             <Route path="/domain-management" component={DomainManagementPage} />
             <Route path="/tenant-management" component={TenantManagementPage} />
@@ -144,14 +140,6 @@ function AppContent() {
             <Route path="/agent-discovery" component={AgentBasedDiscoveryPage} />
             <Route path="/agent-status-reports" component={AgentStatusReportsPage} />
             <Route path="/remote-agent-deployment" component={RemoteAgentDeploymentPage} />
-            <Route path="/cloud-discovery" component={CloudDiscoveryPage} />
-            <Route path="/asset-change-log" component={AssetChangeLogPage} />
-            <Route path="/system-security-audit" component={SystemSecurityAuditPage} />
-            <Route path="/exclusion-access-rules" component={ExclusionAccessRulesPage} />
-            <Route path="/central-asset-repository" component={CentralAssetRepositoryPage} />
-            <Route path="/unmanaged-asset-queue" component={UnmanagedAssetQueuePage} />
-            <Route path="/data-normalization" component={DataNormalizationPage} />
-            <Route path="/software-license-inventory" component={SoftwareLicenseInventoryPage} />
             <Route path="/user-management" component={UserManagementPage} />
             <Route path="/alerts" component={() => <div>Alerts & Notifications page</div>} />
             <Route path="/reports" component={() => <div>Reports page</div>} />

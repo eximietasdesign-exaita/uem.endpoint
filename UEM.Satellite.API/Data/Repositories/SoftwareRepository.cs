@@ -34,46 +34,40 @@ public class SoftwareRepository : ISoftwareRepository
                     software_type TEXT NOT NULL,
                     license_key TEXT,
                     discovered_at TIMESTAMPTZ DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ DEFAULT NOW()
-                );
-
-                CREATE INDEX IF NOT EXISTS idx_software_agent_name 
-                ON software(agent_id, name);";
-
-            const string upsertSql = @"
-                INSERT INTO software (
-                    agent_id, name, version, publisher, install_location, 
-                    size_bytes, install_date, software_type, license_key
-                ) VALUES (
-                    @AgentId, @Name, @Version, @Publisher, @InstallLocation,
-                    @SizeBytes, @InstallDate, @SoftwareType, @LicenseKey
-                ) ON CONFLICT (agent_id, name, version) 
-                DO UPDATE SET
-                    publisher = EXCLUDED.publisher,
-                    install_location = EXCLUDED.install_location,
-                    size_bytes = EXCLUDED.size_bytes,
-                    install_date = EXCLUDED.install_date,
-                    software_type = EXCLUDED.software_type,
-                    license_key = EXCLUDED.license_key,
-                    updated_at = NOW()";
+                    updated_at TIMESTAMPTZ DEFAULT NOW(),
+                    CONSTRAINT unique_software UNIQUE (agent_id, name, version)
+                );";
 
             using var connection = _dbFactory.Open();
             await connection.ExecuteAsync(createTableSql);
 
+            // First delete existing records for this agent
+            await connection.ExecuteAsync(
+                "DELETE FROM software WHERE agent_id = @AgentId",
+                new { AgentId = agentId }
+            );
+
+            // Then insert new records
             foreach (var item in software)
             {
-                await connection.ExecuteAsync(upsertSql, new
-                {
-                    AgentId = agentId,
-                    item.Name,
-                    item.Version,
-                    item.Publisher,
-                    item.InstallLocation,
-                    item.SizeBytes,
-                    item.InstallDate,
-                    item.SoftwareType,
-                    item.LicenseKey
-                });
+                await connection.ExecuteAsync(@"
+                    INSERT INTO software (
+                        agent_id, name, version, publisher, install_location,
+                        size_bytes, install_date, software_type, license_key
+                    ) VALUES (
+                        @AgentId, @Name, @Version, @Publisher, @InstallLocation,
+                        @SizeBytes, @InstallDate, @SoftwareType, @LicenseKey
+                    )", new {
+                        AgentId = agentId,
+                        item.Name,
+                        item.Version,
+                        item.Publisher,
+                        item.InstallLocation,
+                        item.SizeBytes,
+                        item.InstallDate,
+                        item.SoftwareType,
+                        item.LicenseKey
+                    });
             }
 
             _logger.LogInformation("Upserted {Count} software items for agent {AgentId}", software.Length, agentId);

@@ -66,10 +66,25 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useDomainTenant } from '@/contexts/DomainTenantContext';
 import { DomainTenantTree } from '@/components/DomainTenantTree';
+import { DomainTenantSearch } from '@/components/ui/domain-tenant-search';
 import { cn } from '@/lib/utils';
 
 interface EnterpriseTopHeaderProps {
   setIsSidebarOpen: (open: boolean) => void;
+}
+
+// Basic Domain and Tenant types used in this component
+interface Domain {
+  id: number;
+  displayname?: string;
+  [key: string]: any;
+}
+
+interface Tenant {
+  id: number;
+  domainId?: number;
+  displayname?: string;
+  [key: string]: any;
 }
 
 // Mock user data - replace with actual user context
@@ -104,9 +119,11 @@ export function EnterpriseTopHeader({ setIsSidebarOpen }: EnterpriseTopHeaderPro
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [navResults, setNavResults] = useState<any[] | null>(null);
+  const [dtSearchResults, setDtSearchResults] = useState<{ domains: any[]; tenants: any[] } | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isDomainTenantOpen, setIsDomainTenantOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState<{ domains: Domain[]; tenants: Tenant[]; query: string } | null>(null);
 
   // Build breadcrumbs from current location
   const breadcrumbs = buildBreadcrumbs(location);
@@ -124,17 +141,27 @@ export function EnterpriseTopHeader({ setIsSidebarOpen }: EnterpriseTopHeaderPro
     setIsDomainTenantOpen(false);
   };
 
+// Helper to get tenants for a given domain
+const getTenantsForDomain = (domainId: number | null) => {
+    if (!domainId) return [];
+    return tenants.filter(t => t.domainId === domainId || (t as any).domainid === domainId);
+};
+
   // Global search functionality
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+      // Open search with Cmd/Ctrl + K (case-insensitive)
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         setIsSearchOpen(true);
+        return;
       }
+
+      // Close search on Escape
       if (event.key === 'Escape') {
         setIsSearchOpen(false);
         setSearchQuery('');
-        setSearchResults([]);
+        setNavResults(null);
       }
     };
 
@@ -145,7 +172,7 @@ export function EnterpriseTopHeader({ setIsSidebarOpen }: EnterpriseTopHeaderPro
   // Search with debouncing
   useEffect(() => {
     if (!searchQuery.trim()) {
-      setSearchResults([]);
+      setNavResults(null);
       setIsSearching(false);
       return;
     }
@@ -153,7 +180,7 @@ export function EnterpriseTopHeader({ setIsSidebarOpen }: EnterpriseTopHeaderPro
     setIsSearching(true);
     const debounceTimer = setTimeout(() => {
       const results = searchNavigation(searchQuery);
-      setSearchResults(results);
+      setNavResults(results);
       setIsSearching(false);
     }, 250);
 
@@ -164,7 +191,7 @@ export function EnterpriseTopHeader({ setIsSidebarOpen }: EnterpriseTopHeaderPro
     window.location.href = path;
     setIsSearchOpen(false);
     setSearchQuery('');
-    setSearchResults([]);
+    setNavResults(null);
   };
 
   const getStatusBadge = (status: string) => {
@@ -233,39 +260,55 @@ export function EnterpriseTopHeader({ setIsSidebarOpen }: EnterpriseTopHeaderPro
                 >
                   <div className="flex items-center space-x-2 flex-1 min-w-0">
                     {selectedDomain ? (
-                      <>
-                        <div className="flex items-center space-x-1.5 flex-1 min-w-0">
-                          <Globe className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-                          <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">
-                            {(selectedDomain as any).displayname || selectedDomain.displayName}
-                          </span>
-                          {selectedTenant && (
-                            <>
-                              <ChevronRight className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                              <Building2 className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
-                              <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">
-                                {(selectedTenant as any).displayname || selectedTenant.displayName}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex items-center space-x-2">
-                        <Globe className="h-3.5 w-3.5 text-gray-400" />
-                        <span className="text-xs text-gray-600 dark:text-gray-400">
-                          Select Domain & Tenant
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <Badge variant="secondary" className="text-xs font-medium ml-auto">
-                    {selectedTenant ? 'Tenant' : selectedDomain ? 'Domain' : 'All'}
-                  </Badge>
+  <div className="flex items-center space-x-2 flex-1 min-w-0">
+    <Globe className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+    <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">
+      {(selectedDomain as any).displayname || selectedDomain.displayname}
+    </span>
+    
+    {selectedTenant ? (
+      <>
+        <ChevronRight className="h-3 w-3 text-gray-400 flex-shrink-0" />
+        <Building2 className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+        <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">
+          {(selectedTenant as any).displayname || selectedTenant.displayname}
+        </span>
+      </>
+    ) : (
+      getTenantsForDomain(selectedDomain.id).length > 0 && (
+        <Badge variant="secondary" className="ml-2 text-xs">
+          {getTenantsForDomain(selectedDomain.id).length} {getTenantsForDomain(selectedDomain.id).length === 1 ? 'Tenant' : 'Tenants'}
+        </Badge>
+      )
+    )}
+  </div>
+) : (
+  <div className="flex items-center space-x-2">
+    <Globe className="h-3.5 w-3.5 text-gray-400" />
+    <span className="text-xs text-gray-600 dark:text-gray-400">
+      Select Domain & Tenant
+    </span>
+  </div>
+)}
+</div>
+
+<Badge 
+  variant="secondary" 
+  className="text-xs font-medium ml-3"
+>
+  {selectedTenant 
+    ? 'Tenant' 
+    : selectedDomain && getTenantsForDomain(selectedDomain.id).length > 1 
+      ? 'Multi-Tenant Domain' 
+      : selectedDomain 
+        ? 'Domain' 
+        : 'All'
+  }
+</Badge>
                 </Button>
               </PopoverTrigger>
               <PopoverContent 
-                className="w-[400px] p-0" 
+                className="w-[500px] p-0" 
                 align="start"
                 sideOffset={8}
               >
@@ -274,28 +317,62 @@ export function EnterpriseTopHeader({ setIsSidebarOpen }: EnterpriseTopHeaderPro
                     Domain & Tenant Selection
                   </h3>
                   <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
-                    Select your operational context
+                    Search and select your operational context
                   </p>
                 </div>
-                <div className="p-3 max-h-[400px] overflow-y-auto">
-                  <DomainTenantTree
-                    value={{
-                      domainId: selectedDomain?.id || null,
-                      tenantId: selectedTenant?.id || null
-                    }}
-                    onChange={handleDomainTenantChange}
+                
+                <div className="p-4 space-y-4">
+                  <DomainTenantSearch
+                    domains={domains}
+                    tenants={tenants}
+                    selectedDomainId={selectedDomain?.id || null}
+                    selectedTenantId={selectedTenant?.id || null}
+                    onSelect={handleDomainTenantChange}
+                    onSearchResults={setSearchResults}
                   />
+
+                  {/* Divider */}
+                  <div className="border-t border-gray-200 dark:border-gray-700 my-4" />
+
+                  {/* Browse Hierarchy - now filtered by search results */}
+                  <div className="space-y-2">
+                    <div className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Browse Hierarchy
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto">
+                      <DomainTenantTree
+                        domains={(searchResults?.domains || domains) as any}
+                        tenants={(searchResults?.tenants || tenants) as any}
+                        searchQuery={searchResults?.query || ''}
+                        value={{
+                          domainId: selectedDomain?.id || null,
+                          tenantId: selectedTenant?.id || null
+                        }}
+                        onChange={handleDomainTenantChange}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="border-t bg-gray-50 dark:bg-gray-900 px-4 py-2 flex items-center justify-between">
+
+                <div className="border-t bg-gray-50 dark:bg-gray-900 px-4 py-3 flex items-center justify-between">
                   <span className="text-xs text-gray-600 dark:text-gray-400">
                     {selectedDomain && selectedTenant ? (
-                      <>Viewing: <span className="font-medium">{(selectedDomain as any).displayname || selectedDomain.displayName} / {(selectedTenant as any).displayname || selectedTenant.displayName}</span></>
+                      <><span className="font-medium">{(selectedDomain as any).displayname || selectedDomain.displayname} / {(selectedTenant as any).displayname || selectedTenant.displayname}</span></>
                     ) : selectedDomain ? (
-                      <>Viewing: <span className="font-medium">{(selectedDomain as any).displayname || selectedDomain.displayName} (All Tenants)</span></>
+                      <><span className="font-medium">{(selectedDomain as any).displayname || selectedDomain.displayname} (All Tenants)</span></>
                     ) : (
-                      'No selection'
+                      'No selection - viewing all domains'
                     )}
                   </span>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="outline" className="text-xs">
+                      {domains.length} Domains
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {tenants.length} Tenants
+                    </Badge>
+                  </div>
                 </div>
               </PopoverContent>
             </Popover>
@@ -504,15 +581,14 @@ export function EnterpriseTopHeader({ setIsSidebarOpen }: EnterpriseTopHeaderPro
             />
           </div>
           <div className="px-4 pb-4">
-            {isSearching && (
+            {isSearching ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin" />
                 <span className="ml-2 text-sm text-muted-foreground">Searching...</span>
               </div>
-            )}
-            {!isSearching && searchResults.length > 0 && (
+            ) : navResults && navResults.length > 0 ? (
               <div className="space-y-1 max-h-[300px] overflow-y-auto">
-                {searchResults.map((result, index) => (
+                {navResults.map((result, index) => (
                   <div
                     key={index}
                     onClick={() => handleSearchSelect(result.path)}
@@ -534,13 +610,12 @@ export function EnterpriseTopHeader({ setIsSidebarOpen }: EnterpriseTopHeaderPro
                   </div>
                 ))}
               </div>
-            )}
-            {!isSearching && searchQuery && searchResults.length === 0 && (
+            ) : searchQuery && navResults && navResults.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p>No results found for "{searchQuery}"</p>
               </div>
-            )}
+            ) : null}
           </div>
         </DialogContent>
       </Dialog>

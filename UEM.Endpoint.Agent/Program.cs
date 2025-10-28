@@ -25,9 +25,14 @@ builder.Services.Configure<HostOptions>(o =>
 });
 
 // Configure Serilog from appsettings.json
-builder.Host.UseSerilog((context, services, configuration) => configuration
-    .ReadFrom.Configuration(context.Configuration)
-    .ReadFrom.Services(services));
+builder.Services.AddSerilog((services, configuration) => {
+    configuration
+        .ReadFrom.Configuration(builder.Configuration)
+        .ReadFrom.Services(services)
+        .WriteTo.Console()
+        .WriteTo.File("logs/satellite-api-.log", rollingInterval: RollingInterval.Day)
+        .Enrich.FromLogContext();
+});
 
 // Ensure log directories exist
 var logDirs = new[]
@@ -80,8 +85,11 @@ builder.Services.AddHostedService<HeartbeatService>();
 builder.Services.AddSingleton<LogFileManager>();
 
 // Enterprise discovery services
-builder.Services.AddSingleton<EnterpriseHardwareDiscoveryService>();
-builder.Services.AddSingleton<EnterpriseSoftwareDiscoveryService>();
+if (OperatingSystem.IsWindows())
+{
+    builder.Services.AddSingleton<EnterpriseHardwareDiscoveryService>();
+    builder.Services.AddSingleton<EnterpriseSoftwareDiscoveryService>();
+}
 builder.Services.AddSingleton<EnterpriseSecurityDiscoveryService>();
 
 // Add this registration for EnterpriseDiscoveryOrchestrator as a singleton:
@@ -90,8 +98,13 @@ builder.Services.AddSingleton<EnterpriseDiscoveryOrchestrator>(sp =>
     var logger = sp.GetRequiredService<ILogger<EnterpriseDiscoveryOrchestrator>>();
     var config = sp.GetRequiredService<IConfiguration>();
     var reg = sp.GetRequiredService<AgentRegistrationService>();
-    var hardware = sp.GetRequiredService<EnterpriseHardwareDiscoveryService>();
-    var software = sp.GetRequiredService<EnterpriseSoftwareDiscoveryService>();
+    EnterpriseHardwareDiscoveryService? hardware = null;
+    EnterpriseSoftwareDiscoveryService? software = null;
+    if (OperatingSystem.IsWindows())
+    {
+        hardware = sp.GetRequiredService<EnterpriseHardwareDiscoveryService>();
+        software = sp.GetRequiredService<EnterpriseSoftwareDiscoveryService>();
+    }
     var security = sp.GetRequiredService<EnterpriseSecurityDiscoveryService>();
     var agentDataService = sp.GetRequiredService<AgentDataService>();
     return new EnterpriseDiscoveryOrchestrator(logger, config, reg, hardware, software, security, agentDataService);

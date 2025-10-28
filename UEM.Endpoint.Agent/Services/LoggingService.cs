@@ -1,6 +1,9 @@
 using Microsoft.Extensions.Logging;
 using Serilog;
 using System.Runtime.CompilerServices;
+using UEM.Endpoint.Agent.Services;  // Add this to files using logging
+
+using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace UEM.Endpoint.Agent.Services;
 
@@ -157,7 +160,7 @@ public class LogFileManager
     /// </summary>
     public async Task PerformMaintenanceAsync()
     {
-        using var timer = _logger.BeginPerformanceTimer("LogMaintenanceOperation");
+        using var timer = LoggingService.BeginPerformanceTimer(_logger, "LogMaintenanceOperation");
         //using var timer = ((ILogger)_logger).BeginPerformanceTimer("LogMaintenanceOperation");
 
         try
