@@ -115,7 +115,7 @@ export const SidebarContent = React.memo(function SidebarContent({
       {/* Navigation - Filtered in-place with instant updates */}
       <ScrollArea className={cn(
         "flex-1",
-        isCollapsed && !forMobile ? "p-2" : "p-4"
+        isCollapsed && !forMobile ? "p-2 pr-0" : "pl-4 pr-0"
       )}>
         <nav className={cn(
           isCollapsed && !forMobile ? "space-y-1" : "space-y-2"
@@ -180,10 +180,10 @@ export const SidebarContent = React.memo(function SidebarContent({
                     <CollapsibleTrigger asChild>
                       <div
                         className={cn(
-                          'flex items-center w-full rounded-lg transition-all duration-200 group cursor-pointer relative',
+                          // fixed 3-column grid: 28px icon, flexible label, 28px chevron
                           isCollapsed && !forMobile
-                            ? 'justify-center w-12 h-12 mx-auto'
-                            : 'justify-between px-3 py-2.5',
+                            ? 'place-items-center w-12 h-12 mx-auto grid'
+                            : 'group grid grid-cols-[28px_1fr_28px] items-center gap-x-2 w-full px-3 py-2.5 pr-0',
                           isGroupActive(item)
                             ? 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
                             : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
@@ -191,81 +191,88 @@ export const SidebarContent = React.memo(function SidebarContent({
                         data-testid={`nav-group-${item.id}`}
                         title={isCollapsed && !forMobile ? item.name : undefined}
                       >
-                        <div className={cn(
-                          "flex items-center min-w-0",
-                          isCollapsed && !forMobile ? "justify-center" : "space-x-3 flex-1"
-                        )}>
-                          <div className="flex-shrink-0">
-                            <item.icon className={cn(
-                              'transition-colors h-5 w-5',
+                        {/* icon column (fixed) */}
+                        <div className="flex items-center justify-center">
+                          <item.icon
+                            className={cn(
+                              'h-5 w-5 transition-colors',
                               isGroupActive(item)
                                 ? 'text-gray-700 dark:text-gray-300'
                                 : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
-                            )} />
-                          </div>
-                          {(!isCollapsed || forMobile) && (
-                            <span className="font-medium text-sm min-w-0 truncate">
+                            )}
+                          />
+                        </div>
+
+                        {/* label column (flexible) */}
+                        {(!isCollapsed || forMobile) ? (
+                          <div className="min-w-0">
+                            <span className="font-medium text-sm truncate">
                               {searchQuery ? highlightText(item.name, searchQuery) : item.name}
                             </span>
+                          </div>
+                        ) : (
+                          <div /> // placeholder when collapsed
+                        )}
+
+                        {/* chevron column (fixed) - inside the same hoverable group */}
+                        <div className="flex items-center justify-center">
+                          {(!isCollapsed || forMobile) && (
+                            <ChevronRight
+                              className={cn(
+                                'h-4 w-4 text-gray-500 transition-transform duration-200 group-hover:text-gray-700',
+                                expandedGroups.has(item.id) && 'rotate-90'
+                              )}
+                            />
                           )}
                         </div>
-                        {(!isCollapsed || forMobile) && (
-                          <div className="flex-shrink-0">
-                            {expandedGroups.has(item.id) ? (
-                              <ChevronDown className="h-4 w-4 text-gray-500 transition-transform" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 text-gray-500 transition-transform" />
-                            )}
-                          </div>
-                        )}
                       </div>
                     </CollapsibleTrigger>
 
                     <CollapsibleContent className={cn(
-                      "mt-1 space-y-1",
-                      isCollapsed && !forMobile ? "hidden" : "ml-8"
+                      "mt-1 space-y-1 pl-8",
+                      isCollapsed && !forMobile && "hidden"
                     )}>
-                      {item.children
-                        ?.filter((child: any) => child.searchable !== false && child.path)
-                        .map((child: any) => (
-                          <Link key={child.id} href={child.path || '#'}>
-                            <div
-                              className={cn(
-                                'flex items-center rounded-md transition-all duration-200 group relative space-x-3 px-3 py-2',
-                                isActive(child.path)
-                                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200'
-                              )}
-                              data-testid={`nav-${child.id}`}
-                              onClick={onClose}
-                            >
-                              <div className="flex-shrink-0">
-                                <child.icon className={cn(
-                                  'h-4 w-4 transition-colors',
-                                  isActive(child.path)
-                                    ? 'text-blue-600 dark:text-blue-400'
-                                    : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-400'
-                                )} />
-                              </div>
-                              <span className="text-sm flex-1 min-w-0 truncate">
-                                {searchQuery ? highlightText(child.name, searchQuery) : child.name}
-                              </span>
-                              {child.badge && (
-                                <Badge variant="outline" className="text-xs flex-shrink-0">
-                                  {child.badge}
-                                </Badge>
-                              )}
-                            </div>
-                          </Link>
-                        ))}
-                    </CollapsibleContent>
-                  </Collapsible>
-                )}
-              </div>
-            ))
-          )}
-        </nav>
-      </ScrollArea>
+                       {item.children
+                         ?.filter((child: any) => child.searchable !== false && child.path)
+                         .map((child: any) => (
+                           <Link key={child.id} href={child.path || '#'}>
+                             <div
+                               className={cn(
+                                 'flex items-center rounded-md transition-all duration-200 group relative space-x-3 px-3 py-2 w-full',
+                                 isActive(child.path)
+                                   ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200'
+                               )}
+                               data-testid={`nav-${child.id}`}
+                               onClick={onClose}
+                             >
+                               <div className="flex-shrink-0">
+                                 <child.icon className={cn(
+                                   'h-4 w-4 transition-colors',
+                                   isActive(child.path)
+                                     ? 'text-blue-600 dark:text-blue-400'
+                                     : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-400'
+                                 )} />
+                               </div>
+                               <span className="text-sm flex-1 min-w-0 truncate">
+                                 {searchQuery ? highlightText(child.name, searchQuery) : child.name}
+                               </span>
+                               {child.badge && (
+                                 <Badge variant="outline" className="text-xs flex-shrink-0">
+                                   {child.badge}
+                                 </Badge>
+                               )}
+                             </div>
+                           </Link>
+                         ))}
+                     </CollapsibleContent>
+                   </Collapsible>
+                 )}
+               </div>
+             ))
+           )}
+         </nav>
+       </ScrollArea>
 
       {/* Footer */}
       <div className={cn(

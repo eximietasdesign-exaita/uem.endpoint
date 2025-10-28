@@ -150,15 +150,23 @@ export default function EnterpriseCredentialProfilesPage() {
   // Fetch credential profiles from API
   const { data: profiles = [], isLoading, error } = useQuery({
     queryKey: ['/api/credential-profiles'],
+    queryFn: async () => {
+      const response = await fetch('/api/credential-profiles');
+      if (!response.ok) throw new Error('Failed to fetch credential profiles');
+      return response.json();
+    },
   });
 
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (profile: any) => {
-      return await apiRequest('/api/credential-profiles', {
+      const response = await fetch('/api/credential-profiles', {
         method: 'POST',
-        body: profile,
+        body: JSON.stringify(profile),
+        headers: { 'Content-Type': 'application/json' },
       });
+      if (!response.ok) throw new Error('Failed to create profile');
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/credential-profiles'] });
@@ -181,10 +189,13 @@ export default function EnterpriseCredentialProfilesPage() {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...updates }: { id: number } & any) => {
-      return await apiRequest(`/api/credential-profiles/${id}`, {
+      const response = await fetch(`/api/credential-profiles/${id}`, {
         method: 'PATCH',
-        body: updates,
+        body: JSON.stringify(updates),
+        headers: { 'Content-Type': 'application/json' },
       });
+      if (!response.ok) throw new Error('Failed to update profile');
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/credential-profiles'] });
@@ -206,9 +217,10 @@ export default function EnterpriseCredentialProfilesPage() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest(`/api/credential-profiles/${id}`, {
+      const response = await fetch(`/api/credential-profiles/${id}`, {
         method: 'DELETE',
       });
+      if (!response.ok) throw new Error('Failed to delete profile');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/credential-profiles'] });
@@ -361,7 +373,8 @@ export default function EnterpriseCredentialProfilesPage() {
     return level ? level.color : 'bg-blue-500';
   };
 
-  const formatDate = (dateString: string | Date) => {
+  const formatDate = (dateString: string | Date | null) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString();
   };
 

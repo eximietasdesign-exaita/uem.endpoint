@@ -81,16 +81,23 @@ export default function CredentialProfilesPage() {
   // Fetch credential profiles from API
   const { data: profiles = [], isLoading, error } = useQuery({
     queryKey: ['/api/credential-profiles'],
+    queryFn: async () => {
+      const response = await fetch('/api/credential-profiles');
+      if (!response.ok) throw new Error('Failed to fetch credential profiles');
+      return response.json();
+    },
   });
 
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (profile: { name: string; description: string; credentials: string }) => {
-      return await apiRequest('/api/credential-profiles', {
+      const response = await fetch('/api/credential-profiles', {
         method: 'POST',
         body: JSON.stringify(profile),
         headers: { 'Content-Type': 'application/json' },
       });
+      if (!response.ok) throw new Error('Failed to create profile');
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/credential-profiles'] });
@@ -113,11 +120,13 @@ export default function CredentialProfilesPage() {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...updates }: { id: number; name?: string; description?: string; credentials?: string }) => {
-      return await apiRequest(`/api/credential-profiles/${id}`, {
+      const response = await fetch(`/api/credential-profiles/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
         headers: { 'Content-Type': 'application/json' },
       });
+      if (!response.ok) throw new Error('Failed to update profile');
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/credential-profiles'] });
@@ -139,9 +148,10 @@ export default function CredentialProfilesPage() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest(`/api/credential-profiles/${id}`, {
+      const response = await fetch(`/api/credential-profiles/${id}`, {
         method: 'DELETE',
       });
+      if (!response.ok) throw new Error('Failed to delete profile');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/credential-profiles'] });
@@ -160,10 +170,10 @@ export default function CredentialProfilesPage() {
   });
 
   // Filter profiles based on search
-  const filteredProfiles = profiles.filter((profile: CredentialProfile) =>
+  const filteredProfiles = Array.isArray(profiles) ? profiles.filter((profile: CredentialProfile) =>
     profile.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (profile.description || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  ) : [];
 
   const handleCreateProfile = () => {
     if (!newProfile.name.trim()) {
@@ -180,12 +190,13 @@ export default function CredentialProfilesPage() {
 
   const handleEditProfile = (profile: CredentialProfile) => {
     setSelectedProfile(profile);
+    const credData = profile.credentialsLegacy ? JSON.stringify(profile.credentialsLegacy) : '[]';
     setNewProfile({
       name: profile.name,
       description: profile.description || '',
-      credentials: profile.credentials || '[]'
+      credentials: credData
     });
-    setEditingCredentials(parseCredentials(profile.credentials));
+    setEditingCredentials(parseCredentials(credData));
     setIsEditDialogOpen(true);
   };
 
@@ -304,22 +315,100 @@ export default function CredentialProfilesPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6">
       
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Credential Profiles
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Manage credential profiles for secure access to enterprise systems
-          </p>
+      {/* Enterprise Header */}
+      <div className="flex flex-col space-y-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+              {t("discovery_profiles")}
+            </h1>
+            <p className="text-base text-gray-600 dark:text-gray-400 mt-1">
+              Secure credential management for network discovery operations and system access
+            </p>
+          </div>
+          <Button onClick={() => setIsCreateDialogOpen(true)} size="lg">
+            <Plus className="w-4 h-4 mr-2" />
+            Create Profile
+          </Button>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add New Profile
-        </Button>
+      </div>
+
+      {/* Statistics Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Total Profiles
+                </p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
+                  {Array.isArray(profiles) ? profiles.length : 0}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
+                <Shield className="h-6 w-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Active
+                </p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
+                  {Array.isArray(profiles) ? profiles.filter((p: CredentialProfile) => p.isActive).length : 0}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400">
+                <CheckCircle className="h-6 w-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Total Credentials
+                </p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
+                  {Array.isArray(profiles) ? profiles.reduce((acc: number, p: CredentialProfile) => {
+                    const credData = p.credentialsLegacy ? JSON.stringify(p.credentialsLegacy) : '[]';
+                    const creds = parseCredentials(credData);
+                    return acc + creds.length;
+                  }, 0) : 0}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400">
+                <Key className="h-6 w-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Total Usage
+                </p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
+                  {Array.isArray(profiles) ? profiles.reduce((acc: number, p: CredentialProfile) => acc + (p.usageCount || 0), 0) : 0}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400">
+                <Activity className="h-6 w-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Search and Filters */}
@@ -338,17 +427,37 @@ export default function CredentialProfilesPage() {
       {/* Profiles Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {filteredProfiles.length === 0 ? (
-          <div className="col-span-full text-center py-12 text-gray-500 dark:text-gray-400">
-            <Shield className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-            <p>No credential profiles found.</p>
+          <div className="col-span-full">
+            <Card>
+              <CardContent className="text-center py-16">
+                <div className="flex flex-col items-center space-y-4">
+                  <div className="p-4 rounded-full bg-gray-100 dark:bg-gray-800">
+                    <Shield className="w-12 h-12 text-gray-400 dark:text-gray-600" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-medium text-gray-900 dark:text-white">
+                      No discovery profiles found
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      Create your first profile to start managing discovery credentials
+                    </p>
+                  </div>
+                  <Button onClick={() => setIsCreateDialogOpen(true)} size="lg">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create First Profile
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         ) : (
           filteredProfiles.map((profile: CredentialProfile) => {
-            const credentials = parseCredentials(profile.credentials);
-            const credentialTypesSummary = credentials.reduce((acc: any, cred: any) => {
+            const credData = profile.credentialsLegacy ? JSON.stringify(profile.credentialsLegacy) : '[]';
+            const credentials = parseCredentials(credData);
+            const credentialTypesSummary = Array.isArray(credentials) ? credentials.reduce((acc: any, cred: any) => {
               acc[cred.type] = (acc[cred.type] || 0) + 1;
               return acc;
-            }, {});
+            }, {}) : {};
 
             return (
               <Card key={profile.id} className="hover:shadow-md transition-shadow">
@@ -381,7 +490,7 @@ export default function CredentialProfilesPage() {
 
                     {/* Credential Types */}
                     <div className="flex flex-wrap gap-2">
-                      {Object.entries(credentialTypesSummary).map(([type, count]) => (
+                      {Object.entries(credentialTypesSummary).map(([type, count]: [string, any]) => (
                         <div key={type} className="flex items-center space-x-1">
                           {renderCredentialIcon(type)}
                           <span className="text-xs text-gray-600 dark:text-gray-400">
@@ -439,7 +548,7 @@ export default function CredentialProfilesPage() {
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Create New Credential Profile</DialogTitle>
+            <DialogTitle>Create New Discovery Profile</DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
@@ -487,7 +596,7 @@ export default function CredentialProfilesPage() {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit Credential Profile</DialogTitle>
+            <DialogTitle>Edit Discovery Profile</DialogTitle>
           </DialogHeader>
           
           {selectedProfile && (

@@ -20,6 +20,7 @@ import {
   Building2,
   Database,
   Zap,
+  Cloud,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
@@ -65,6 +66,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       path: "/remote-agent-deployment",
       icon: Zap,
       label: "Remote Agent Deployment",
+    },
+    {
+      path: "/cloud-discovery",
+      icon: Cloud,
+      label: "Cloud Discovery",
     },
     { path: "/scripts", icon: Code, label: "Discovery Scripts" },
     { path: "/policies", icon: FileText, label: "Script Orchestrator" },

@@ -166,7 +166,7 @@ export default function ScriptPoliciesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t("script_policies")}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t("orchestration_repository")}</h1>
           <p className="text-gray-600 dark:text-gray-400">Group script into policies for streamlined deployment</p>
         </div>
         <Button onClick={handleCreatePolicy} className="bg-blue-600 hover:bg-blue-700">

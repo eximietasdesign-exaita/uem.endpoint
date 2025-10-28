@@ -6,6 +6,8 @@ This is a comprehensive enterprise UEM (Unified Endpoint Management) solution wi
 **ARCHITECTURAL MILESTONES**:
 - **September 2025**: Migrated from dual-server architecture (TypeScript + C#) to unified C#-only backend
 - **September 30, 2025**: Implemented unified hierarchical domain-tenant tree selector across all UI components for consistent context selection and display
+- **October 17, 2025**: Implemented enterprise-grade Cloud Discovery infrastructure for AWS, GCP, and Azure with encrypted credentials, scheduled discovery jobs, and comprehensive audit trails
+- **October 21, 2025**: Navigation consolidation - Renamed 5 Discovery-related menu items for clarity and added "Others" menu section containing 16 previously orphaned pages for future organization
 
 ### Unified UEM System - .NET + React Integration
 A robust enterprise UEM system with single-backend architecture, featuring:
@@ -35,9 +37,16 @@ Preferred communication style: Simple, everyday language.
 - **Static Files**: Integrated serving of React build assets
 
 ### Database
-- **Type**: PostgreSQL (Enterprise-grade with 44+ tables)
+- **Type**: PostgreSQL (Enterprise-grade with 50+ tables)
 - **ORM**: Dapper with raw SQL for performance
 - **Management**: C# repositories with graceful fallbacks, comprehensive agent data
+- **Cloud Discovery Schema**: 6 specialized tables for multi-cloud asset discovery:
+  - `cloud_providers`: AWS, GCP, Azure registry with 3 default providers
+  - `cloud_credentials`: AES-256 encrypted credential storage with validation tracking
+  - `cloud_discovery_jobs`: Scheduled discovery job configuration with cron support
+  - `cloud_assets`: Discovered cloud resources with JSONB metadata and cost estimates
+  - `cloud_discovery_results`: Execution history and audit trail for all discovery runs
+  - `cloud_audit_logs`: Comprehensive security audit trail for all cloud operations
 
 ### Key Features & Components
 - **Data Models**: Users, Endpoints, Activities, System Status.
@@ -59,6 +68,34 @@ Preferred communication style: Simple, everyday language.
 - **Script Management**: Enhanced script editor with hierarchical domain-tenant tree selection, output processing, real-time validation, and code templates.
 - **Policy Management**: Improved execution flow visualization and professional step-card layouts.
 - **System Status**: Enterprise-grade footer displaying internet connectivity, system version, and real-time clock.
+- **Cloud Discovery** (Phase 1-5 Complete): Enterprise-grade multi-cloud discovery infrastructure:
+  - **Database Foundation** ✅: 6 tables with 40+ indexes for optimal query performance
+  - **Multi-Cloud Support** ✅: AWS, GCP, Azure provider registry with extensible architecture (3 providers auto-initialized)
+  - **Security** ✅: AES-256 encrypted credential storage with validation and expiration tracking
+  - **Scheduling** ✅: Cron-based job scheduling (hourly, daily, weekly, custom expressions) with on-demand execution
+  - **Asset Tracking**: Comprehensive cloud resource inventory with tags, metadata, cost estimates (in progress)
+  - **Audit Trail**: Full execution history and security audit logs for compliance
+  - **Tenant Isolation**: Multi-tenant support with domain/tenant-based data isolation
+  - **Cloud Provider SDKs** ✅: AWS SDK (EC2, S3, RDS), Google Cloud (Compute, Storage), Azure (ResourceManager, Compute, Storage)
+  - **Discovery Services** ✅: Fully implemented AWS, GCP, and Azure discovery engines with authentication, validation, and resource enumeration
+  - **Encryption Service** ✅: AES-256 credential encryption with PBKDF2 key derivation and secure credential management
+  - **Data Access Layer** ✅: CloudCredentialsRepository, CloudProvidersRepository, CloudDiscoveryJobsRepository with full CRUD operations (fixed column mapping for name/last_validated)
+  - **Service Factory** ✅: CloudDiscoveryServiceFactory for provider-based service selection
+  - **Dependency Injection** ✅: All services registered and auto-initialized on application startup
+  - **Credential Management UI** ✅: Complete credential management with provider-specific forms, validation status badges, and encrypted storage indicators
+  - **Discovery Job Management** ✅: CreateDiscoveryJobDialog wizard with tabbed interface (basic settings, scheduling), DiscoveryJobsList with run/pause/delete actions
+  - **Backend API** ✅: 13 cloud discovery endpoints including jobs management (create, update, delete, run, list) with enriched provider data
+  - **Frontend Integration** ✅: Full credential and job management workflows with real-time validation and status updates
+- **Security & Compliance Module** ✅: Enterprise-grade security and compliance management:
+  - **Asset Change & Integrity Log**: Immutable audit trail with 1,547 records tracking all asset modifications and integrity checks
+  - **System Security Audit Log**: Comprehensive security event monitoring with 892 events including authentication, access, and system changes
+  - **Exclusion & Controlled Access Rules**: Scalable security management with 127 active rules for access control policies
+  - **Enterprise Credential Vault**: Integrated with Discovery Profiles (267+ credentials) for secure credential management
+- **Inventory & Asset Management Module** ✅: Enterprise-grade asset tracking and lifecycle management:
+  - **Central Asset Repository**: Comprehensive catalog with 6 assets across servers, workstations, laptops, mobile, network, and printers with detailed specs
+  - **Unmanaged Asset Queue**: Device classification workflow with 5 detected devices, risk assessment (1 critical, 1 high, 2 medium, 1 low), and approval workflow
+  - **Data Normalization & Enrichment**: Automated data quality with 6 active rules (standardize, enrich, validate, transform), 7.1k records processed, 95.7% success rate
+  - **Software & License Inventory**: SAM with 2,019 total licenses (1,432 in use), $388k annual cost, 86% compliance rate, and cost optimization insights
 
 ## External Dependencies
 
