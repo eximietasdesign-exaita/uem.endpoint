@@ -56,6 +56,11 @@ public interface IPolicyDeploymentService
     /// Get policy execution statistics
     /// </summary>
     Task<object> GetPolicyStatisticsAsync(DateTime fromDate, DateTime toDate, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get script policies
+    /// </summary>
+    Task<IEnumerable<ScriptPolicy>> GetScriptPoliciesAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>

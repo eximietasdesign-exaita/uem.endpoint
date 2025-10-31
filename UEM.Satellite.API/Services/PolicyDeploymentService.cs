@@ -1,8 +1,16 @@
 using UEM.Satellite.API.Models;
 using UEM.Satellite.API.Data;
 using Dapper;
+using Npgsql;
 using System.Text.Json;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using System;
 
 namespace UEM.Satellite.API.Services;
 
@@ -13,6 +21,7 @@ public class PolicyDeploymentService : IPolicyDeploymentService
 {
     private readonly IDbFactory _dbFactory;
     private readonly IAgentStatusService _agentStatusService;
+    private readonly IConfiguration _config;
     private readonly ILogger<PolicyDeploymentService> _logger;
     private readonly ConcurrentDictionary<int, PolicyDeploymentStatus> _deploymentCache = new();
     private readonly ConcurrentDictionary<string, List<PolicyExecutionCommand>> _pendingCommands = new();
@@ -20,12 +29,14 @@ public class PolicyDeploymentService : IPolicyDeploymentService
 
     public PolicyDeploymentService(
         IDbFactory dbFactory,
+        IConfiguration config,
         IAgentStatusService agentStatusService,
         ILogger<PolicyDeploymentService> logger)
     {
-        _dbFactory = dbFactory;
-        _agentStatusService = agentStatusService;
-        _logger = logger;
+        _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+        _config = config ?? throw new ArgumentNullException(nameof(config));
+        _agentStatusService = agentStatusService ?? throw new ArgumentNullException(nameof(agentStatusService));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<PolicyDeploymentStatus> DeployPolicyAsync(PolicyDeploymentRequest request, CancellationToken cancellationToken = default)
@@ -353,6 +364,44 @@ public class PolicyDeploymentService : IPolicyDeploymentService
         }
     }
 
+    public async Task<IEnumerable<ScriptPolicy>> GetScriptPoliciesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var conn = _dbFactory.Open();
+
+            const string sql = @"
+                SELECT
+                    id,
+                    name,
+                    description,
+                    category,
+                    target_os AS ""TargetOs"",
+                    parameters AS ""Parameters"",
+                    output_format AS ""OutputFormat"",
+                    estimated_run_time_seconds AS ""EstimatedRunTimeSeconds"",
+                    requires_elevation AS ""RequiresElevation"",
+                    vendor AS ""Vendor"",
+                    version AS ""Version"",
+                    COALESCE(publish_status, 'published') AS ""PublishStatus"",
+                    is_active AS ""IsActive"",
+                    created_at AS ""CreatedAt"",
+                    updated_at AS ""UpdatedAt""
+                FROM discovery_scripts
+                WHERE is_active = true
+                ORDER BY name;
+            ";
+
+            var rows = await conn.QueryAsync<ScriptPolicy>(new CommandDefinition(sql, cancellationToken: cancellationToken));
+            return rows?.ToList() ?? Enumerable.Empty<ScriptPolicy>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load script policies from discovery_scripts");
+            return Enumerable.Empty<ScriptPolicy>();
+        }
+    }
+ 
     #region Private Methods
 
     private async Task<int> CreateDeploymentJobAsync(PolicyDeploymentRequest request, CancellationToken cancellationToken)
@@ -679,4 +728,23 @@ public class PolicyDeploymentService : IPolicyDeploymentService
     }
 
     #endregion
+}
+
+public class ScriptPolicy
+{
+    public int Id { get; set; }
+    public string? Name { get; set; }
+    public string? Description { get; set; }
+    public string? Category { get; set; }
+    public string? TargetOs { get; set; }
+    public string? Parameters { get; set; }
+    public string? OutputFormat { get; set; }
+    public int? EstimatedRunTimeSeconds { get; set; }
+    public bool? RequiresElevation { get; set; }
+    public string? Vendor { get; set; }
+    public string? Version { get; set; }
+    public string? PublishStatus { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
 }

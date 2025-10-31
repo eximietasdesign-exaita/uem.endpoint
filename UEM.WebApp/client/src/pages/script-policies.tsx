@@ -59,7 +59,7 @@ export default function ScriptPoliciesPage() {
     endpoint: "/api/script-policies",
   });
 
-  const { data: scripts = [] } = useTenantData({
+  const { data: scripts = [] } = useTenantData<Script[]>({
     endpoint: "/api/discovery-scripts",
     requiresContext: false,
   });
@@ -82,7 +82,7 @@ export default function ScriptPoliciesPage() {
   });
 
   // Group policies by category
-  const groupedPolicies = policies.reduce((acc: Record<string, ScriptPolicy[]>, policy: ScriptPolicy) => {
+  const groupedPolicies = (policies as ScriptPolicy[]).reduce((acc: Record<string, ScriptPolicy[]>, policy: ScriptPolicy) => {
     if (!acc[policy.category]) {
       acc[policy.category] = [];
     }
@@ -95,7 +95,7 @@ export default function ScriptPoliciesPage() {
     const filtered = categoryPolicies.filter(policy => {
       const matchesSearch = policy.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            policy.description?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesOS = osFilter === "All OS" || policy.targetOS === osFilter;
+      const matchesOS = osFilter === "All OS" || policy.targetOs === osFilter;
       const matchesStatus = statusFilter === "All Status" || policy.publishStatus === statusFilter.toLowerCase();
       return matchesSearch && matchesOS && matchesStatus;
     });
@@ -243,7 +243,7 @@ export default function ScriptPoliciesPage() {
               <CollapsibleContent>
                 <CardContent className="pt-0">
                   <div className="space-y-3">
-                    {category.policies.map((policy) => (
+                    {category.policies.map((policy: ScriptPolicy) => (
                       <div
                         key={policy.id}
                         className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
@@ -260,8 +260,8 @@ export default function ScriptPoliciesPage() {
                               >
                                 {policy.isActive ? t("activate") : t("inactive")}
                               </Badge>
-                              <Badge className={`text-xs ${getStatusColor(policy.publishStatus)}`}>
-                                {t(policy.publishStatus)}
+                              <Badge className={`text-xs ${getStatusColor(policy.publishStatus ?? "")}`}>
+                                {t(policy.publishStatus ?? "")}
                               </Badge>
                             </div>
                             <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
@@ -271,7 +271,7 @@ export default function ScriptPoliciesPage() {
                               <span className="flex items-center gap-1">
                                 <span className="font-medium">Target OS:</span>
                                 <Badge variant="outline" className="text-xs">
-                                  {policy.targetOS}
+                                  {policy.targetOs}
                                 </Badge>
                               </span>
                               <span className="flex items-center gap-1">
@@ -358,7 +358,7 @@ function ScriptPolicyEditor({ policy, onClose }: ScriptPolicyEditorProps) {
     name: policy?.name || "",
     description: policy?.description || "",
     category: policy?.category || "Discovery",
-    targetOS: policy?.targetOS || "Linux",
+    targetOS: policy?.targetOs || "Linux",
     publishStatus: policy?.publishStatus || "draft",
     executionOrder: policy?.executionOrder || 0,
     isActive: policy?.isActive || true,
@@ -395,7 +395,7 @@ function ScriptPolicyEditor({ policy, onClose }: ScriptPolicyEditorProps) {
 
   // Remove script search and selection as it's not needed anymore
   
-  const { data: scripts = [] } = useTenantData({
+  const { data: scripts = [] } = useTenantData<Script[]>({
     endpoint: "/api/discovery-scripts",
     requiresContext: false,
   });

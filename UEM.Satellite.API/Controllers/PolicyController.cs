@@ -23,6 +23,22 @@ public class PolicyController : ControllerBase
         _logger = logger;
     }
 
+
+    [HttpGet("script-policies")]
+    public async Task<ActionResult<IEnumerable<ScriptPolicy>>> GetScriptPolicies(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var policies = await _policyDeploymentService.GetScriptPoliciesAsync(cancellationToken);
+            return Ok(policies ?? Array.Empty<ScriptPolicy>());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get script policies");
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
     /// <summary>
     /// Deploy a policy to target agents
     /// </summary>

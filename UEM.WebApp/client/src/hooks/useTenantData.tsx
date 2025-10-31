@@ -50,7 +50,7 @@ export function useTenantContext() {
     error,
     hasContext: !!selectedDomain && !!selectedTenant,
     contextDisplay: selectedDomain && selectedTenant 
-      ? `${selectedDomain.displayName} / ${selectedTenant.displayName}`
+      ? `${selectedDomain.displayname} / ${selectedTenant.displayname}`
       : 'No context selected',
   };
 }
