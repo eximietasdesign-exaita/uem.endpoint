@@ -34,7 +34,7 @@ export default defineConfig({
       deny: ["**/.*"],
     },
     proxy: {
-      '/api': {
+      '/api/*': {
         target: 'http://localhost:8000',
         changeOrigin: true,
       }

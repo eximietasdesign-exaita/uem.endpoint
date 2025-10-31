@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { useTenantData, useTenantContext } from '@/hooks/useTenantData';
+import { useTenantData } from '@/hooks/useTenantData';
 import { 
   Card, 
   CardContent, 
@@ -87,9 +87,15 @@ import {
   MoreHorizontal
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { queryClient } from '@/lib/queryClient';
-import type { ScriptPolicy, CredentialProfile, DiscoveryProbe } from '@shared/schema';
+import { queryClient, apiRequest } from '@/lib/queryClient';
 import { AIAgentOrchestrator } from '@/components/AIAgentOrchestrator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+
+interface DiscoveryProbe {
+  id: number;
+  name: string;
+  location?: string;
+}
 
 interface AgentPolicyDeployment {
   id: number;
@@ -120,6 +126,20 @@ interface AgentPolicyDeployment {
     failed: number;
   };
   errors?: string[];
+}
+
+interface ScriptPolicy {
+  id: number;
+  name: string;
+  description: string;
+  publishStatus: string;
+  targetOs: string;
+}
+
+interface CredentialProfile {
+  id: number;
+  name: string;
+  category: string;
 }
 
 interface DeploymentWizardData {
@@ -178,18 +198,22 @@ export default function AgentBasedDiscovery() {
   });
 
   // API calls
-  const { data: policies = [], isLoading: policiesLoading } = useQuery({
-    queryKey: ['/api/script-policies'],
+  const { data: policiesData, isLoading: policiesLoading } = useTenantData<ScriptPolicy[]>({
+    endpoint: "/api/policy/script-policies",
   });
+
+  const effectivePolicies: ScriptPolicy[] = Array.isArray(policiesData) ? policiesData : [];
 
   const { data: credentialProfiles = [], isLoading: credentialsLoading } = useQuery({
     queryKey: ['/api/credential-profiles'],
   });
 
-  const { data: probes = [], isLoading: probesLoading } = useQuery({
-    queryKey: ['/api/discovery-probes'],
+  // Load satellite servers (tenant-aware)
+  const { data: probes = [], isLoading: probesLoading } = useTenantData({
+    endpoint: '/api/discovery-probes'
   });
 
+  const effectiveProbes: DiscoveryProbe[] = Array.isArray(probes) ? probes : [];
   // Mock deployments data for demonstration
   const mockDeployments: AgentPolicyDeployment[] = [
     {
@@ -703,7 +727,7 @@ export default function AgentBasedDiscovery() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {(policies as ScriptPolicy[]).map(policy => (
+                  {(effectivePolicies as ScriptPolicy[]).map(policy => (
                     <Card key={policy.id} className="hover:shadow-md transition-shadow">
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between mb-3">
@@ -714,7 +738,7 @@ export default function AgentBasedDiscovery() {
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{policy.description}</p>
                         <div className="flex items-center justify-between">
-                          <Badge variant="secondary">{policy.targetOS}</Badge>
+                          <Badge variant="secondary">{policy.targetOs}</Badge>
                           <Button variant="outline" size="sm">
                             <Settings className="w-3 h-3 mr-1" />
                             Configure
@@ -827,7 +851,7 @@ export default function AgentBasedDiscovery() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {(policies as ScriptPolicy[]).map(policy => (
+                      {(effectivePolicies as ScriptPolicy[]).map(policy => (
                         <div
                           key={policy.id}
                           className={cn(
@@ -852,7 +876,7 @@ export default function AgentBasedDiscovery() {
                               <h4 className="font-medium text-gray-900 dark:text-white">{policy.name}</h4>
                               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{policy.description}</p>
                               <div className="flex items-center space-x-2 mt-2">
-                                <Badge variant="secondary" className="text-xs">{policy.targetOS}</Badge>
+                                <Badge variant="secondary" className="text-xs">{policy.targetOs}</Badge>
                                 <Badge variant="outline" className="text-xs">{policy.publishStatus}</Badge>
                               </div>
                             </div>
@@ -1087,7 +1111,7 @@ export default function AgentBasedDiscovery() {
                       <SelectContent>
                         {(credentialProfiles as CredentialProfile[]).map(profile => (
                           <SelectItem key={profile.id} value={profile.id.toString()}>
-                            {profile.name} - {profile.type}
+                            {profile.name} - {profile.category}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1097,56 +1121,77 @@ export default function AgentBasedDiscovery() {
                   {/* Probe Selection */}
                   <div>
                     <Label className="text-sm font-medium">Satellite Servers *</Label>
-                    <div className="mt-2 space-y-3">
-                      <div className="flex items-center space-x-2">
+                    <div className="mt-2">
+                      <div className="flex items-center gap-2 mb-3">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            const allProbeIds = (probes as DiscoveryProbe[]).map(p => p.id);
-                            updateWizardData('selectedProbeIds', allProbeIds);
+                            const allProbeIds = effectiveProbes.map((probe) => probe.id);
+                            updateWizardData("selectedProbeIds", allProbeIds);
                           }}
                         >
                           Select All
                         </Button>
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
-                          onClick={() => updateWizardData('selectedProbeIds', [])}
+                          onClick={() => updateWizardData("selectedProbeIds", [])}
                         >
                           Clear All
                         </Button>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {(probes as DiscoveryProbe[]).map(probe => (
-                          <div
-                            key={probe.id}
-                            className={cn(
-                              "border rounded-lg p-3 cursor-pointer transition-all",
-                              wizardData.selectedProbeIds.includes(probe.id)
-                                ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                                : "border-gray-200 hover:border-blue-300"
-                            )}
-                            onClick={() => {
-                              const newIds = wizardData.selectedProbeIds.includes(probe.id)
-                                ? wizardData.selectedProbeIds.filter(id => id !== probe.id)
-                                : [...wizardData.selectedProbeIds, probe.id];
-                              updateWizardData('selectedProbeIds', newIds);
-                            }}
-                          >
-                            <div className="flex items-start space-x-2">
-                              <Checkbox
-                                checked={wizardData.selectedProbeIds.includes(probe.id)}
-                                className="mt-1"
-                              />
-                              <div className="flex-1">
-                                <h4 className="font-medium text-sm">{probe.name}</h4>
-                                <p className="text-xs text-gray-600 dark:text-gray-400">{probe.location}</p>
-                                <Badge variant="outline" className="text-xs mt-1">{probe.status}</Badge>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+
+                      <Select
+                        // keep the dropdown for adding/removing a single probe at a time;
+                        // value left empty so Select doesn't force a single visible choice
+                        value={""}
+                        onValueChange={(value) => {
+                          const selectedId = parseInt(value);
+                          if (Number.isNaN(selectedId)) return;
+                          const updatedProbeIds = wizardData.selectedProbeIds.includes(selectedId)
+                            ? wizardData.selectedProbeIds.filter((id) => id !== selectedId)
+                            : [...wizardData.selectedProbeIds, selectedId];
+                          updateWizardData("selectedProbeIds", updatedProbeIds);
+                        }}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select satellite server (use dropdown to add)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {effectiveProbes.map((probe) => (
+                            <SelectItem key={probe.id} value={probe.id.toString()}>
+                              {probe.name} {probe.location && `(${probe.location})`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      {/* show all selected probes as badges so Select All appears to work */}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {wizardData.selectedProbeIds.length === 0 ? (
+                          <div className="text-sm text-muted">No satellite server selected</div>
+                        ) : (
+                          wizardData.selectedProbeIds.map((id) => {
+                            const p = effectiveProbes.find((pr) => pr.id === id);
+                            return p ? (
+                              <Badge
+                                key={id}
+                                variant="secondary"
+                                className="flex items-center gap-2 cursor-pointer"
+                                onClick={() =>
+                                  updateWizardData(
+                                    "selectedProbeIds",
+                                    wizardData.selectedProbeIds.filter((pid) => pid !== id)
+                                  )
+                                }
+                              >
+                                <span>{p.name}</span>
+                                <span className="text-xs font-bold">×</span>
+                              </Badge>
+                            ) : null;
+                          })
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1163,54 +1208,44 @@ export default function AgentBasedDiscovery() {
                     Configure when and how often to run the deployment
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                  <div>
-                    <Label className="text-sm font-medium">Execution Time</Label>
-                    <div className="mt-2 space-y-3">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          checked={wizardData.schedule.type === 'now'}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              updateWizardData('schedule', { type: 'now' });
-                            }
-                          }}
-                        />
-                        <Label className="text-sm">Run Now</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          checked={wizardData.schedule.type === 'later'}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              updateWizardData('schedule', { 
-                                type: 'later', 
-                                frequency: 'daily', 
-                                time: '02:00',
-                                businessHours: false 
-                              });
-                            }
-                          }}
-                        />
-                        <Label className="text-sm">Schedule for Later</Label>
-                      </div>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        checked={wizardData.schedule.type === 'now'}
+                        onCheckedChange={(checked) => {
+                          if (checked) updateWizardData('schedule', { ...wizardData.schedule, type: 'now' });
+                        }}
+                      />
+                      <Label className="text-sm">Run Now</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        checked={wizardData.schedule.type === 'later'}
+                        onCheckedChange={(checked) => {
+                          if (checked) updateWizardData('schedule', { 
+                            ...wizardData.schedule, 
+                            type: 'later',
+                            frequency: wizardData.schedule.frequency ?? 'daily',
+                            time: wizardData.schedule.time ?? '02:00'
+                          });
+                        }}
+                      />
+                      <Label className="text-sm">Schedule for Later</Label>
                     </div>
                   </div>
 
                   {wizardData.schedule.type === 'later' && (
-                    <div className="space-y-4 pl-6 border-l-2 border-blue-200">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end pt-2">
                       <div>
                         <Label className="text-sm font-medium">Frequency</Label>
                         <Select
                           value={wizardData.schedule.frequency || 'daily'}
                           onValueChange={(value: 'daily' | 'weekly' | 'monthly') => {
-                            updateWizardData('schedule', { 
-                              ...wizardData.schedule, 
-                              frequency: value 
-                            });
+                            updateWizardData('schedule', { ...wizardData.schedule, frequency: value });
                           }}
                         >
-                          <SelectTrigger className="mt-1">
+                          <SelectTrigger className="mt-2">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -1226,47 +1261,28 @@ export default function AgentBasedDiscovery() {
                         <Input
                           type="time"
                           value={wizardData.schedule.time || '02:00'}
-                          onChange={(e) => {
-                            updateWizardData('schedule', { 
-                              ...wizardData.schedule, 
-                              time: e.target.value 
-                            });
-                          }}
-                          className="mt-1"
+                          onChange={(e) => updateWizardData('schedule', { ...wizardData.schedule, time: e.target.value })}
+                          className="mt-2"
                         />
                       </div>
 
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">Business Hours Preference</Label>
-                        <div className="space-y-2">
-                          <div className="flex items-center space-x-2">
+                      <div>
+                        <Label className="text-sm font-medium">Business Hours</Label>
+                        <div className="mt-2 flex flex-col space-y-2">
+                          <label className="flex items-center gap-2">
                             <Checkbox
                               checked={wizardData.schedule.businessHours === true}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
-                                  updateWizardData('schedule', { 
-                                    ...wizardData.schedule, 
-                                    businessHours: true 
-                                  });
-                                }
-                              }}
+                              onCheckedChange={(checked) => updateWizardData('schedule', { ...wizardData.schedule, businessHours: checked ?? true })}
                             />
-                            <Label className="text-sm">During Business Hours (9 AM - 5 PM)</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
+                            <span className="text-sm">During Business Hours (9 AM - 5 PM)</span>
+                          </label>
+                          <label className="flex items-center gap-2">
                             <Checkbox
                               checked={wizardData.schedule.businessHours === false}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
-                                  updateWizardData('schedule', { 
-                                    ...wizardData.schedule, 
-                                    businessHours: false 
-                                  });
-                                }
-                              }}
+                              onCheckedChange={(checked) => updateWizardData('schedule', { ...wizardData.schedule, businessHours: checked === true ? false : wizardData.schedule.businessHours })}
                             />
-                            <Label className="text-sm">After Business Hours</Label>
-                          </div>
+                            <span className="text-sm">After Business Hours</span>
+                          </label>
                         </div>
                       </div>
                     </div>
@@ -1300,7 +1316,7 @@ export default function AgentBasedDiscovery() {
                       <h4 className="font-medium text-gray-900 dark:text-white">Selected Policies</h4>
                       <div className="flex flex-wrap gap-1">
                         {wizardData.selectedPolicyIds.map(id => {
-                          const policy = (policies as ScriptPolicy[]).find(p => p.id === id);
+                          const policy = (effectivePolicies as ScriptPolicy[]).find(p => p.id === id);
                           return policy ? (
                             <Badge key={id} variant="secondary" className="text-xs">
                               {policy.name}
