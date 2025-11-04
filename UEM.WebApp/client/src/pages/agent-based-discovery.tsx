@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useTenantData } from '@/hooks/useTenantData';
@@ -90,6 +90,7 @@ import { cn } from '@/lib/utils';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { AIAgentOrchestrator } from '@/components/AIAgentOrchestrator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import React from 'react';
 
 interface DiscoveryProbe {
   id: number;
@@ -197,6 +198,9 @@ export default function AgentBasedDiscovery() {
     }
   });
 
+  // toast() returns an object (id + helpers) — allow storing that shape instead of only a string id
+  const savingToastRef = React.useRef<{ id: string; dismiss?: () => void; update?: (props: any) => void } | null>(null);
+
   // API calls
   const { data: policiesData, isLoading: policiesLoading } = useTenantData<ScriptPolicy[]>({
     endpoint: "/api/policy/script-policies",
@@ -214,94 +218,235 @@ export default function AgentBasedDiscovery() {
   });
 
   const effectiveProbes: DiscoveryProbe[] = Array.isArray(probes) ? probes : [];
-  // Mock deployments data for demonstration
-  const mockDeployments: AgentPolicyDeployment[] = [
-    {
-      id: 1,
-      name: 'Enterprise Security Assessment',
-      description: 'Comprehensive security and compliance deployment across enterprise network',
-      selectedPolicyIds: [1, 3, 5],
-      targets: {
-        ipRanges: ['10.0.0.1-10.0.0.100', '192.168.1.1-192.168.1.50'],
-        hostnames: ['server01.company.com', 'server02.company.com'],
-        ouPaths: ['OU=Servers,DC=company,DC=com'],
-        ipSegments: ['10.0.1.0/24']
-      },
-      credentialProfileId: 1,
-      selectedProbeIds: [1, 2],
-      schedule: { type: 'later', frequency: 'daily', time: '02:00', businessHours: false },
-      status: 'in_progress',
-      createdAt: '2025-07-18T08:00:00Z',
-      deployedMachines: {
-        total: 150,
-        applied: 89,
-        inProgress: 35,
-        pending: 20,
-        failed: 6
-      },
-      errors: ['Authentication failed on server03.company.com', 'Network timeout on 192.168.1.45']
+
+  // load real deployments from backend & normalize to UI model
+  const {
+    data: rawDeployments = [],
+    isLoading: deploymentsLoading,
+  } = useQuery<any[]>({
+    queryKey: ['agent-deployment-jobs'], // A unique key for this query
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/policy-deployments');
+      if (!response.ok) throw new Error('Failed to fetch deployments');
+      return response.json();
     },
-    {
-      id: 2,
-      name: 'Network Infrastructure Discovery',
-      description: 'Discovery and inventory of network devices and infrastructure',
-      selectedPolicyIds: [1, 2],
+  });
+  
+  // log raw backend rows for debugging in dev console
+  useEffect(() => {
+    console.debug('rawDeployments changed', { deploymentsLoading, rawDeployments });
+  }, [deploymentsLoading, rawDeployments]);
+
+  const normalizeDeployment = (dbRow: any): AgentPolicyDeployment => {
+    // Safely parse JSON columns, defaulting to empty objects/arrays
+    const targets = dbRow.targets ?? {};
+    const schedule = dbRow.schedule ?? {};
+    const progress = dbRow.progress ?? {};
+    const results = dbRow.deployment_results ?? {};
+    const policyIds = Array.isArray(dbRow.policy_ids) ? dbRow.policy_ids : [];
+
+    // Calculate machine stats from the progress and results columns
+    const total = progress.total ?? results.total ?? 0;
+    const applied = progress.applied ?? results.successfulDeployments ?? 0;
+    const failed = progress.failed ?? results.failedDeployments ?? 0;
+    const inProgress = progress.inProgress ?? 0;
+    const pending = Math.max(0, total - (applied + failed + inProgress));
+    
+    // Map database status 'running' to UI status 'in_progress'
+    const dbStatus = (dbRow.status || 'pending').toLowerCase();
+
+    return {
+      id: dbRow.id,
+      name: dbRow.name || 'Untitled Deployment',
+      description: dbRow.description || '',
+      status: dbStatus === 'running' ? 'in_progress' : dbStatus,
+      createdAt: dbRow.created_at || new Date().toISOString(),
+      
+      // Extract data from the JSON columns
+      selectedPolicyIds: policyIds,
       targets: {
-        ipRanges: ['172.16.0.1-172.16.0.200'],
-        hostnames: [],
-        ouPaths: ['OU=Network,DC=company,DC=com'],
-        ipSegments: []
+        // Handle inconsistent casing from your DB data (e.g., OuPaths vs ipRanges)
+        ipRanges: targets.ipRanges || targets.IpRanges || [],
+        hostnames: targets.Hostnames || targets.hostnames || [],
+        ouPaths: targets.OuPaths || targets.ouPaths || [],
+        ipSegments: targets.IpSegments || targets.ipSegments || [],
       },
-      credentialProfileId: 2,
-      selectedProbeIds: [1],
-      schedule: { type: 'now' },
-      status: 'completed',
-      createdAt: '2025-07-17T14:30:00Z',
-      deployedMachines: {
-        total: 75,
-        applied: 75,
-        inProgress: 0,
-        pending: 0,
-        failed: 0
-      }
-    },
-    {
-      id: 3,
-      name: 'Development Environment Scan',
-      description: 'Security and compliance scan for development servers',
-      selectedPolicyIds: [4, 6],
-      targets: {
-        ipRanges: ['10.1.0.1-10.1.0.50'],
-        hostnames: ['dev01.company.com', 'dev02.company.com'],
-        ouPaths: [],
-        ipSegments: ['10.1.1.0/24']
+      credentialProfileId: dbRow.credential_profile_id || null,
+      selectedProbeIds: dbRow.probe_id ? [dbRow.probe_id] : [], // probe_id is a single int, UI expects an array
+      schedule: {
+        // Handle inconsistent casing (e.g., Type vs type)
+        type: (schedule.Type || schedule.type)?.toLowerCase() || 'now',
+        frequency: schedule.Frequency || schedule.frequency,
+        time: schedule.Time || schedule.time,
+        businessHours: schedule.BusinessHours ?? schedule.businessHours,
       },
-      credentialProfileId: 3,
-      selectedProbeIds: [2, 3],
-      schedule: { type: 'later', frequency: 'weekly', time: '22:00', businessHours: false },
-      status: 'scheduled',
-      createdAt: '2025-07-18T10:15:00Z',
-      deployedMachines: {
-        total: 25,
-        applied: 0,
-        inProgress: 0,
-        pending: 25,
-        failed: 0
-      }
+      
+      // Assign calculated stats
+      deployedMachines: { total, applied, inProgress, pending, failed },
+      
+      errors: results.errors || [],
+    };
+  };
+
+  const deployments: AgentPolicyDeployment[] = useMemo(() => {
+    if (deploymentsLoading || !Array.isArray(rawDeployments)) {
+      return []; // Return an empty array while loading or if data is invalid
     }
-  ];
+    return rawDeployments.map(normalizeDeployment);
+  }, [rawDeployments, deploymentsLoading]);
+
+  // // Mock deployments data for demonstration
+  // const mockDeployments: AgentPolicyDeployment[] = [
+  //   {
+  //     id: 1,
+  //     name: 'Enterprise Security Assessment',
+  //     description: 'Comprehensive security and compliance deployment across enterprise network',
+  //     selectedPolicyIds: [1, 3, 5],
+  //     targets: {
+  //       ipRanges: ['10.0.0.1-10.0.0.100', '192.168.1.1-192.168.1.50'],
+  //       hostnames: ['server01.company.com', 'server02.company.com'],
+  //       ouPaths: ['OU=Servers,DC=company,DC=com'],
+  //       ipSegments: ['10.0.1.0/24']
+  //     },
+  //     credentialProfileId: 1,
+  //     selectedProbeIds: [1, 2],
+  //     schedule: { type: 'later', frequency: 'daily', time: '02:00', businessHours: false },
+  //     status: 'in_progress',
+  //     createdAt: '2025-07-18T08:00:00Z',
+  //     deployedMachines: {
+  //       total: 150,
+  //       applied: 89,
+  //       inProgress: 35,
+  //       pending: 20,
+  //       failed: 6
+  //     },
+  //     errors: ['Authentication failed on server03.company.com', 'Network timeout on 192.168.1.45']
+  //   },
+  //   {
+  //     id: 2,
+  //     name: 'Network Infrastructure Discovery',
+  //     description: 'Discovery and inventory of network devices and infrastructure',
+  //     selectedPolicyIds: [1, 2],
+  //     targets: {
+  //       ipRanges: ['172.16.0.1-172.16.0.200'],
+  //       hostnames: [],
+  //       ouPaths: ['OU=Network,DC=company,DC=com'],
+  //       ipSegments: []
+  //     },
+  //     credentialProfileId: 2,
+  //     selectedProbeIds: [1],
+  //     schedule: { type: 'now' },
+  //     status: 'completed',
+  //     createdAt: '2025-07-17T14:30:00Z',
+  //     deployedMachines: {
+  //       total: 75,
+  //       applied: 75,
+  //       inProgress: 0,
+  //       pending: 0,
+  //       failed: 0
+  //     }
+  //   },
+  //   {
+  //     id: 3,
+  //     name: 'Development Environment Scan',
+  //     description: 'Security and compliance scan for development servers',
+  //     selectedPolicyIds: [4, 6],
+  //     targets: {
+  //       ipRanges: ['10.1.0.1-10.1.0.50'],
+  //       hostnames: ['dev01.company.com', 'dev02.company.com'],
+  //       ouPaths: [],
+  //       ipSegments: ['10.1.1.0/24']
+  //     },
+  //     credentialProfileId: 3,
+  //     selectedProbeIds: [2, 3],
+  //     schedule: { type: 'later', frequency: 'weekly', time: '22:00', businessHours: false },
+  //     status: 'scheduled',
+  //     createdAt: '2025-07-18T10:15:00Z',
+  //     deployedMachines: {
+  //       total: 25,
+  //       applied: 0,
+  //       inProgress: 0,
+  //       pending: 25,
+  //       failed: 0
+  //     }
+  //   }
+  // ];
 
   const createDeploymentMutation = useMutation({
     mutationFn: async (data: DeploymentWizardData) => {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      return { id: Date.now(), ...data, status: 'pending', createdAt: new Date().toISOString() };
-    },
-    onSuccess: () => {
-      toast({
-        title: "Policy Deployment Created",
-        description: "Your agent-based discovery policy has been successfully deployed.",
+      const payload: any = {
+        name: data.name,
+        description: data.description,
+        policyIds: data.selectedPolicyIds,
+        deploymentTargets: data.targets,
+        agentConfiguration: {
+          credentialProfileId: data.credentialProfileId,
+          probeIds: data.selectedProbeIds,
+          triggerType: data.schedule.type === 'now' ? 'manual' : 'scheduled',
+        },
+        schedule: data.schedule,
+        createdBy: 'ui',
+      };
+
+      const newScripts = (data.selectedPolicyIds || []).map(id => {
+        const p = effectivePolicies.find(x => x.id === id);
+        return {
+          Name: p?.name ?? `policy-${id}`,
+          Description: p?.description ?? '',
+          Category: 'discovery',
+          Type: 'script',
+          TargetOs: p?.targetOs ?? null,
+          Template: null,
+          Vendor: null,
+          Complexity: null,
+          EstimatedRunTimeSeconds: null,
+          RequiresElevation: false,
+          RequiresNetwork: false,
+          Parameters: null,
+          OutputFormat: null,
+          OutputProcessing: null,
+          CredentialRequirements: null,
+          Tags: [],
+          Industries: [],
+          ComplianceFrameworks: [],
+          Version: '1.0',
+          IsStandard: false,
+          IsActive: true,
+          PublishStatus: 'published'
+        };
       });
+      payload.NewScripts = newScripts;
+
+      // call backend and return parsed JSON (controller returns job info)
+      const res = await apiRequest('POST', '/api/policy-deployments/publish', payload);
+      // if apiRequest returns Response-like object, parse JSON; otherwise return value directly
+      if (res && typeof (res as any).json === 'function') {
+        return (await (res as Response).json());
+      }
+      return res;
+    },
+    onMutate: () => {
+      // show an immediate saving toast and save its id for updates
+      const id = toast({
+        title: "Saving deployment",
+        description: "Saving deployment job...",
+      });
+      savingToastRef.current = id;
+    },
+    onSuccess: (response: any) => {
+      const details = response ?? {};
+      if (savingToastRef.current && typeof savingToastRef.current.update === 'function') {
+        savingToastRef.current.update({
+          title: "Deployment Saved",
+          description: `Job #${details.id ?? 'unknown'} created – ${details.totalTargets ?? 0} targets queued.`,
+        });
+      } else {
+        toast({
+          title: "Deployment Saved",
+          description: `Job #${details.id ?? 'unknown'} created – ${details.totalTargets ?? 0} targets queued.`,
+        });
+      }
+
       setShowDeploymentWizard(false);
       setCurrentWizardStep(1);
       setWizardData({
@@ -313,14 +458,28 @@ export default function AgentBasedDiscovery() {
         selectedProbeIds: [],
         schedule: { type: 'now' }
       });
+
+      // refresh job list
+      queryClient.invalidateQueries({ queryKey: ['/api/policy-deployments'] });
+      savingToastRef.current = null;
     },
-    onError: () => {
-      toast({
-        title: "Deployment Failed",
-        description: "Failed to create the policy deployment. Please try again.",
-        variant: "destructive",
-      });
-    },
+    onError: (err: any) => {
+      const details = err?.response?.data?.details ?? err?.message ?? 'Unknown error';
+      if (savingToastRef.current && typeof savingToastRef.current.update === 'function') {
+        savingToastRef.current.update({
+          title: "Save Failed",
+          description: details,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Save Failed",
+          description: details,
+          variant: "destructive",
+        });
+      }
+      savingToastRef.current = null;
+    }
   });
 
   const updateWizardData = (field: keyof DeploymentWizardData, value: any) => {
@@ -340,6 +499,8 @@ export default function AgentBasedDiscovery() {
         return wizardData.credentialProfileId !== null && wizardData.selectedProbeIds.length > 0;
       case 5:
         return true; // Schedule is always valid as 'now' is default
+      case 6:
+        return true;
       default:
         return false;
     }
@@ -369,17 +530,20 @@ export default function AgentBasedDiscovery() {
   };
 
   // Filter deployments
-  const filteredDeployments = mockDeployments.filter(deployment => {
-    const matchesSearch = deployment.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         deployment.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || deployment.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+   const filteredDeployments = useMemo(() => {
+    return deployments.filter(deployment => {
+      const matchesSearch = (deployment.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           (deployment.description || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || deployment.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [deployments, searchTerm, statusFilter]);
 
-  const totalMachines = mockDeployments.reduce((sum, d) => sum + d.deployedMachines.total, 0);
-  const successfulDeployments = mockDeployments.reduce((sum, d) => sum + d.deployedMachines.applied, 0);
-  const failedDeployments = mockDeployments.reduce((sum, d) => sum + d.deployedMachines.failed, 0);
-  const inProgressDeployments = mockDeployments.reduce((sum, d) => sum + d.deployedMachines.inProgress, 0);
+  // Update summary stats to use the new `deployments` array
+  const totalMachines = useMemo(() => deployments.reduce((sum, d) => sum + d.deployedMachines.total, 0), [deployments]);
+  const successfulDeployments = useMemo(() => deployments.reduce((sum, d) => sum + d.deployedMachines.applied, 0), [deployments]);
+  const failedDeployments = useMemo(() => deployments.reduce((sum, d) => sum + d.deployedMachines.failed, 0), [deployments]);
+  const inProgressDeployments = useMemo(() => deployments.reduce((sum, d) => sum + d.deployedMachines.inProgress, 0), [deployments]);
 
   return (
     <div className="space-y-6">
@@ -487,12 +651,13 @@ export default function AgentBasedDiscovery() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {mockDeployments.slice(0, 3).map(deployment => {
+                {deployments.slice(0, 3).map(deployment => {
                   const statusConfig = DEPLOYMENT_STATUS_CONFIG[deployment.status];
                   const StatusIcon = statusConfig.icon;
-                  const progress = deployment.deployedMachines.total > 0 
-                    ? (deployment.deployedMachines.applied / deployment.deployedMachines.total) * 100 
-                    : 0;
+                  const progress = (deployment as any).progress ??
+                    (deployment.deployedMachines.total > 0
+                      ? (deployment.deployedMachines.applied / deployment.deployedMachines.total) * 100
+                      : 0);
 
                   return (
                     <div key={deployment.id} className="border rounded-lg p-4 space-y-3">
@@ -814,7 +979,7 @@ export default function AgentBasedDiscovery() {
                     <Input
                       id="deployment-name"
                       placeholder="Enter deployment name..."
-                      value={wizardData.name}
+                      value={wizardData.name}  
                       onChange={(e) => updateWizardData('name', e.target.value)}
                       className="mt-1"
                     />
@@ -1253,7 +1418,7 @@ export default function AgentBasedDiscovery() {
                             <SelectItem value="weekly">Weekly</SelectItem>
                             <SelectItem value="monthly">Monthly</SelectItem>
                           </SelectContent>
-                        </Select>
+                        </Select> 
                       </div>
 
                       <div>
