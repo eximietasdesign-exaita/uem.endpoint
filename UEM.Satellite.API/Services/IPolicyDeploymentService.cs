@@ -60,7 +60,7 @@ public interface IPolicyDeploymentService
     /// <summary>
     /// Get script policies
     /// </summary>
-    Task<IEnumerable<ScriptPolicy>> GetScriptPoliciesAsync(CancellationToken cancellationToken = default);
+    Task<IEnumerable<ScriptPolicy>> GetScriptPoliciesAsync(string? ids = null, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

@@ -1,5 +1,94 @@
 // Common Types for the Enterprise Endpoint Management Application
 
+
+export interface DiscoveryProbeSummary {
+  id: number;
+  name: string;
+  location?: string;
+}
+
+export interface ScriptPolicy {
+  id: number;
+  name: string;
+  description: string;
+  publishStatus: string;
+  targetOs: string;
+}
+
+export interface CredentialProfileSummary {
+  id: number;
+  name: string;
+  category: string;
+}
+
+export interface AgentPolicyDeployment {
+  deployment_method: any;
+  deploymentMethod: any;
+  probe_id: any;
+  probeId: any;
+  credential_profile_id: number | null;
+  created_by: any;
+  createdBy: any;
+  started_at: any;
+  completed_at: any;
+  created_at: any;
+  updated_at: any;
+  domain_id: any;
+  domainId: any;
+  tenant_id: any;
+  tenantId: any;
+  results: {};
+  id: number;
+  name: string;
+  description: string;
+  selectedPolicyIds: number[];
+  targets: {
+    ipRanges: string[];
+    hostnames: string[];
+    ouPaths: string[];
+    ipSegments: string[];
+  };
+  credentialProfileId: number | null; // Allow null
+  selectedProbeIds: number[];
+  schedule: {
+    type: 'now' | 'later';
+    frequency?: 'daily' | 'weekly' | 'monthly';
+    time?: string;
+    businessHours?: boolean;
+  };
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'scheduled';
+  createdAt: string;
+  deployedMachines: {
+    total: number;
+    applied: number;
+    inProgress: number;
+    pending: number;
+    failed: number;
+  };
+  errors?: string[];
+}
+
+export interface DeploymentWizardData {
+  name: string;
+  description: string;
+  selectedPolicyIds: number[];
+  targets: {
+    ipRanges: string[];
+    hostnames: string[];
+    ouPaths: string[];
+    ipSegments: string[];
+  };
+  credentialProfileId: number | null;
+  selectedProbeIds: number[];
+  schedule: {
+    type: 'now' | 'later';
+    frequency?: 'daily' | 'weekly' | 'monthly';
+    time?: string;
+    businessHours?: boolean;
+  };
+}
+
+
 // Base Entity
 export interface BaseEntity {
   id: string;
