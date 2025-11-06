@@ -364,13 +364,13 @@ public class PolicyDeploymentService : IPolicyDeploymentService
         }
     }
 
-    public async Task<IEnumerable<ScriptPolicy>> GetScriptPoliciesAsync(CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<ScriptPolicy>> GetScriptPoliciesAsync(string? ids = null, CancellationToken cancellationToken = default)
     {
         try
         {
             using var conn = _dbFactory.Open();
-
-            const string sql = @"
+            
+            var sql = @"
                 SELECT
                     id,
                     name,
@@ -387,17 +387,39 @@ public class PolicyDeploymentService : IPolicyDeploymentService
                     is_active AS ""IsActive"",
                     created_at AS ""CreatedAt"",
                     updated_at AS ""UpdatedAt""
-                FROM discovery_scripts
-                WHERE is_active = true
+                FROM uem_app_scripts
+                /**-- WHERE clause will be added dynamically --**/
                 ORDER BY name;
             ";
 
-            var rows = await conn.QueryAsync<ScriptPolicy>(new CommandDefinition(sql, cancellationToken: cancellationToken));
-            return rows?.ToList() ?? Enumerable.Empty<ScriptPolicy>();
+            var parameters = new DynamicParameters();
+            var idList = new List<int>();
+
+            if (!string.IsNullOrWhiteSpace(ids))
+            {
+                idList = ids.Split(',')
+                            .Select(idStr => int.TryParse(idStr.Trim(), out var id) ? id : -1)
+                            .Where(id => id > 0)
+                            .ToList();
+
+                if (idList.Any())
+                {
+                    sql = sql.Replace("/**-- WHERE clause will be added dynamically --**/", "WHERE id = ANY(@Ids)");
+                    parameters.Add("Ids", idList.ToArray());
+                }
+            }
+            else
+            {
+                // remove placeholder if no ids
+                sql = sql.Replace("/**-- WHERE clause will be added dynamically --**/", "");
+            }
+
+            var rows = await conn.QueryAsync<ScriptPolicy>(new CommandDefinition(sql, parameters, cancellationToken: cancellationToken));
+            return rows ?? Enumerable.Empty<ScriptPolicy>();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load script policies from discovery_scripts");
+            _logger.LogError(ex, "Failed to load script policies from uem_app_scripts");
             return Enumerable.Empty<ScriptPolicy>();
         }
     }

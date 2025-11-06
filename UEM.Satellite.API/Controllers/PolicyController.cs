@@ -25,11 +25,14 @@ public class PolicyController : ControllerBase
 
 
     [HttpGet("script-policies")]
-    public async Task<ActionResult<IEnumerable<ScriptPolicy>>> GetScriptPolicies(CancellationToken cancellationToken = default)
+    public async Task<ActionResult<IEnumerable<ScriptPolicy>>> GetScriptPolicies(
+        [FromQuery] string? ids = null, // Accept an optional comma-separated list of IDs
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            var policies = await _policyDeploymentService.GetScriptPoliciesAsync(cancellationToken);
+            // The service method now needs to handle the optional filter
+            var policies = await _policyDeploymentService.GetScriptPoliciesAsync(ids, cancellationToken);
             return Ok(policies ?? Array.Empty<ScriptPolicy>());
         }
         catch (Exception ex)

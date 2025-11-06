@@ -190,7 +190,10 @@ export const sortBy = <T>(array: T[], key: keyof T, order: 'asc' | 'desc' = 'asc
 
 export const removeDuplicates = <T>(array: T[], key?: keyof T): T[] => {
   if (!key) {
-    return [...new Set(array)];
+    const set = new Set<T>(array as any);
+    const result: T[] = [];
+    set.forEach(value => result.push(value));
+    return result;
   }
   
   const seen = new Set();
@@ -242,10 +245,10 @@ export const omit = <T, K extends keyof T>(obj: T, keys: K[]): Omit<T, K> => {
   return result;
 };
 
-export const pick = <T, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> => {
+export const pick = <T extends object, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> => {
   const result = {} as Pick<T, K>;
   keys.forEach(key => {
-    if (key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
       result[key] = obj[key];
     }
   });

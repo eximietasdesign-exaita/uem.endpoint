@@ -92,6 +92,63 @@ namespace UEM.Satellite.API.Controllers
 
         #endregion
 
+        /// <summary>
+        /// Gets the detailed status of a specific deployment job, including per-agent results.
+        /// </summary>
+
+        [HttpGet("{jobId:int}/details")]
+        public async Task<ActionResult<object>> GetJobDetails(int jobId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                _logger.LogInformation("Fetching job details for job {jobId}", jobId);
+                using var conn = _dbFactory.Open();
+
+                // Query the deployments table for the requested job.
+                // NOTE: per-agent status details are stored in a separate table (if you have one).
+                // This returns the job record (progress/results JSON) so the UI can display details.
+                const string sql = @"
+                    SELECT
+                        id,
+                        name,
+                        description,
+                        policy_ids,
+                        targets,
+                        deployment_method,
+                        schedule,
+                        status,
+                        progress,
+                        results AS deployment_results,
+                        probe_id,
+                        credential_profile_id,
+                        created_by,
+                        started_at,
+                        completed_at,
+                        created_at,
+                        updated_at,
+                        domain_id,
+                        tenant_id
+                    FROM uem_app_agent_deployments
+                    WHERE id = @JobId
+                    LIMIT 1;
+                ";
+
+                var job = await conn.QuerySingleOrDefaultAsync(new CommandDefinition(sql, new { JobId = jobId }, cancellationToken: cancellationToken));
+                if (job == null)
+                {
+                    _logger.LogWarning("Job {JobId} not found", jobId);
+                    return NotFound(new { error = "Deployment job not found" });
+                }
+
+                return Ok(job);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve details for job {JobId}", jobId);
+                return StatusCode(500, new { error = "An internal server error occurred while fetching job details." });
+            }
+        }
+
     #region NEW GET Endpoint
     /// <summary>
     /// Gets all saved agent deployment jobs.

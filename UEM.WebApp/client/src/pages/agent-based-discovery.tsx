@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DeploymentDetailDialog } from '@/components/DeploymentDetailDialog';
 import {
   Select,
   SelectContent,
@@ -92,76 +93,84 @@ import { AIAgentOrchestrator } from '@/components/AIAgentOrchestrator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import React from 'react';
 
-interface DiscoveryProbe {
-  id: number;
-  name: string;
-  location?: string;
-}
+// interface DiscoveryProbe {
+//   id: number;
+//   name: string;
+//   location?: string;
+// }
 
-interface AgentPolicyDeployment {
-  id: number;
-  name: string;
-  description: string;
-  selectedPolicyIds: number[];
-  targets: {
-    ipRanges: string[];
-    hostnames: string[];
-    ouPaths: string[];
-    ipSegments: string[];
-  };
-  credentialProfileId: number;
-  selectedProbeIds: number[];
-  schedule: {
-    type: 'now' | 'later';
-    frequency?: 'daily' | 'weekly' | 'monthly';
-    time?: string;
-    businessHours?: boolean;
-  };
-  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'scheduled';
-  createdAt: string;
-  deployedMachines: {
-    total: number;
-    applied: number;
-    inProgress: number;
-    pending: number;
-    failed: number;
-  };
-  errors?: string[];
-}
+// interface AgentPolicyDeployment {
+//   id: number;
+//   name: string;
+//   description: string;
+//   selectedPolicyIds: number[];
+//   targets: {
+//     ipRanges: string[];
+//     hostnames: string[];
+//     ouPaths: string[];
+//     ipSegments: string[];
+//   };
+//   credentialProfileId: number;
+//   selectedProbeIds: number[];
+//   schedule: {
+//     type: 'now' | 'later';
+//     frequency?: 'daily' | 'weekly' | 'monthly';
+//     time?: string;
+//     businessHours?: boolean;
+//   };
+//   status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'scheduled';
+//   createdAt: string;
+//   deployedMachines: {
+//     total: number;
+//     applied: number;
+//     inProgress: number;
+//     pending: number;
+//     failed: number;
+//   };
+//   errors?: string[];
+// }
 
-interface ScriptPolicy {
-  id: number;
-  name: string;
-  description: string;
-  publishStatus: string;
-  targetOs: string;
-}
+// interface ScriptPolicy {
+//   id: number;
+//   name: string;
+//   description: string;
+//   publishStatus: string;
+//   targetOs: string;
+// }
 
-interface CredentialProfile {
-  id: number;
-  name: string;
-  category: string;
-}
+// interface CredentialProfile {
+//   id: number;
+//   name: string;
+//   category: string;
+// }
 
-interface DeploymentWizardData {
-  name: string;
-  description: string;
-  selectedPolicyIds: number[];
-  targets: {
-    ipRanges: string[];
-    hostnames: string[];
-    ouPaths: string[];
-    ipSegments: string[];
-  };
-  credentialProfileId: number | null;
-  selectedProbeIds: number[];
-  schedule: {
-    type: 'now' | 'later';
-    frequency?: 'daily' | 'weekly' | 'monthly';
-    time?: string;
-    businessHours?: boolean;
-  };
-}
+// interface DeploymentWizardData {
+//   name: string;
+//   description: string;
+//   selectedPolicyIds: number[];
+//   targets: {
+//     ipRanges: string[];
+//     hostnames: string[];
+//     ouPaths: string[];
+//     ipSegments: string[];
+//   };
+//   credentialProfileId: number | null;
+//   selectedProbeIds: number[];
+//   schedule: {
+//     type: 'now' | 'later';
+//     frequency?: 'daily' | 'weekly' | 'monthly';
+//     time?: string;
+//     businessHours?: boolean;
+//   };
+// }
+
+import type { 
+  DiscoveryProbeSummary,
+  AgentPolicyDeployment,
+  ScriptPolicy,
+  CredentialProfileSummary,
+  DeploymentWizardData
+} from '../../../shared/types';
 
 const DEPLOYMENT_STATUS_CONFIG = {
   pending: { color: 'bg-yellow-500', label: 'Pending', icon: Clock },
@@ -169,6 +178,21 @@ const DEPLOYMENT_STATUS_CONFIG = {
   completed: { color: 'bg-green-500', label: 'Completed', icon: CheckCircle },
   failed: { color: 'bg-red-500', label: 'Failed', icon: XCircle },
   scheduled: { color: 'bg-purple-500', label: 'Scheduled', icon: Calendar }
+};
+
+const parseJsonbArray = (value: any): number[] => {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value;
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (e) {
+      return value.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id));
+    }
+  }
+  return [];
 };
 
 export default function AgentBasedDiscovery() {
@@ -217,7 +241,7 @@ export default function AgentBasedDiscovery() {
     endpoint: '/api/discovery-probes'
   });
 
-  const effectiveProbes: DiscoveryProbe[] = Array.isArray(probes) ? probes : [];
+  const effectiveProbes: DiscoveryProbeSummary[] = Array.isArray(probes) ? probes : [];
 
   // load real deployments from backend & normalize to UI model
   const {
@@ -243,7 +267,8 @@ export default function AgentBasedDiscovery() {
     const schedule = dbRow.schedule ?? {};
     const progress = dbRow.progress ?? {};
     const results = dbRow.deployment_results ?? {};
-    const policyIds = Array.isArray(dbRow.policy_ids) ? dbRow.policy_ids : [];
+    //const policyIds = Array.isArray(dbRow.policy_ids) ? dbRow.policy_ids : [];
+     const policyIds = parseJsonbArray(dbRow.policy_ids);
 
     // Calculate machine stats from the progress and results columns
     const total = progress.total ?? results.total ?? 0;
@@ -1274,7 +1299,7 @@ export default function AgentBasedDiscovery() {
                         <SelectValue placeholder="Select credential profile" />
                       </SelectTrigger>
                       <SelectContent>
-                        {(credentialProfiles as CredentialProfile[]).map(profile => (
+                        {(credentialProfiles as CredentialProfileSummary[]).map(profile => (
                           <SelectItem key={profile.id} value={profile.id.toString()}>
                             {profile.name} - {profile.category}
                           </SelectItem>
@@ -1516,7 +1541,7 @@ export default function AgentBasedDiscovery() {
                       <div className="text-sm space-y-1">
                         <p>
                           <span className="font-medium">Credential Profile:</span>{' '}
-                          {(credentialProfiles as CredentialProfile[]).find(p => p.id === wizardData.credentialProfileId)?.name}
+                          {(credentialProfiles as CredentialProfileSummary[]).find(p => p.id === wizardData.credentialProfileId)?.name}
                         </p>
                         <p>
                           <span className="font-medium">Selected Probes:</span>{' '}
@@ -1603,6 +1628,12 @@ export default function AgentBasedDiscovery() {
         isOpen={isAIOrchestratorOpen}
         onClose={() => setIsAIOrchestratorOpen(false)}
         onStrategyGenerated={handleAIStrategyGenerated}
+      />
+
+      {/* Deployment detail dialog */}
+      <DeploymentDetailDialog
+        deployment={selectedDeployment}
+        onClose={() => setSelectedDeployment(null)}
       />
     </div>
   );
