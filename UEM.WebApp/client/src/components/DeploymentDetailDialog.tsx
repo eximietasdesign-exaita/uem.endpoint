@@ -174,9 +174,41 @@ const SummaryTab = ({ deployment }: { deployment: AgentPolicyDeployment }) => {
     queryKey: ['script-policies-by-id', policyIdList.join(',')],
     queryFn: async () => {
       if (policyIdList.length === 0) return [];
-      const res = await apiRequest('GET', `/api/policy/script-policies?ids=${policyIdList.join(',')}`);
-      if (res && typeof (res as Response).json === 'function') return await (res as Response).json();
-      return res;
+
+      // Primary: ask canonical script-policies endpoint for specific IDs
+      try {
+        const res = await apiRequest('GET', `/api/policy/script-policies?ids=${policyIdList.join(',')}`);
+        const payload = (res && typeof (res as Response).json === 'function') ? await (res as Response).json() : res;
+        if (Array.isArray(payload) && payload.length > 0) return payload as ScriptPolicy[];
+      } catch (e) {
+        // ignore and fall through to discovery-scripts fallback
+      }
+
+      // Fallback #1: discovery-scripts table (some deployments reference scripts there)
+      try {
+        const res2 = await apiRequest('GET', `/api/discovery-scripts?ids=${policyIdList.join(',')}`);
+        const payload2 = (res2 && typeof (res2 as Response).json === 'function') ? await (res2 as Response).json() : res2;
+        if (Array.isArray(payload2) && payload2.length > 0) {
+          return payload2.map((s: any) => ({
+            id: Number(s.id),
+            name: s.name ?? `Policy ${s.id}`,
+            description: s.description ?? '',
+            publishStatus: s.isActive ? 'published' : (s.publishStatus ?? 'draft'),
+            targetOs: s.targetOs ?? s.target_os ?? 'Any'
+          } as ScriptPolicy));
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      // Final fallback: return placeholder objects so UI shows names instead of raw ids
+      return policyIdList.map(id => ({
+        id: Number(id),
+        name: `Policy ${id}`,
+        description: '',
+        publishStatus: 'unknown',
+        targetOs: 'Any'
+      } as ScriptPolicy));
     },
     enabled: policyIdList.length > 0
   });

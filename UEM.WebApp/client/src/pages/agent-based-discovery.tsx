@@ -1,14 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useTenantData } from '@/hooks/useTenantData';
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardHeader, 
-  CardTitle 
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,159 +12,20 @@ import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DeploymentDetailDialog } from '@/components/DeploymentDetailDialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Play,
-  Settings,
-  Users,
-  Server,
-  Calendar,
-  Monitor,
-  CheckCircle,
-  Clock,
-  AlertTriangle,
-  XCircle,
-  Plus,
-  Search,
-  Filter,
-  Download,
-  Upload,
-  RefreshCw,
-  Eye,
-  Edit,
-  Trash2,
-  Network,
-  Shield,
-  Cpu,
-  HardDrive,
-  Activity,
-  Target,
-  User,
-  Globe,
-  Database,
-  Zap,
-  Brain,
-  Sparkles,
-  BarChart3,
-  TrendingUp,
-  AlertCircle,
-  Info,
-  Check,
-  X,
-  ChevronRight,
-  ChevronDown,
-  MoreHorizontal
-} from 'lucide-react';
+import { Play, Settings, Server, Calendar, Monitor, CheckCircle, Clock, Activity, XCircle, Plus, Search, Eye, MoreHorizontal, Brain, Sparkles, ChevronRight, AlertTriangle, BarChart3, Check, Shield, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { AIAgentOrchestrator } from '@/components/AIAgentOrchestrator';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import React from 'react';
-
-// interface DiscoveryProbe {
-//   id: number;
-//   name: string;
-//   location?: string;
-// }
-
-// interface AgentPolicyDeployment {
-//   id: number;
-//   name: string;
-//   description: string;
-//   selectedPolicyIds: number[];
-//   targets: {
-//     ipRanges: string[];
-//     hostnames: string[];
-//     ouPaths: string[];
-//     ipSegments: string[];
-//   };
-//   credentialProfileId: number;
-//   selectedProbeIds: number[];
-//   schedule: {
-//     type: 'now' | 'later';
-//     frequency?: 'daily' | 'weekly' | 'monthly';
-//     time?: string;
-//     businessHours?: boolean;
-//   };
-//   status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'scheduled';
-//   createdAt: string;
-//   deployedMachines: {
-//     total: number;
-//     applied: number;
-//     inProgress: number;
-//     pending: number;
-//     failed: number;
-//   };
-//   errors?: string[];
-// }
-
-// interface ScriptPolicy {
-//   id: number;
-//   name: string;
-//   description: string;
-//   publishStatus: string;
-//   targetOs: string;
-// }
-
-// interface CredentialProfile {
-//   id: number;
-//   name: string;
-//   category: string;
-// }
-
-// interface DeploymentWizardData {
-//   name: string;
-//   description: string;
-//   selectedPolicyIds: number[];
-//   targets: {
-//     ipRanges: string[];
-//     hostnames: string[];
-//     ouPaths: string[];
-//     ipSegments: string[];
-//   };
-//   credentialProfileId: number | null;
-//   selectedProbeIds: number[];
-//   schedule: {
-//     type: 'now' | 'later';
-//     frequency?: 'daily' | 'weekly' | 'monthly';
-//     time?: string;
-//     businessHours?: boolean;
-//   };
-// }
-
-import type { 
+import type {
   DiscoveryProbeSummary,
   AgentPolicyDeployment,
   ScriptPolicy,
   CredentialProfileSummary,
   DeploymentWizardData
-} from '../../../shared/types';
+} from '../../../shared/types'; // use shared types alias
 
 const DEPLOYMENT_STATUS_CONFIG = {
   pending: { color: 'bg-yellow-500', label: 'Pending', icon: Clock },
@@ -180,15 +35,32 @@ const DEPLOYMENT_STATUS_CONFIG = {
   scheduled: { color: 'bg-purple-500', label: 'Scheduled', icon: Calendar }
 };
 
-const parseJsonbArray = (value: any): number[] => {
-  if (value == null) return [];
-  if (Array.isArray(value)) return value;
-
+/**
+ * A robust parser for JSONB columns that may be returned as objects or "double-encoded" strings.
+ */
+const parseJsonb = <T extends any>(value: any): T | null => {
+  if (value == null) return null;
+  if (typeof value === 'object') return value as T;
   if (typeof value === 'string') {
     try {
       const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) return parsed;
+      return typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
     } catch (e) {
+      console.error("Failed to parse JSONB string:", value, e);
+      return null;
+    }
+  }
+  return null;
+};
+
+const parseJsonbArray = (value: any): number[] => {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value.map((v: any) => Number(v)).filter((n: number) => !Number.isNaN(n));
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map((v: any) => Number(v)).filter((n: number) => !Number.isNaN(n));
+    } catch {
       return value.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id));
     }
   }
@@ -196,206 +68,250 @@ const parseJsonbArray = (value: any): number[] => {
 };
 
 export default function AgentBasedDiscovery() {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('deployments');
   const [showDeploymentWizard, setShowDeploymentWizard] = useState(false);
   const [isAIOrchestratorOpen, setIsAIOrchestratorOpen] = useState(false);
-  const [currentWizardStep, setCurrentWizardStep] = useState(1);
+  const [currentWizardStep, setCurrentWizardStep] = useState<number>(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedDeployment, setSelectedDeployment] = useState<AgentPolicyDeployment | null>(null);
   const { toast } = useToast();
+  const savingToastRef = React.useRef<{ id: string; dismiss?: () => void; update?: (props: any) => void } | null>(null);
 
   const [wizardData, setWizardData] = useState<DeploymentWizardData>({
     name: '',
     description: '',
     selectedPolicyIds: [],
-    targets: {
-      ipRanges: [],
-      hostnames: [],
-      ouPaths: [],
-      ipSegments: []
-    },
+    targets: { ipRanges: [], hostnames: [], ouPaths: [], ipSegments: [] },
     credentialProfileId: null,
     selectedProbeIds: [],
-    schedule: {
-      type: 'now'
-    }
+    schedule: { type: 'now' }
   });
 
-  // toast() returns an object (id + helpers) — allow storing that shape instead of only a string id
-  const savingToastRef = React.useRef<{ id: string; dismiss?: () => void; update?: (props: any) => void } | null>(null);
+  // --- START OF THE FIX: Consolidated Data Fetching ---
 
-  // API calls
-  const { data: policiesData, isLoading: policiesLoading } = useTenantData<ScriptPolicy[]>({
+  // fetch canonical policies and discovery scripts
+  const { data: policiesData = [], isLoading: policiesLoading } = useTenantData<ScriptPolicy[]>({
     endpoint: "/api/policy/script-policies",
   });
 
-  const effectivePolicies: ScriptPolicy[] = Array.isArray(policiesData) ? policiesData : [];
-
-  const { data: credentialProfiles = [], isLoading: credentialsLoading } = useQuery({
-    queryKey: ['/api/credential-profiles'],
+  const { data: discoveryScripts = [], isLoading: discoveryLoading } = useTenantData<any[]>({
+    endpoint: "/api/discovery-scripts",
   });
 
-  // Load satellite servers (tenant-aware)
-  const { data: probes = [], isLoading: probesLoading } = useTenantData({
+  // credential profiles
+  const { data: credentialProfiles = [], isLoading: credentialsLoading } = useQuery<CredentialProfileSummary[]>({
+    queryKey: ['credential-profiles'],
+    queryFn: async () => {
+      const res = await apiRequest('GET', '/api/credential-profiles');
+      if (res && typeof (res as Response).json === 'function') return await (res as Response).json();
+      return res;
+    },
+  });
+
+  // probes
+  const { data: probes = [], isLoading: probesLoading } = useTenantData<DiscoveryProbeSummary[]>({
     endpoint: '/api/discovery-probes'
   });
 
-  const effectiveProbes: DiscoveryProbeSummary[] = Array.isArray(probes) ? probes : [];
+  // normalize probes for UI consumption (provides effectiveProbes used by the wizard)
+  const effectiveProbes = useMemo(() => {
+    if (!Array.isArray(probes)) return [] as DiscoveryProbeSummary[];
+    return probes.map((p: any) => ({
+      id: Number(p.id),
+      name: p.name ?? p.hostname ?? `Probe ${p.id}`,
+      location: p.location ?? p.region ?? null,
+      // keep other fields if present for downstream usage
+      ...p
+    } as DiscoveryProbeSummary));
+  }, [probes]);
 
-  // load real deployments from backend & normalize to UI model
-  const {
-    data: rawDeployments = [],
-    isLoading: deploymentsLoading,
-  } = useQuery<any[]>({
-    queryKey: ['agent-deployment-jobs'], // A unique key for this query
+  // raw deployments (DB rows)
+  const { data: rawDeployments = [], isLoading: deploymentsLoading } = useQuery<any[]>({
+    queryKey: ['agent-deployment-jobs'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/policy-deployments');
       if (!response.ok) throw new Error('Failed to fetch deployments');
       return response.json();
     },
   });
-  
-  // log raw backend rows for debugging in dev console
-  useEffect(() => {
-    console.debug('rawDeployments changed', { deploymentsLoading, rawDeployments });
-  }, [deploymentsLoading, rawDeployments]);
 
-  const normalizeDeployment = (dbRow: any): AgentPolicyDeployment => {
-    // Safely parse JSON columns, defaulting to empty objects/arrays
-    const targets = dbRow.targets ?? {};
-    const schedule = dbRow.schedule ?? {};
-    const progress = dbRow.progress ?? {};
-    const results = dbRow.deployment_results ?? {};
-    //const policyIds = Array.isArray(dbRow.policy_ids) ? dbRow.policy_ids : [];
-     const policyIds = parseJsonbArray(dbRow.policy_ids);
-
-    // Calculate machine stats from the progress and results columns
-    const total = progress.total ?? results.total ?? 0;
-    const applied = progress.applied ?? results.successfulDeployments ?? 0;
-    const failed = progress.failed ?? results.failedDeployments ?? 0;
-    const inProgress = progress.inProgress ?? 0;
-    const pending = Math.max(0, total - (applied + failed + inProgress));
-    
-    // Map database status 'running' to UI status 'in_progress'
-    const dbStatus = (dbRow.status || 'pending').toLowerCase();
-
-    return {
-      id: dbRow.id,
-      name: dbRow.name || 'Untitled Deployment',
-      description: dbRow.description || '',
-      status: dbStatus === 'running' ? 'in_progress' : dbStatus,
-      createdAt: dbRow.created_at || new Date().toISOString(),
-      
-      // Extract data from the JSON columns
-      selectedPolicyIds: policyIds,
-      targets: {
-        // Handle inconsistent casing from your DB data (e.g., OuPaths vs ipRanges)
-        ipRanges: targets.ipRanges || targets.IpRanges || [],
-        hostnames: targets.Hostnames || targets.hostnames || [],
-        ouPaths: targets.OuPaths || targets.ouPaths || [],
-        ipSegments: targets.IpSegments || targets.ipSegments || [],
-      },
-      credentialProfileId: dbRow.credential_profile_id || null,
-      selectedProbeIds: dbRow.probe_id ? [dbRow.probe_id] : [], // probe_id is a single int, UI expects an array
-      schedule: {
-        // Handle inconsistent casing (e.g., Type vs type)
-        type: (schedule.Type || schedule.type)?.toLowerCase() || 'now',
-        frequency: schedule.Frequency || schedule.frequency,
-        time: schedule.Time || schedule.time,
-        businessHours: schedule.BusinessHours ?? schedule.businessHours,
-      },
-      
-      // Assign calculated stats
-      deployedMachines: { total, applied, inProgress, pending, failed },
-      
-      errors: results.errors || [],
-    };
-  };
-
-  const deployments: AgentPolicyDeployment[] = useMemo(() => {
-    if (deploymentsLoading || !Array.isArray(rawDeployments)) {
-      return []; // Return an empty array while loading or if data is invalid
+  // create effectivePolicies by merging discovery scripts + script-policies + referenced deployment policies
+  // Step A: compute all policy ids referenced by deployments
+  const referencedPolicyIds = useMemo(() => {
+    const set = new Set<number>();
+    for (const d of (Array.isArray(rawDeployments) ? rawDeployments : [])) {
+      try {
+        const ids = parseJsonbArray(d.policy_ids ?? d.policyIds ?? d.selectedPolicyIds ?? []);
+        for (const id of ids) set.add(Number(id));
+      } catch { /* ignore malformed */ }
     }
+    return Array.from(set);
+  }, [rawDeployments]);
+
+  // Step B: fetch canonical policy rows for referenced ids (backend: GET /api/policy/script-policies?ids=...)
+  const { data: referencedPolicies = [], isLoading: referencedPoliciesLoading } = useQuery<ScriptPolicy[]>({
+    queryKey: ['script-policies-by-ids-ref', referencedPolicyIds.join(',')],
+    queryFn: async () => {
+      if (referencedPolicyIds.length === 0) return [];
+
+      const idsParam = referencedPolicyIds.join(',');
+      // Try canonical policies endpoint first
+      try {
+        const res = await apiRequest('GET', `/api/policy/script-policies?ids=${idsParam}`);
+        const payload = (res && typeof (res as Response).json === 'function') ? await (res as Response).json() : res;
+        if (Array.isArray(payload) && payload.length > 0) return payload as ScriptPolicy[];
+      } catch (e) {
+        // ignore and try discovery-scripts fallback
+      }
+
+      // Fallback: discovery_scripts table may hold the referenced rows
+      try {
+        const res2 = await apiRequest('GET', `/api/discovery-scripts?ids=${idsParam}`);
+        const payload2 = (res2 && typeof (res2 as Response).json === 'function') ? await (res2 as Response).json() : res2;
+        if (Array.isArray(payload2) && payload2.length > 0) {
+          return payload2.map((s: any) => ({
+            id: Number(s.id),
+            name: s.name ?? `Policy ${s.id}`,
+            description: s.description ?? '',
+            publishStatus: s.isActive ? 'published' : (s.publishStatus ?? 'draft'),
+            targetOs: s.targetOs ?? s.target_os ?? 'Any'
+          } as ScriptPolicy));
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      return [];
+    },
+    enabled: referencedPolicyIds.length > 0,
+    staleTime: 30_000
+  });
+
+   const effectivePolicies: ScriptPolicy[] = useMemo(() => {
+    const map = new Map<number, ScriptPolicy>();
+    const normalizedScripts = (Array.isArray(discoveryScripts) ? discoveryScripts : []).map((s: any) => ({
+      id: Number(s.id),
+      name: s.name ?? `script-${s.id}`,
+      description: s.description ?? '',
+      publishStatus: (s.isActive ? 'published' : 'draft'),
+      targetOs: s.targetOs ?? s.target_os ?? 'Any',
+    }));
+    [...normalizedScripts, ...(Array.isArray(policiesData) ? policiesData : [])].forEach(p => {
+      if (p && p.id) map.set(Number(p.id), p as ScriptPolicy);
+    });
+    return Array.from(map.values());
+  }, [policiesData, discoveryScripts]);
+
+   const policiesLoadingCombined = policiesLoading || discoveryLoading;
+
+  // For Policy Management tab: derive simple list of policy entries from DB rows (uem_app_agent_deployments)
+  const deploymentPolicyEntries = useMemo(() => {
+    if (!Array.isArray(rawDeployments) || rawDeployments.length === 0) return [];
+    const map = new Map<string, { id: number; name: string; description?: string }>();
+    for (const d of rawDeployments) {
+      const name = (d?.name ?? '').toString().trim();
+      if (!name) continue;
+      // prefer the deployment row's name/description (one entry per unique name)
+      if (!map.has(name)) {
+        map.set(name, {
+          id: Number(d.id ?? 0),
+          name,
+          description: d?.description ?? ''
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [rawDeployments]);
+
+  // normalize deployments into UI model
+  const deployments: AgentPolicyDeployment[] = useMemo(() => {
+    if (deploymentsLoading || !Array.isArray(rawDeployments)) return [];
+
+    const normalizeDeployment = (dbRow: any): AgentPolicyDeployment => {
+      const targets = parseJsonb<any>(dbRow.targets) || {};
+      const schedule = parseJsonb<any>(dbRow.schedule) || { type: 'now' };
+      const progress = parseJsonb<any>(dbRow.progress) || {};
+      const results = parseJsonb<any>(dbRow.deployment_results) || {};
+      const policyIds = parseJsonbArray(dbRow.policy_ids ?? dbRow.policyIds ?? dbRow.selectedPolicyIds ?? []);
+
+      const total = progress.total ?? results.total ?? 0;
+      const applied = progress.applied ?? results.successfulDeployments ?? 0;
+      const failed = progress.failed ?? results.failedDeployments ?? 0;
+      const inProgress = progress.inProgress ?? 0;
+      const pending = Math.max(0, total - (applied + failed + inProgress));
+      const dbStatus = (dbRow.status || 'pending').toLowerCase();
+
+      return {
+        id: dbRow.id,
+        name: dbRow.name || 'Untitled Deployment',
+        description: dbRow.description || '',
+        status: dbStatus === 'running' ? 'in_progress' : dbStatus,
+        createdAt: dbRow.created_at || new Date().toISOString(),
+        selectedPolicyIds: policyIds,
+        targets: {
+          ipRanges: targets.IpRanges || targets.ipRanges || [],
+          hostnames: targets.Hostnames || targets.hostnames || [],
+          ouPaths: targets.OuPaths || targets.ouPaths || [],
+          ipSegments: targets.IpSegments || targets.ipSegments || [],
+        },
+        credentialProfileId: dbRow.credential_profile_id || null,
+        selectedProbeIds: dbRow.probe_id ? [dbRow.probe_id] : [],
+        schedule: {
+          type: (schedule.Type || schedule.type || 'now').toLowerCase(),
+          frequency: schedule.Frequency ?? schedule.frequency,
+          time: schedule.Time ?? schedule.time,
+          businessHours: schedule.BusinessHours ?? schedule.businessHours,
+        },
+        deployedMachines: { total, applied, inProgress, pending, failed },
+        errors: results.errors || [],
+        // passthrough metadata for details dialog
+        deploymentMethod: dbRow.deployment_method,
+        probeId: dbRow.probe_id,
+        createdBy: dbRow.created_by,
+        startedAt: dbRow.started_at,
+        completedAt: dbRow.completed_at,
+        updatedAt: dbRow.updated_at,
+        domainId: dbRow.domain_id,
+        tenantId: dbRow.tenant_id,
+        rawResults: results,
+      } as unknown as AgentPolicyDeployment;
+    };
+
     return rawDeployments.map(normalizeDeployment);
   }, [rawDeployments, deploymentsLoading]);
 
-  // // Mock deployments data for demonstration
-  // const mockDeployments: AgentPolicyDeployment[] = [
-  //   {
-  //     id: 1,
-  //     name: 'Enterprise Security Assessment',
-  //     description: 'Comprehensive security and compliance deployment across enterprise network',
-  //     selectedPolicyIds: [1, 3, 5],
-  //     targets: {
-  //       ipRanges: ['10.0.0.1-10.0.0.100', '192.168.1.1-192.168.1.50'],
-  //       hostnames: ['server01.company.com', 'server02.company.com'],
-  //       ouPaths: ['OU=Servers,DC=company,DC=com'],
-  //       ipSegments: ['10.0.1.0/24']
-  //     },
-  //     credentialProfileId: 1,
-  //     selectedProbeIds: [1, 2],
-  //     schedule: { type: 'later', frequency: 'daily', time: '02:00', businessHours: false },
-  //     status: 'in_progress',
-  //     createdAt: '2025-07-18T08:00:00Z',
-  //     deployedMachines: {
-  //       total: 150,
-  //       applied: 89,
-  //       inProgress: 35,
-  //       pending: 20,
-  //       failed: 6
-  //     },
-  //     errors: ['Authentication failed on server03.company.com', 'Network timeout on 192.168.1.45']
-  //   },
-  //   {
-  //     id: 2,
-  //     name: 'Network Infrastructure Discovery',
-  //     description: 'Discovery and inventory of network devices and infrastructure',
-  //     selectedPolicyIds: [1, 2],
-  //     targets: {
-  //       ipRanges: ['172.16.0.1-172.16.0.200'],
-  //       hostnames: [],
-  //       ouPaths: ['OU=Network,DC=company,DC=com'],
-  //       ipSegments: []
-  //     },
-  //     credentialProfileId: 2,
-  //     selectedProbeIds: [1],
-  //     schedule: { type: 'now' },
-  //     status: 'completed',
-  //     createdAt: '2025-07-17T14:30:00Z',
-  //     deployedMachines: {
-  //       total: 75,
-  //       applied: 75,
-  //       inProgress: 0,
-  //       pending: 0,
-  //       failed: 0
-  //     }
-  //   },
-  //   {
-  //     id: 3,
-  //     name: 'Development Environment Scan',
-  //     description: 'Security and compliance scan for development servers',
-  //     selectedPolicyIds: [4, 6],
-  //     targets: {
-  //       ipRanges: ['10.1.0.1-10.1.0.50'],
-  //       hostnames: ['dev01.company.com', 'dev02.company.com'],
-  //       ouPaths: [],
-  //       ipSegments: ['10.1.1.0/24']
-  //     },
-  //     credentialProfileId: 3,
-  //     selectedProbeIds: [2, 3],
-  //     schedule: { type: 'later', frequency: 'weekly', time: '22:00', businessHours: false },
-  //     status: 'scheduled',
-  //     createdAt: '2025-07-18T10:15:00Z',
-  //     deployedMachines: {
-  //       total: 25,
-  //       applied: 0,
-  //       inProgress: 0,
-  //       pending: 25,
-  //       failed: 0
-  //     }
-  //   }
-  // ];
+  const policyManagementList = useMemo(() => {
+    const map = new Map<string, any>();
+
+    // Add canonical scripts/policies first
+    effectivePolicies.forEach(p => {
+      map.set(`policy-${p.id}`, {
+        ...p,
+        isDeploymentJob: false, // Flag to differentiate in the UI
+      });
+    });
+
+    // Add saved deployment jobs, treating them as policy templates
+    (Array.isArray(rawDeployments) ? rawDeployments : []).forEach(job => {
+        // Use a unique key to avoid overwriting canonical policies
+        const key = `job-${job.id}`;
+        if (!map.has(key)) {
+            map.set(key, {
+                id: job.id,
+                name: job.name,
+                description: job.description,
+                publishStatus: job.status, // Use the job's status (e.g., 'pending') as its publish status
+                targetOs: 'Multiple', // A job can have policies for multiple OSes
+                isDeploymentJob: true, // Flag to identify this as a job
+            });
+        }
+    });
+
+    return Array.from(map.values());
+  }, [effectivePolicies, rawDeployments]);
+  
+    // toast() returns an object (id + helpers) — allow storing that shape instead of only a string id
 
   const createDeploymentMutation = useMutation({
     mutationFn: async (data: DeploymentWizardData) => {
@@ -899,49 +815,49 @@ export default function AgentBasedDiscovery() {
         </TabsContent>
 
         <TabsContent value="policies" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Shield className="w-5 h-5 text-blue-600" />
-                <span>Available Policies for Agent Deployment</span>
-              </CardTitle>
-              <CardDescription>
-                Manage and deploy discovery policies to agent-based endpoints
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {policiesLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                  <span className="ml-2">Loading policies...</span>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {(effectivePolicies as ScriptPolicy[]).map(policy => (
-                    <Card key={policy.id} className="hover:shadow-md transition-shadow">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between mb-3">
-                          <h4 className="font-medium text-gray-900 dark:text-white">{policy.name}</h4>
-                          <Badge variant={policy.publishStatus === 'published' ? 'default' : 'outline'}>
-                            {policy.publishStatus}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{policy.description}</p>
-                        <div className="flex items-center justify-between">
-                          <Badge variant="secondary">{policy.targetOs}</Badge>
-                          <Button variant="outline" size="sm">
-                            <Settings className="w-3 h-3 mr-1" />
-                            Configure
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Shield className="w-5 h-5 text-blue-600" />
+              <span>Available Policies for Agent Deployment</span>
+            </CardTitle>
+            <CardDescription>
+              Manage and deploy discovery policies to agent-based endpoints
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {policiesLoadingCombined ? (
+              <div className="flex items-center justify-center py-8">
+                {/* Loading spinner */}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Render the new, unified list */}
+                {policyManagementList.map(item => (
+                  <Card key={`${item.isDeploymentJob ? 'job' : 'policy'}-${item.id}`} className="hover:shadow-md transition-shadow flex flex-col">
+                    <CardContent className="p-4 flex-grow">
+                      <div className="flex items-start justify-between mb-3">
+                        <h4 className="font-medium text-gray-900 dark:text-white">{item.name}</h4>
+                        <Badge variant={item.isDeploymentJob ? 'secondary' : 'default'}>
+                          {item.isDeploymentJob ? 'Deployment' : item.publishStatus}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{item.description}</p>
+                    </CardContent>
+                    <div className="p-4 pt-0 mt-auto flex items-center justify-between">
+                      <Badge variant="outline">{item.targetOs}</Badge>
+                      <Button variant="outline" size="sm">
+                        <Settings className="w-3 h-3 mr-1" />
+                        Configure
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </TabsContent>
       </Tabs>
 
       {/* Deployment Wizard Dialog */}
