@@ -15,7 +15,6 @@ import {
   ChevronDown, 
   ChevronUp, 
   Edit, 
-  Trash2,
   Play,
   Pause,
   Filter,
@@ -54,9 +53,14 @@ export default function ScriptPoliciesPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
 
-  // Use tenant-aware data fetching
-  const { data: policies = [], isLoading, hasContext } = useTenantData({
-    endpoint: "/api/script-policies",
+  // Fetch all policies from backend (uem_app_policies) via frontend-friendly API
+  const { data: policies = [], isLoading: policiesLoading, refetch } = useQuery<ScriptPolicy[]>({
+    queryKey: ['/api/script-policies'],
+    queryFn: async () => {
+      const res = await apiRequest('GET', '/api/script-policies');
+      return (res && typeof (res as Response).json === 'function') ? await (res as Response).json() : res;
+    },
+    staleTime: 30_000,
   });
 
   const { data: scripts = [] } = useTenantData<Script[]>({
@@ -64,17 +68,8 @@ export default function ScriptPoliciesPage() {
     requiresContext: false,
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/script-policies/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/script-policies"] });
-      toast({ title: "Policy deleted successfully" });
-    },
-  });
-
   const toggleActiveMutation = useMutation({
-    mutationFn: (policy: ScriptPolicy) => 
-      apiRequest("PATCH", `/api/script-policies/${policy.id}`, { isActive: !policy.isActive }),
+    mutationFn: (policy: ScriptPolicy) => apiRequest("PATCH", `/api/script-policies/${policy.id}`, { isActive: !policy.isActive }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/script-policies"] });
       toast({ title: "Policy status updated" });
@@ -135,29 +130,16 @@ export default function ScriptPoliciesPage() {
     setIsEditing(true);
   };
 
-  const handleDeletePolicy = (policy: ScriptPolicy) => {
-    if (confirm(`Are you sure you want to delete "${policy.name}"?`)) {
-      deleteMutation.mutate(policy.id);
-    }
-  };
-
   const handleToggleActive = (policy: ScriptPolicy) => {
     toggleActiveMutation.mutate(policy);
   };
 
   if (isEditing) {
-    return <ScriptPolicyEditor policy={selectedPolicy} onClose={() => setIsEditing(false)} />;
+    return <ScriptPolicyEditor policy={selectedPolicy} onClose={() => setIsEditing(false)} onSaveSuccess={refetch} />;
   }
 
-  if (isLoading) {
+  if (policiesLoading) {
     return <div className="flex items-center justify-center h-64">Loading policies...</div>;
-  }
-
-  if (!hasContext) {
-    return (
-      <div className="space-y-6">
-      </div>
-    );
   }
 
   return (
@@ -291,6 +273,8 @@ export default function ScriptPoliciesPage() {
                             size="sm"
                             onClick={() => handleToggleActive(policy)}
                             disabled={toggleActiveMutation.isPending}
+                            title={policy.isActive ? t("deactivate") : t("activate")}
+                            aria-label={policy.isActive ? t("deactivate") : t("activate")}
                           >
                             {policy.isActive ? (
                               <Pause className="w-4 h-4" />
@@ -302,17 +286,10 @@ export default function ScriptPoliciesPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleEditPolicy(policy)}
+                            title={t("edit")}
+                            aria-label={t("edit")}
                           >
                             <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeletePolicy(policy)}
-                            disabled={deleteMutation.isPending}
-                            className="text-red-600 hover:text-red-700 dark:text-red-400"
-                          >
-                            <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                       </div>
@@ -341,6 +318,7 @@ export default function ScriptPoliciesPage() {
 interface ScriptPolicyEditorProps {
   policy: ScriptPolicy | null;
   onClose: () => void;
+  onSaveSuccess: () => void;
 }
 
 interface ExecutionStep {
@@ -348,11 +326,11 @@ interface ExecutionStep {
   stepName: string;
   scriptId: number;
   runCondition: "always" | "on_success" | "on_failure";
-  previousStepId?: string;
+  previousStep?: string;
   order: number;
 }
 
-function ScriptPolicyEditor({ policy, onClose }: ScriptPolicyEditorProps) {
+function ScriptPolicyEditor({ policy, onClose, onSaveSuccess }: ScriptPolicyEditorProps) {
   const { t } = useLanguage();
   const [formData, setFormData] = useState({
     name: policy?.name || "",
@@ -377,14 +355,37 @@ function ScriptPolicyEditor({ policy, onClose }: ScriptPolicyEditorProps) {
         }
         
         // Clean and normalize the execution flow data
-        return parsed.map((step: any, index: number) => ({
+        // We want to store the previous-step as the displayed name (not an id).
+        // If the stored payload contains an id, try to map it to the stepName present in the same flow.
+        const normalized = parsed.map((step: any, index: number) => ({
+          rawId: step.id ?? `step_${index}`, // temporary to help resolving references
           id: step.id || `step_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`,
-          stepName: step.stepName || "",
-          scriptId: Number(step.scriptId) || 0,
-          runCondition: step.runCondition || "always",
-          previousStepId: step.previousStepId || undefined,
+          stepName: step.stepName || step.step_name || "",
+          scriptId: Number(step.scriptId ?? step.script_id) || 0,
+          runCondition: step.runCondition || step.run_condition || "always",
+          previousRaw: step.previousStep ?? step.previous_step ?? step.previousStepId ?? step.previous_step_id ?? null,
           order: step.order || (index + 1),
-        } as ExecutionStep));
+        }));
+
+        // Resolve previousRaw -> previousStep (use matching stepName if previousRaw looks like an id)
+        return normalized.map((s: any, idx: number) => {
+          let prevName: string | undefined;
+          if (s.previousRaw) {
+            // if previousRaw matches any rawId or id in normalized, use that stepName
+            const found = normalized.find((x: any) => String(x.rawId) === String(s.previousRaw) || String(x.id) === String(s.previousRaw));
+            if (found) prevName = found.stepName || `Step ${found.order}`;
+            else prevName = String(s.previousRaw); // otherwise assume it's already a display value
+          }
+
+          return {
+            id: s.id,
+            stepName: s.stepName,
+            scriptId: s.scriptId,
+            runCondition: s.runCondition,
+            previousStep: prevName ?? undefined,
+            order: s.order,
+          } as ExecutionStep;
+        });
       } catch (error) {
         console.error('Error parsing execution flow:', error);
         return [];
@@ -392,33 +393,77 @@ function ScriptPolicyEditor({ policy, onClose }: ScriptPolicyEditorProps) {
     }
     return [];
   });
-
-  // Remove script search and selection as it's not needed anymore
   
   const { data: scripts = [] } = useTenantData<Script[]>({
     endpoint: "/api/discovery-scripts",
     requiresContext: false,
   });
 
+  const { toast } = useToast();
+
   const createMutation = useMutation({
+    // pass payload directly (apiRequest expects the body as the 3rd arg, not { body: ... })
     mutationFn: (data: any) => apiRequest('POST', '/api/script-policies', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/script-policies"] });
       toast({ title: t("policy_created") });
       onClose();
     },
+    onError: (err: any) => {
+      toast({ title: 'Create failed', description: String(err?.message ?? err), variant: 'destructive' });
+    }
   });
 
   const updateMutation = useMutation({
     mutationFn: (data: any) => apiRequest('PATCH', `/api/script-policies/${policy?.id}`, data),
-    onSuccess: (response) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/script-policies"] });
       toast({ title: t("policy_updated") });
       onClose();
     },
+    onError: (err: any) => {
+      toast({ title: 'Update failed', description: String(err?.message ?? err), variant: 'destructive' });
+    }
   });
 
-  const { toast } = useToast();
+  const saveMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      // use the frontend-backed endpoint /api/script-policies (backend controller)
+      const url = policy ? `/api/script-policies/${policy.id}` : "/api/script-policies";
+      const method = policy ? "PATCH" : "POST";
+      const res = await apiRequest(method, url, payload);
+ 
+      // If apiRequest returns a Fetch Response-like object, surface errors and parse JSON
+      if (res && typeof (res as any).ok === "boolean") {
+        const r = res as unknown as Response;
+        if (!r.ok) {
+          let body: any = null;
+          try { body = await r.json(); } catch { /* ignore */ }
+          const message = body?.error ?? body?.message ?? `HTTP ${r.status}`;
+          throw new Error(String(message));
+        }
+        try { return await r.json(); } catch { return {}; }
+      }
+ 
+      // Otherwise return parsed object / whatever helper returned
+      return res;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/script-policies"] });
+      toast({ title: policy ? t("policy_updated") : t("policy_created") });
+      try { onSaveSuccess(); } catch (err) { console.error('onSaveSuccess callback error', err); }
+      onClose();
+    },
+    onError: (err: any) => {
+      console.error('Save policy error:', err);
+      toast({
+        title: `Failed to ${policy ? "update" : "create"} policy`,
+        description: String(err?.message ?? err),
+        variant: "destructive",
+      });
+    }
+  });
+  
 
   const getScriptIcon = (category: string) => {
     switch (category) {
@@ -488,18 +533,42 @@ function ScriptPolicyEditor({ policy, onClose }: ScriptPolicyEditorProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const submitData = {
-      ...formData,
-      availableScripts: executionFlow.map(step => step.scriptId.toString()).filter(id => id !== "0"),
-      executionFlow: JSON.stringify(executionFlow),
+    const finalExecutionFlow = executionFlow
+      .filter(step => step.scriptId > 0)
+      .map((step, index) => ({
+        scriptId: step.scriptId,
+        stepName: step.stepName || `Step ${index + 1}`,
+        onFailure: "continue", 
+        onSuccess: "continue",
+        stepNumber: index + 1,
+        runCondition: step.runCondition,
+        // persist previous step display value (no ids)
+        previousStep: step.previousStep ?? null,
+      }));
+
+    // Build the final payload with PascalCase keys to match the C# DTO.
+    const payload = {
+      Name: formData.name,
+      Description: formData.description,
+      Category: formData.category,
+      TargetOs: formData.targetOS,
+      PublishStatus: formData.publishStatus,
+      ExecutionOrder: Number(formData.executionOrder) || 0,
+      IsActive: Boolean(formData.isActive),
+      Version: policy?.version ?? "1.0.0",
+      Scope: policy?.scope ?? "tenant",
+      PublishScope: policy?.publishScope ?? "private",
+      
+      // `available_scripts` is an array of strings
+      AvailableScripts: finalExecutionFlow.map(step => step.scriptId.toString()),
+      
+      // `ExecutionFlow` is the array of objects itself.
+      ExecutionFlow: finalExecutionFlow
     };
 
-    if (policy) {
-      updateMutation.mutate(submitData);
-    } else {
-      createMutation.mutate(submitData);
-    }
+    console.debug('Final policy payload to send:', payload);
+
+    saveMutation.mutate(payload);
   };
 
   return (
@@ -730,15 +799,23 @@ function ScriptPolicyEditor({ policy, onClose }: ScriptPolicyEditorProps) {
                                   />
                                 </div>
 
-                                {/* Script Selection */}
+                                
                                 <div>
-                                  <Label className="text-xs font-medium text-gray-600 dark:text-gray-400">Script</Label>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <Label className="text-xs font-medium text-gray-600 dark:text-gray-400">Script</Label>
+                                    <div className="flex items-center gap-2 text-xs">
+                                      <div className={`w-2 h-2 rounded-full ${selectedScript ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                                      <span className="text-gray-500">
+                                        {selectedScript ? 'Configured' : 'Incomplete'}
+                                      </span>
+                                    </div>
+                                  </div>
                                   <Select
                                     value={step.scriptId > 0 ? step.scriptId.toString() : ""}
                                     onValueChange={(value) => updateExecutionStep(step.id, { scriptId: parseInt(value) || 0 })}
                                   >
-                                    <SelectTrigger className="mt-1">
-                                      <SelectValue placeholder="Choose script">
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Choose a script...">
                                         {selectedScript && (
                                           <div className="flex items-center gap-2">
                                             {getScriptIcon(selectedScript.category)}
@@ -762,13 +839,14 @@ function ScriptPolicyEditor({ policy, onClose }: ScriptPolicyEditorProps) {
                                     </SelectContent>
                                   </Select>
                                 </div>
+                                
 
                                 {/* Run Condition */}
                                 <div>
                                   <Label className="text-xs font-medium text-gray-600 dark:text-gray-400">Execution Condition</Label>
                                   <Select
                                     value={step.runCondition}
-                                    onValueChange={(value: "always" | "on_success" | "on_failure") => 
+                                    onValueChange={(value: "always" | "on_success" | "on_failure") =>
                                       updateExecutionStep(step.id, { runCondition: value })
                                     }
                                   >
@@ -797,44 +875,40 @@ function ScriptPolicyEditor({ policy, onClose }: ScriptPolicyEditorProps) {
                                     </SelectContent>
                                   </Select>
                                 </div>
-
+                                
                                 {/* Previous Step Selection for Conditional Execution */}
                                 {step.runCondition !== "always" && (
                                   <div>
                                     <Label className="text-xs font-medium text-gray-600 dark:text-gray-400">Previous Step Reference</Label>
                                     <Select
-                                      value={step.previousStepId || ""}
-                                      onValueChange={(value) => updateExecutionStep(step.id, { previousStepId: value })}
+                                      // store the displayed step name (not the id)
+                                      value={step.previousStep || ""}
+                                      onValueChange={(value) => updateExecutionStep(step.id, { previousStep: value })}
                                     >
                                       <SelectTrigger className="mt-1">
                                         <SelectValue placeholder="Select previous step" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        {executionFlow.slice(0, index).map((prevStep) => (
-                                          <SelectItem key={prevStep.id} value={prevStep.id}>
-                                            <div className="flex items-center gap-2">
-                                              <div className="w-4 h-4 bg-gray-500 text-white rounded-full flex items-center justify-center text-xs">
-                                                {executionFlow.findIndex(s => s.id === prevStep.id) + 1}
+                                        {executionFlow.slice(0, index).map((prevStep) => {
+                                          const display = prevStep.stepName || `Step ${prevStep.order}`;
+                                          return (
+                                            <SelectItem key={prevStep.id} value={display}>
+                                              <div className="flex items-center gap-2">
+                                                <div className="w-4 h-4 bg-gray-500 text-white rounded-full flex items-center justify-center text-xs">
+                                                  {executionFlow.findIndex(s => s.id === prevStep.id) + 1}
+                                                </div>
+                                                {display}
                                               </div>
-                                              {prevStep.stepName || `Step ${prevStep.order}`}
-                                            </div>
-                                          </SelectItem>
-                                        ))}
+                                            </SelectItem>
+                                          );
+                                        })}
                                       </SelectContent>
                                     </Select>
                                   </div>
                                 )}
                               </div>
                               
-                              {/* Step Status Indicator */}
-                              <div className="absolute bottom-2 left-4 flex items-center gap-1">
-                                <div className={`w-2 h-2 rounded-full ${
-                                  selectedScript ? 'bg-green-500' : 'bg-gray-400'
-                                }`}></div>
-                                <span className="text-xs text-gray-500">
-                                  {selectedScript ? 'Configured' : 'Incomplete'}
-                                </span>
-                              </div>
+                              
                             </div>
                             
                             {/* Connection Line to Next Step */}
@@ -894,10 +968,10 @@ function ScriptPolicyEditor({ policy, onClose }: ScriptPolicyEditorProps) {
           </Button>
           <Button 
             type="submit" 
-            disabled={createMutation.isPending || updateMutation.isPending}
+            disabled={saveMutation.isPending}
             className="bg-blue-600 hover:bg-blue-700"
           >
-            {createMutation.isPending || updateMutation.isPending ? t("loading") : t("save")}
+            {saveMutation.isPending ? t("loading") : t("save")}
           </Button>
         </div>
       </form>

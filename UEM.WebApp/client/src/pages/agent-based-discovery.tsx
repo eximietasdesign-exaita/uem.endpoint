@@ -75,6 +75,8 @@ export default function AgentBasedDiscovery() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedDeployment, setSelectedDeployment] = useState<AgentPolicyDeployment | null>(null);
+  // Toggle to hide/show Policy Management tab without deleting it
+  const SHOW_POLICY_TAB = false;
   const { toast } = useToast();
   const savingToastRef = React.useRef<{ id: string; dismiss?: () => void; update?: (props: any) => void } | null>(null);
 
@@ -88,15 +90,14 @@ export default function AgentBasedDiscovery() {
     schedule: { type: 'now' }
   });
 
-  // --- START OF THE FIX: Consolidated Data Fetching ---
-
-  // fetch canonical policies and discovery scripts
-  const { data: policiesData = [], isLoading: policiesLoading } = useTenantData<ScriptPolicy[]>({
-    endpoint: "/api/policy/script-policies",
-  });
-
-  const { data: discoveryScripts = [], isLoading: discoveryLoading } = useTenantData<any[]>({
-    endpoint: "/api/discovery-scripts",
+  // fetch canonical policies from uem_app_policies via frontend-friendly API
+  const { data: policiesData = [], isLoading: policiesLoading } = useQuery<ScriptPolicy[]>({
+    queryKey: ['/api/script-policies'],
+    queryFn: async () => {
+      const res = await apiRequest('GET', '/api/script-policies');
+      return (res && typeof (res as Response).json === 'function') ? await (res as Response).json() : res;
+    },
+    staleTime: 30_000,
   });
 
   // credential profiles
@@ -121,7 +122,6 @@ export default function AgentBasedDiscovery() {
       id: Number(p.id),
       name: p.name ?? p.hostname ?? `Probe ${p.id}`,
       location: p.location ?? p.region ?? null,
-      // keep other fields if present for downstream usage
       ...p
     } as DiscoveryProbeSummary));
   }, [probes]);
@@ -137,7 +137,7 @@ export default function AgentBasedDiscovery() {
   });
 
   // create effectivePolicies by merging discovery scripts + script-policies + referenced deployment policies
-  // Step A: compute all policy ids referenced by deployments
+  // compute all policy ids referenced by deployments
   const referencedPolicyIds = useMemo(() => {
     const set = new Set<number>();
     for (const d of (Array.isArray(rawDeployments) ? rawDeployments : [])) {
@@ -149,61 +149,35 @@ export default function AgentBasedDiscovery() {
     return Array.from(set);
   }, [rawDeployments]);
 
-  // Step B: fetch canonical policy rows for referenced ids (backend: GET /api/policy/script-policies?ids=...)
+  // fetch canonical policy rows for referenced ids from /api/script-policies only
   const { data: referencedPolicies = [], isLoading: referencedPoliciesLoading } = useQuery<ScriptPolicy[]>({
     queryKey: ['script-policies-by-ids-ref', referencedPolicyIds.join(',')],
     queryFn: async () => {
       if (referencedPolicyIds.length === 0) return [];
-
       const idsParam = referencedPolicyIds.join(',');
-      // Try canonical policies endpoint first
-      try {
-        const res = await apiRequest('GET', `/api/policy/script-policies?ids=${idsParam}`);
-        const payload = (res && typeof (res as Response).json === 'function') ? await (res as Response).json() : res;
-        if (Array.isArray(payload) && payload.length > 0) return payload as ScriptPolicy[];
-      } catch (e) {
-        // ignore and try discovery-scripts fallback
-      }
-
-      // Fallback: discovery_scripts table may hold the referenced rows
-      try {
-        const res2 = await apiRequest('GET', `/api/discovery-scripts?ids=${idsParam}`);
-        const payload2 = (res2 && typeof (res2 as Response).json === 'function') ? await (res2 as Response).json() : res2;
-        if (Array.isArray(payload2) && payload2.length > 0) {
-          return payload2.map((s: any) => ({
-            id: Number(s.id),
-            name: s.name ?? `Policy ${s.id}`,
-            description: s.description ?? '',
-            publishStatus: s.isActive ? 'published' : (s.publishStatus ?? 'draft'),
-            targetOs: s.targetOs ?? s.target_os ?? 'Any'
-          } as ScriptPolicy));
-        }
-      } catch (e) {
-        // ignore
-      }
-
+      const res = await apiRequest('GET', `/api/script-policies?ids=${idsParam}`);
+      const payload = (res && typeof (res as Response).json === 'function') ? await (res as Response).json() : res;
+      if (Array.isArray(payload)) return payload as ScriptPolicy[];
       return [];
     },
     enabled: referencedPolicyIds.length > 0,
     staleTime: 30_000
   });
 
-   const effectivePolicies: ScriptPolicy[] = useMemo(() => {
+  // effectivePolicies are taken only from the canonical /api/script-policies rows (policiesData)
+  const effectivePolicies: ScriptPolicy[] = useMemo(() => {
     const map = new Map<number, ScriptPolicy>();
-    const normalizedScripts = (Array.isArray(discoveryScripts) ? discoveryScripts : []).map((s: any) => ({
-      id: Number(s.id),
-      name: s.name ?? `script-${s.id}`,
-      description: s.description ?? '',
-      publishStatus: (s.isActive ? 'published' : 'draft'),
-      targetOs: s.targetOs ?? s.target_os ?? 'Any',
-    }));
-    [...normalizedScripts, ...(Array.isArray(policiesData) ? policiesData : [])].forEach(p => {
+    (Array.isArray(policiesData) ? policiesData : []).forEach((p: any) => {
+      if (p && p.id) map.set(Number(p.id), p as ScriptPolicy);
+    });
+    // include referencedPolicies if any (ensures policies referenced by deployments are present)
+    (Array.isArray(referencedPolicies) ? referencedPolicies : []).forEach((p: any) => {
       if (p && p.id) map.set(Number(p.id), p as ScriptPolicy);
     });
     return Array.from(map.values());
-  }, [policiesData, discoveryScripts]);
+  }, [policiesData, referencedPolicies]);
 
-   const policiesLoadingCombined = policiesLoading || discoveryLoading;
+  const policiesLoadingCombined = policiesLoading;
 
   // For Policy Management tab: derive simple list of policy entries from DB rows (uem_app_agent_deployments)
   const deploymentPolicyEntries = useMemo(() => {
@@ -265,7 +239,6 @@ export default function AgentBasedDiscovery() {
         },
         deployedMachines: { total, applied, inProgress, pending, failed },
         errors: results.errors || [],
-        // passthrough metadata for details dialog
         deploymentMethod: dbRow.deployment_method,
         probeId: dbRow.probe_id,
         createdBy: dbRow.created_by,
@@ -301,9 +274,9 @@ export default function AgentBasedDiscovery() {
                 id: job.id,
                 name: job.name,
                 description: job.description,
-                publishStatus: job.status, // Use the job's status (e.g., 'pending') as its publish status
-                targetOs: 'Multiple', // A job can have policies for multiple OSes
-                isDeploymentJob: true, // Flag to identify this as a job
+                publishStatus: job.status,
+                targetOs: 'Multiple',
+                isDeploymentJob: true,
             });
         }
     });
@@ -575,10 +548,10 @@ export default function AgentBasedDiscovery() {
 
       {/* Main Content */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className={cn("grid w-full", SHOW_POLICY_TAB ? "grid-cols-3" : "grid-cols-2")}>
           <TabsTrigger value="overview">Deployment Overview</TabsTrigger>
           <TabsTrigger value="deployments">Active Deployments</TabsTrigger>
-          <TabsTrigger value="policies">Policy Management</TabsTrigger>
+          {SHOW_POLICY_TAB && <TabsTrigger value="policies">Policy Management</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -814,50 +787,53 @@ export default function AgentBasedDiscovery() {
           </div>
         </TabsContent>
 
-        <TabsContent value="policies" className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Shield className="w-5 h-5 text-blue-600" />
-              <span>Available Policies for Agent Deployment</span>
-            </CardTitle>
-            <CardDescription>
-              Manage and deploy discovery policies to agent-based endpoints
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {policiesLoadingCombined ? (
-              <div className="flex items-center justify-center py-8">
-                {/* Loading spinner */}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Render the new, unified list */}
-                {policyManagementList.map(item => (
-                  <Card key={`${item.isDeploymentJob ? 'job' : 'policy'}-${item.id}`} className="hover:shadow-md transition-shadow flex flex-col">
-                    <CardContent className="p-4 flex-grow">
-                      <div className="flex items-start justify-between mb-3">
-                        <h4 className="font-medium text-gray-900 dark:text-white">{item.name}</h4>
-                        <Badge variant={item.isDeploymentJob ? 'secondary' : 'default'}>
-                          {item.isDeploymentJob ? 'Deployment' : item.publishStatus}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{item.description}</p>
-                    </CardContent>
-                    <div className="p-4 pt-0 mt-auto flex items-center justify-between">
-                      <Badge variant="outline">{item.targetOs}</Badge>
-                      <Button variant="outline" size="sm">
-                        <Settings className="w-3 h-3 mr-1" />
-                        Configure
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
+        
+        {SHOW_POLICY_TAB && (
+          <TabsContent value="policies" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Shield className="w-5 h-5 text-blue-600" />
+                  <span>Available Policies for Agent Deployment</span>
+                </CardTitle>
+                <CardDescription>
+                  Manage and deploy discovery policies to agent-based endpoints
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {policiesLoadingCombined ? (
+                  <div className="flex items-center justify-center py-8">
+                    {/* Loading spinner */}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Render the new, unified list */}
+                    {policyManagementList.map(item => (
+                      <Card key={`${item.isDeploymentJob ? 'job' : 'policy'}-${item.id}`} className="hover:shadow-md transition-shadow flex flex-col">
+                        <CardContent className="p-4 flex-grow">
+                          <div className="flex items-start justify-between mb-3">
+                            <h4 className="font-medium text-gray-900 dark:text-white">{item.name}</h4>
+                            <Badge variant={item.isDeploymentJob ? 'secondary' : 'default'}>
+                              {item.isDeploymentJob ? 'Deployment' : item.publishStatus}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{item.description}</p>
+                        </CardContent>
+                        <div className="p-4 pt-0 mt-auto flex items-center justify-between">
+                          <Badge variant="outline">{item.targetOs}</Badge>
+                          <Button variant="outline" size="sm">
+                            <Settings className="w-3 h-3 mr-1" />
+                            Configure
+                          </Button>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Deployment Wizard Dialog */}
