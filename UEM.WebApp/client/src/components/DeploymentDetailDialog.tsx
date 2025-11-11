@@ -175,18 +175,30 @@ const SummaryTab = ({ deployment }: { deployment: AgentPolicyDeployment }) => {
     queryFn: async () => {
       if (policyIdList.length === 0) return [];
 
-      // Primary: ask canonical script-policies endpoint for specific IDs
+      const idsParam = policyIdList.join(',');
+
+      // Primary: canonical policies from uem_app_policies via frontend endpoint
       try {
-        const res = await apiRequest('GET', `/api/policy/script-policies?ids=${policyIdList.join(',')}`);
+        const res = await apiRequest('GET', `/api/script-policies?ids=${idsParam}`);
         const payload = (res && typeof (res as Response).json === 'function') ? await (res as Response).json() : res;
-        if (Array.isArray(payload) && payload.length > 0) return payload as ScriptPolicy[];
+        if (Array.isArray(payload) && payload.length > 0) {
+          // Normalize returned rows to ScriptPolicy shape expected by UI
+          return payload.map((r: any) => ({
+            id: Number(r.id),
+            name: (r.name ?? r.Name ?? `Policy ${r.id}`).toString(),
+            description: r.description ?? r.Description ?? '',
+            publishStatus: (r.publishStatus ?? r.publish_status ?? 'published'),
+            targetOs: r.targetOs ?? r.target_os ?? r.TargetOs ?? 'Any',
+            isActive: (r.isActive ?? r.is_active) === true,
+          } as ScriptPolicy));
+        }
       } catch (e) {
-        // ignore and fall through to discovery-scripts fallback
+        console.error('Failed to fetch script-policies by ids', e);
       }
 
-      // Fallback #1: discovery-scripts table (some deployments reference scripts there)
+      // Fallback: try discovery scripts (legacy source)
       try {
-        const res2 = await apiRequest('GET', `/api/discovery-scripts?ids=${policyIdList.join(',')}`);
+        const res2 = await apiRequest('GET', `/api/discovery-scripts?ids=${idsParam}`);
         const payload2 = (res2 && typeof (res2 as Response).json === 'function') ? await (res2 as Response).json() : res2;
         if (Array.isArray(payload2) && payload2.length > 0) {
           return payload2.map((s: any) => ({
@@ -194,23 +206,26 @@ const SummaryTab = ({ deployment }: { deployment: AgentPolicyDeployment }) => {
             name: s.name ?? `Policy ${s.id}`,
             description: s.description ?? '',
             publishStatus: s.isActive ? 'published' : (s.publishStatus ?? 'draft'),
-            targetOs: s.targetOs ?? s.target_os ?? 'Any'
+            targetOs: s.targetOs ?? s.target_os ?? 'Any',
+            isActive: !!s.isActive,
           } as ScriptPolicy));
         }
-      } catch (e) {
-        // ignore
+      } catch {
+        /* ignore fallback failure */
       }
 
-      // Final fallback: return placeholder objects so UI shows names instead of raw ids
+      // Final fallback: return placeholders (should be rare)
       return policyIdList.map(id => ({
         id: Number(id),
         name: `Policy ${id}`,
         description: '',
-        publishStatus: 'unknown',
-        targetOs: 'Any'
+        publishStatus: 'published',
+        targetOs: 'Any',
+        isActive: true,
       } as ScriptPolicy));
     },
-    enabled: policyIdList.length > 0
+    enabled: policyIdList.length > 0,
+    staleTime: 30_000,
   });
 
   const { data: credentialProfile, isLoading: credentialLoading } = useQuery<CredentialProfile>({
