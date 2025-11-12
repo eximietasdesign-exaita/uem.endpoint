@@ -22,7 +22,6 @@ import {
   Globe,
   Settings,
   Play,
-  ScheduleIcon,
   Target,
   Users,
   Key,
@@ -110,23 +109,28 @@ export default function AgentlessDiscoveryPage() {
   const { t } = useLanguage();
 
   // Fetch policies
-  const { data: policies = [] } = useQuery({
-    queryKey: ['/api/script-policies'],
-  });
-
-  // Fetch credential profiles
-  const { data: credentialProfiles = [] } = useQuery({
-    queryKey: ['/api/credential-profiles'],
-  });
+      const { data: policies = [] } = useQuery<ScriptPolicy[]>({
+        queryKey: ['/api/script-policies'],
+        queryFn: async () => {
+          const res = await apiRequest('GET', '/api/script-policies');
+          return (await res.json()) as ScriptPolicy[];
+        },
+      });
+    
+      // Fetch credential profiles
+      const { data: credentialProfiles = [] } = useQuery<CredentialProfile[]>({
+        queryKey: ['/api/credential-profiles'],
+        queryFn: async () => {
+          const res = await apiRequest('GET', '/api/credential-profiles');
+          return (await res.json()) as CredentialProfile[];
+        },
+      });
 
   // Create job mutation
   const createJobMutation = useMutation({
     mutationFn: async (jobData: any) => {
-      return await apiRequest('/api/agentless-discovery-jobs', {
-        method: 'POST',
-        body: JSON.stringify(jobData),
-        headers: { 'Content-Type': 'application/json' },
-      });
+      // apiRequest expects (method, url, data)
+      return await apiRequest('POST', '/api/agentless-discovery-jobs', jobData);
     },
     onSuccess: () => {
       toast({
@@ -308,7 +312,7 @@ export default function AgentlessDiscoveryPage() {
                             {policy.description}
                           </div>
                           <div className="flex items-center space-x-2 mt-1">
-                            <Badge variant="outline">{policy.targetOS}</Badge>
+                            <Badge variant="outline">{policy.targetOs}</Badge>
                             <Badge variant={policy.publishStatus === 'published' ? 'default' : 'secondary'}>
                               {policy.publishStatus}
                             </Badge>

@@ -11,7 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { AgentlessDiscoveryJob } from '@/shared/schema';
+import { AgentlessDiscoveryJob } from '../../../shared/schema';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -45,9 +45,7 @@ export default function AgentlessJobDetails() {
   // Action mutations
   const runJobMutation = useMutation({
     mutationFn: async (jobId: number) => {
-      return await apiRequest(`/api/agentless-discovery-jobs/${jobId}/run`, {
-        method: 'POST',
-      });
+      return await apiRequest('POST', `/api/agentless-discovery-jobs/${jobId}/run`);
     },
     onSuccess: () => {
       toast({
@@ -68,9 +66,7 @@ export default function AgentlessJobDetails() {
 
   const pauseJobMutation = useMutation({
     mutationFn: async (jobId: number) => {
-      return await apiRequest(`/api/agentless-discovery-jobs/${jobId}/pause`, {
-        method: 'POST',
-      });
+      return await apiRequest('POST', `/api/agentless-discovery-jobs/${jobId}/pause`);
     },
     onSuccess: () => {
       toast({
@@ -91,9 +87,7 @@ export default function AgentlessJobDetails() {
 
   const disableJobMutation = useMutation({
     mutationFn: async (jobId: number) => {
-      return await apiRequest(`/api/agentless-discovery-jobs/${jobId}/disable`, {
-        method: 'POST',
-      });
+      return await apiRequest('POST', `/api/agentless-discovery-jobs/${jobId}/disable`);
     },
     onSuccess: () => {
       toast({
@@ -114,9 +108,7 @@ export default function AgentlessJobDetails() {
 
   const deleteJobMutation = useMutation({
     mutationFn: async (jobId: number) => {
-      return await apiRequest(`/api/agentless-discovery-jobs/${jobId}`, {
-        method: 'DELETE',
-      });
+      return await apiRequest('DELETE', `/api/agentless-discovery-jobs/${jobId}`);
     },
     onSuccess: () => {
       toast({
@@ -243,11 +235,11 @@ export default function AgentlessJobDetails() {
   const Icon = config?.icon || Clock;
 
   // Parse discovered assets and error logs
-  const discoveredAssets: DiscoveredAsset[] = job.discoveredAssets ? JSON.parse(job.discoveredAssets) : [];
-  const errorLogs: ErrorLog[] = job.errorLogs ? JSON.parse(job.errorLogs) : [];
-  const targets = job.targets ? JSON.parse(job.targets) : {};
-  const schedule = job.schedule ? JSON.parse(job.schedule) : {};
-  const policyIds = job.policyIds ? JSON.parse(job.policyIds) : [];
+  const discoveredAssets: DiscoveredAsset[] = (job as any).discoveredAssets ? JSON.parse((job as any).discoveredAssets) : [];
+  const errorLogs: ErrorLog[] = (job as any).errorLogs ? JSON.parse((job as any).errorLogs) : [];
+  const targets = (job as any).targets ? JSON.parse((job as any).targets) : {};
+  const schedule = (job as any).schedule ? JSON.parse((job as any).schedule) : {};
+  const policyIds = (job as any).policyIds ? JSON.parse((job as any).policyIds) : [];
 
   // Group discovered assets by type
   const groupedAssets = discoveredAssets.reduce((acc, asset) => {
@@ -270,7 +262,11 @@ export default function AgentlessJobDetails() {
     return typeIcons[type] || Server;
   };
 
-  const successRate = job.runCount > 0 ? (job.successCount / job.runCount) * 100 : 0;
+  // Safely read counters that may not exist on the AgentlessDiscoveryJob type
+  const runCount = (job as any).runCount ?? 0;
+  const successCount = (job as any).successCount ?? 0;
+  const errorCount = (job as any).errorCount ?? 0;
+  const successRate = runCount > 0 ? (successCount / runCount) * 100 : 0;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
@@ -349,15 +345,14 @@ export default function AgentlessJobDetails() {
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center space-x-2">
                 <Target className="h-5 w-5 text-blue-600" />
                 <div>
                   <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Runs</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{job.runCount}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{runCount}</p>
                 </div>
               </div>
             </CardContent>
@@ -394,8 +389,8 @@ export default function AgentlessJobDetails() {
                 <div>
                   <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Last Run</p>
                   <p className="text-sm font-bold text-gray-900 dark:text-white">
-                    {job.lastRun ? new Date(job.lastRun).toLocaleDateString() : 'Never'}
-                  </p>
+                            {(job as any).lastRun ? new Date((job as any).lastRun).toLocaleDateString() : 'Never'}
+                          </p>
                 </div>
               </div>
             </CardContent>
@@ -426,20 +421,20 @@ export default function AgentlessJobDetails() {
                     <span className="font-medium">{successRate.toFixed(1)}%</span>
                   </div>
                   <Progress value={successRate} className="h-2" />
-                  
+
                   <Separator />
-                  
+
                   <div className="grid grid-cols-3 gap-4 text-center">
                     <div>
-                      <p className="text-lg font-bold text-green-600">{job.successCount}</p>
+                      <p className="text-lg font-bold text-green-600">{successCount}</p>
                       <p className="text-xs text-gray-600 dark:text-gray-400">Successful</p>
                     </div>
                     <div>
-                      <p className="text-lg font-bold text-red-600">{job.errorCount}</p>
+                      <p className="text-lg font-bold text-red-600">{errorCount}</p>
                       <p className="text-xs text-gray-600 dark:text-gray-400">Failed</p>
                     </div>
                     <div>
-                      <p className="text-lg font-bold text-gray-600">{job.runCount}</p>
+                      <p className="text-lg font-bold text-gray-600">{runCount}</p>
                       <p className="text-xs text-gray-600 dark:text-gray-400">Total</p>
                     </div>
                   </div>
@@ -471,7 +466,7 @@ export default function AgentlessJobDetails() {
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600 dark:text-gray-400">Next Run</span>
                     <span className="font-medium">
-                      {job.nextRun ? new Date(job.nextRun).toLocaleString() : 'Not scheduled'}
+                      {(job as any).nextRun ? new Date((job as any).nextRun).toLocaleString() : 'Not scheduled'}
                     </span>
                   </div>
                 </CardContent>
@@ -639,11 +634,11 @@ export default function AgentlessJobDetails() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600 dark:text-gray-400">Created At</span>
-                    <span className="font-medium">{new Date(job.createdAt).toLocaleString()}</span>
+                    <span className="font-medium">{job.createdAt ? new Date(job.createdAt).toLocaleString() : 'Not set'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600 dark:text-gray-400">Last Updated</span>
-                    <span className="font-medium">{new Date(job.updatedAt).toLocaleString()}</span>
+                    <span className="font-medium">{job.updatedAt ? new Date(job.updatedAt).toLocaleString() : 'Not set'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600 dark:text-gray-400">Policies</span>

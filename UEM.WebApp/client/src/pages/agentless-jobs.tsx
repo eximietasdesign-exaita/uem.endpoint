@@ -96,17 +96,101 @@ export default function AgentlessJobsPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
 
-  // Fetch agentless discovery jobs
-  const { data: jobs = [], isLoading, refetch } = useQuery({
-    queryKey: ['/api/agentless-discovery-jobs'],
+  // Fetch agentless discovery jobs (from DB via backend controller)
+  const { data: jobs = [], isLoading, refetch, isFetching } = useQuery<any[]>({
+    queryKey: ['agentless-discovery-jobs'], // Use a consistent, simple key
+    queryFn: async () => {
+      const res = await apiRequest('GET', '/api/agentless-discovery-jobs');
+      if (!res.ok) throw new Error('Failed to fetch jobs');
+      const rawJobs: any[] = await res.json();
+
+      // collect all discovery profile ids (support discoveryProfiles, discovery_profiles, policyIds)
+      const allProfileIds = new Set<number>();
+      const jobsWithProfiles = rawJobs.map(j => {
+        const raw = j.discoveryProfiles ?? j.discovery_profiles ?? j.policyIds ?? j.policy_ids ?? null;
+        let arr: any[] | null = null;
+        try {
+          if (typeof raw === 'string') arr = raw ? JSON.parse(raw) : null;
+          else arr = Array.isArray(raw) ? raw : null;
+        } catch { arr = null; }
+        if (arr && arr.length) {
+          arr.forEach((v: any) => {
+            const n = Number(v);
+            if (!isNaN(n)) allProfileIds.add(n);
+          });
+        }
+        return { original: j, rawProfileArray: arr };
+      });
+
+      // if there are numeric ids, fetch policy names once
+      const idList = Array.from(allProfileIds);
+      let policyMap: Record<number, string> = {};
+      if (idList.length > 0) {
+        try {
+          const policiesRes = await apiRequest('GET', `/api/script-policies?ids=${idList.join(',')}`);
+          if (policiesRes.ok) {
+            const policies = await policiesRes.json();
+            (policies || []).forEach((p: any) => {
+              const pid = Number(p.id);
+              if (!isNaN(pid)) policyMap[pid] = (p.name ?? p.Name ?? `Policy ${pid}`).toString();
+            });
+          }
+        } catch (e) {
+          console.warn('Failed to fetch policy names for discovery_profiles', e);
+        }
+      }
+
+      // produce normalized jobs where discoveryProfiles / policyIds are arrays of names (strings)
+      const normalized = rawJobs.map((j, idx) => {
+        const raw = j.discoveryProfiles ?? j.discovery_profiles ?? j.policyIds ?? j.policy_ids ?? null;
+        let arr: any[] | null = null;
+        try {
+          if (typeof raw === 'string') arr = raw ? JSON.parse(raw) : null;
+          else arr = Array.isArray(raw) ? raw : null;
+        } catch { arr = null; }
+
+        let profileNames: string[] | null = null;
+        if (arr && arr.length) {
+          profileNames = arr.map((v: any) => {
+            const n = Number(v);
+            if (!isNaN(n) && policyMap[n]) return policyMap[n];
+            // if it's already a string, keep it
+            if (typeof v === 'string') return v;
+            // fallback to stringified value
+            return String(v);
+          });
+        }
+
+        return {
+          ...j,
+          discoveryProfiles: profileNames ?? arr ?? [],
+          policyIds: profileNames ?? arr ?? [],
+        };
+      });
+
+      return normalized;
+    },
+    staleTime: 15_000,
   });
+
+  const handleRefresh = async () => {
+    toast({ title: "Refreshing jobs..." });
+    try {
+      await refetch();
+      toast({ title: "Refreshed", description: "Jobs list has been updated." });
+    } catch (err: any) {
+      toast({
+        title: "Refresh failed",
+        description: err.message || 'Unable to fetch latest jobs.',
+        variant: "destructive",
+      });
+    }
+  };
 
   // Job action mutations
   const runJobMutation = useMutation({
     mutationFn: async (jobId: number) => {
-      return await apiRequest(`/api/agentless-discovery-jobs/${jobId}/run`, {
-        method: 'POST',
-      });
+      return await apiRequest('POST', `/api/agentless-discovery-jobs/${jobId}/run`);
     },
     onSuccess: () => {
       toast({
@@ -127,9 +211,7 @@ export default function AgentlessJobsPage() {
 
   const pauseJobMutation = useMutation({
     mutationFn: async (jobId: number) => {
-      return await apiRequest(`/api/agentless-discovery-jobs/${jobId}/pause`, {
-        method: 'POST',
-      });
+      return await apiRequest('POST', `/api/agentless-discovery-jobs/${jobId}/pause`);
     },
     onSuccess: () => {
       toast({
@@ -150,9 +232,7 @@ export default function AgentlessJobsPage() {
 
   const disableJobMutation = useMutation({
     mutationFn: async (jobId: number) => {
-      return await apiRequest(`/api/agentless-discovery-jobs/${jobId}/disable`, {
-        method: 'POST',
-      });
+      return await apiRequest('POST', `/api/agentless-discovery-jobs/${jobId}/disable`);
     },
     onSuccess: () => {
       toast({
@@ -173,9 +253,7 @@ export default function AgentlessJobsPage() {
 
   const deleteJobMutation = useMutation({
     mutationFn: async (jobId: number) => {
-      return await apiRequest(`/api/agentless-discovery-jobs/${jobId}`, {
-        method: 'DELETE',
-      });
+      return await apiRequest('DELETE', `/api/agentless-discovery-jobs/${jobId}`);
     },
     onSuccess: () => {
       toast({
@@ -485,9 +563,21 @@ export default function AgentlessJobsPage() {
                 <Button variant="outline" size="sm" onClick={clearAllFilters}>
                   Clear All
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => refetch()}>
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Refresh
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefresh}
+                  disabled={isFetching || isLoading}
+                >
+                  {isFetching ? (
+                    <svg className="w-4 h-4 mr-2 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                    </svg>
+                  ) : (
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                  )}
+                  {isFetching ? 'Refreshing...' : 'Refresh'}
                 </Button>
               </div>
             </CardTitle>
@@ -673,11 +763,23 @@ export default function AgentlessJobsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>
-                    <Button 
+            <div className="relative">
+              {isFetching && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/75 dark:bg-gray-900/60">
+                  <div className="flex items-center space-x-3">
+                    <svg className="h-6 w-6 animate-spin text-blue-600" viewBox="0 0 24 24" fill="none" aria-hidden>
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                    </svg>
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Refreshing jobs…</span>
+                  </div>
+                </div>
+              )}
+              <Table>
+               <TableHeader>
+                 <TableRow>
+                   <TableHead>
+                     <Button 
                       variant="ghost" 
                       size="sm" 
                       onClick={() => handleSort('name')}
@@ -729,9 +831,36 @@ export default function AgentlessJobsPage() {
               </TableHeader>
               <TableBody>
                 {sortedJobs.map((job: AgentlessDiscoveryJob) => {
-                  const targets = JSON.parse(job.targets || '{}');
+                  // targets may be a JSON string or already an object; normalize safely
+                  let targets: Record<string, any> = {};
+                  try {
+                    if (typeof job.targets === 'string') {
+                      targets = job.targets ? JSON.parse(job.targets) : {};
+                    } else if (job.targets && typeof job.targets === 'object') {
+                      targets = job.targets as Record<string, any>;
+                    } else {
+                      targets = {};
+                    }
+                  } catch (e) {
+                    console.warn('Failed to parse job.targets for job', job.id, e);
+                    targets = {};
+                  }
                   const targetCount = Object.values(targets).flat().length;
-                  const successRate = job.runCount > 0 ? Math.round((job.successCount / job.runCount) * 100) : 0;
+                  // Compute success rate from available schema fields:
+                  // Prefer progress.discovered / (discovered + failed) if present,
+                  // otherwise fall back to runtime runCount/successCount if they exist.
+                  const discovered = typeof job.progress?.discovered === 'number' ? job.progress.discovered : 0;
+                  const failed = typeof job.progress?.failed === 'number' ? job.progress.failed : 0;
+                  const totalAttempts = discovered + failed;
+                  const successRate = totalAttempts > 0
+                    ? Math.round((discovered / totalAttempts) * 100)
+                    : (typeof (job as any).runCount === 'number' && (job as any).runCount > 0
+                        ? Math.round(((job as any).successCount || 0) / (job as any).runCount * 100)
+                        : 0);
+
+                  // Derive display values safely because successCount/runCount are not part of the strict AgentlessDiscoveryJob type
+                  const displaySuccessCount = typeof (job as any).successCount === 'number' ? (job as any).successCount : discovered;
+                  const displayRunCount = typeof (job as any).runCount === 'number' ? (job as any).runCount : totalAttempts;
 
                   return (
                     <TableRow key={job.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
@@ -752,33 +881,28 @@ export default function AgentlessJobsPage() {
                         <StatusBadge status={job.status} />
                       </TableCell>
                       <TableCell>
-                        {job.lastRun ? (
+                        {job.startedAt ? (
                           <div className="text-sm">
-                            <div>{format(new Date(job.lastRun), 'MMM dd, yyyy')}</div>
-                            <div className="text-gray-500">{format(new Date(job.lastRun), 'HH:mm')}</div>
+                            <div>{format(new Date(job.startedAt), 'MMM dd, yyyy')}</div>
+                            <div className="text-gray-500">{format(new Date(job.startedAt), 'HH:mm')}</div>
                           </div>
                         ) : (
                           <span className="text-gray-400">Never</span>
                         )}
                       </TableCell>
                       <TableCell>
-                        {job.nextRun ? (
+                        {(job as any).nextRun ? (
                           <div className="text-sm">
-                            <div>{format(new Date(job.nextRun), 'MMM dd, yyyy')}</div>
-                            <div className="text-gray-500">{format(new Date(job.nextRun), 'HH:mm')}</div>
+                            <div>{format(new Date((job as any).nextRun), 'MMM dd, yyyy')}</div>
+                            <div className="text-gray-500">{format(new Date((job as any).nextRun), 'HH:mm')}</div>
                           </div>
                         ) : (
                           <span className="text-gray-400">Not scheduled</span>
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <div className="text-sm font-medium">
-                            {successRate}%
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            ({job.successCount}/{job.runCount})
-                          </div>
+                        <div className="text-xs text-gray-500">
+                          ({displaySuccessCount}/{displayRunCount})
                         </div>
                       </TableCell>
                       <TableCell>
@@ -877,6 +1001,7 @@ export default function AgentlessJobsPage() {
                 })}
               </TableBody>
             </Table>
+            </div>
 
             {sortedJobs.length === 0 && (
               <div className="text-center py-12">
