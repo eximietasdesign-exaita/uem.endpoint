@@ -137,25 +137,43 @@ export default function AgentlessJobCreationWizard() {
   ];
 
   // Fetch policies
-  const { data: policies = [], isLoading: policiesLoading } = useQuery({
-    queryKey: ['/api/script-policies'],
-  });
+    const { data: policies = [], isLoading: policiesLoading } = useQuery<ScriptPolicy[], Error>({
+      queryKey: ['/api/script-policies'],
+      queryFn: async () => {
+        const res = await apiRequest('GET', '/api/script-policies');
+        return (res && typeof (res as Response).json === 'function') ? await (res as Response).json() as ScriptPolicy[] : (res as unknown as ScriptPolicy[]);
+      },
+      staleTime: 30_000,
+    });
 
-  // Fetch credential profiles
-  const { data: credentialProfiles = [], isLoading: credentialsLoading } = useQuery({
-    queryKey: ['/api/credential-profiles'],
-  });
+    // Fetch credential profiles
+    const { data: credentialProfiles = [], isLoading: credentialsLoading } = useQuery<CredentialProfile[], Error>({
+      queryKey: ['/api/credential-profiles'],
+      queryFn: async () => {
+        const res = await apiRequest('GET', '/api/credential-profiles');
+        return (res && typeof (res as Response).json === 'function') ? await (res as Response).json() as CredentialProfile[] : (res as unknown as CredentialProfile[]);
+      },
+    });
 
-  // Fetch discovery probes
-  const { data: probes = [], isLoading: probesLoading } = useQuery({
-    queryKey: ['/api/discovery-probes'],
-  });
+    // Fetch discovery probes
+    const { data: probes = [], isLoading: probesLoading } = useQuery<DiscoveryProbe[], Error>({
+      queryKey: ['/api/discovery-probes'],
+      queryFn: async () => {
+        const res = await apiRequest('GET', '/api/discovery-probes');
+        return (res && typeof (res as Response).json === 'function') ? await (res as Response).json() as DiscoveryProbe[] : (res as unknown as DiscoveryProbe[]);
+      },
+      staleTime: 30_000,
+    });
+
+  // normalize fields from backend: target OS may come as targetOS / targetOs / target_os
+  const getTargetOS = (policy: any) =>
+    policy?.targetOS ?? policy?.targetOs ?? policy?.target_os ?? policy?.TargetOs ?? 'Any';
 
   // Create job mutation
   const createJobMutation = useMutation({
     mutationFn: async (jobData: any) => {
       console.log('Creating job with data:', jobData);
-      return await apiRequest('/api/agentless-discovery-jobs', 'POST', jobData);
+      return await apiRequest('POST','/api/agentless-discovery-jobs', jobData);
     },
     onSuccess: (data) => {
       console.log('Job created successfully:', data);
@@ -185,14 +203,16 @@ export default function AgentlessJobCreationWizard() {
     }));
   };
 
-  const updateNestedFormData = (field: string, subField: string, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: {
-        ...prev[field as keyof JobFormData],
-        [subField]: value
-      }
-    }));
+  const updateNestedFormData = (field: keyof JobFormData, subField: string, value: any) => {
+    setFormData(prev => {
+      const current = prev[field] as any;
+      const next = (current && typeof current === 'object') ? { ...current } : {};
+      next[subField] = value;
+      return {
+        ...prev,
+        [field]: next
+      } as JobFormData;
+    });
   };
 
   const addTargetField = (type: 'ipRanges' | 'hostnames' | 'ouPaths' | 'ipSegments') => {
@@ -276,17 +296,47 @@ export default function AgentlessJobCreationWizard() {
       ipSegments: formData.targets.ipSegments.filter(segment => segment.trim() !== ''),
     };
 
+    // ensure required JSONB fields included and startedAt is timestamp WITHOUT timezone string
+    const startedAtDate = formData.scheduleType === 'now'
+      ? new Date()
+      : formData.schedule.startDate
+        ? new Date(formData.schedule.startDate)
+        : null;
+
+    // Use ISO 8601 (UTC) so System.Text.Json can parse into DateTime on the server
+    const startedAt = startedAtDate ? startedAtDate.toISOString() : null;
+    
+    const defaultProgress = {
+      total: 0,
+      failed: 0,
+      discovered: 0,
+      inProgress: 0,
+      legacyPercent: 0
+    };
+    
+    const defaultResults = {
+      errors: [],
+      newAssets: 0,
+      totalAssets: 0,
+      updatedAssets: 0
+    };
+    
     const jobData = {
       name: formData.name,
       description: formData.description,
-      policyIds: JSON.stringify(formData.selectedPolicyIds),
-      targets: JSON.stringify(cleanTargets),
+      policyIds: formData.selectedPolicyIds,
+      targets: cleanTargets,
       credentialProfileId: formData.credentialProfileId,
       probeId: formData.probeId,
-      schedule: JSON.stringify(formData.schedule),
+      schedule: formData.schedule,
       status: formData.scheduleType === 'now' ? 'running' : 'scheduled',
+      // pass progress/results explicitly so DB JSONB columns are populated
+      progress: defaultProgress,
+      results: defaultResults,
+      // send ISO timestamp (server will convert to DB timestamp without timezone)
+      startedAt: startedAt,
     };
-
+    
     createJobMutation.mutate(jobData);
   };
 
@@ -409,7 +459,7 @@ export default function AgentlessJobCreationWizard() {
     // Filter policies based on search and category
     const filteredPolicies = policies.filter((policy: ScriptPolicy) => {
       const matchesSearch = policy.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           policy.description.toLowerCase().includes(searchTerm.toLowerCase());
+                           (policy.description ?? '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = selectedCategory === 'all' || policy.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
@@ -544,10 +594,14 @@ export default function AgentlessJobCreationWizard() {
                               size="sm"
                               onClick={() => {
                                 const categoryIds = categoryPolicies.map(p => p.id);
-                                setFormData(prev => ({
-                                  ...prev,
-                                  selectedPolicyIds: [...new Set([...prev.selectedPolicyIds, ...categoryIds])]
-                                }));
+                                setFormData(prev => {
+                                  const combined = prev.selectedPolicyIds.concat(categoryIds);
+                                  const deduped = combined.filter((id, idx, arr) => arr.indexOf(id) === idx);
+                                  return {
+                                    ...prev,
+                                    selectedPolicyIds: deduped
+                                  };
+                                });
                               }}
                               disabled={selectedInCategory === categoryPolicies.length}
                               className="text-xs"
@@ -615,7 +669,7 @@ export default function AgentlessJobCreationWizard() {
                                     <div className="flex items-center justify-between">
                                       <div className="flex items-center space-x-1">
                                         <Badge variant="secondary" className="text-xs">
-                                          {policy.targetOS}
+                                          {getTargetOS(policy)}
                                         </Badge>
                                         <Badge 
                                           variant={policy.publishStatus === 'published' ? 'default' : 'outline'} 
@@ -816,8 +870,9 @@ export default function AgentlessJobCreationWizard() {
                           const newSelected = formData.selectedPolicyIds.filter(id => !categoryPolicyIds.includes(id));
                           updateFormData('selectedPolicyIds', newSelected);
                         } else {
-                          // Select all in category
-                          const newSelected = [...new Set([...formData.selectedPolicyIds, ...categoryPolicyIds])];
+                          // Select all in category - concat and dedupe without using Set spread
+                          const combined = formData.selectedPolicyIds.concat(categoryPolicyIds);
+                          const newSelected = combined.filter((id, idx) => combined.indexOf(id) === idx);
                           updateFormData('selectedPolicyIds', newSelected);
                         }
                       }}

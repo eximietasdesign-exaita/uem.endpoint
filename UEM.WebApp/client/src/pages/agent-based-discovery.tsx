@@ -349,6 +349,8 @@ export default function AgentBasedDiscovery() {
     },
     onSuccess: (response: any) => {
       const details = response ?? {};
+      
+      // update toast
       if (savingToastRef.current && typeof savingToastRef.current.update === 'function') {
         savingToastRef.current.update({
           title: "Deployment Saved",
@@ -361,6 +363,7 @@ export default function AgentBasedDiscovery() {
         });
       }
 
+      // close/reset wizard
       setShowDeploymentWizard(false);
       setCurrentWizardStep(1);
       setWizardData({
@@ -373,8 +376,30 @@ export default function AgentBasedDiscovery() {
         schedule: { type: 'now' }
       });
 
-      // refresh job list
+      // Optimistically add the new job to the UI cache so Active Deployments updates immediately
+      try {
+        // many controllers return the created row; use it if present, otherwise fall back to response
+        const newJob = details || response;
+        queryClient.setQueryData(['agent-deployment-jobs'], (old: any[] | undefined) => {
+          // if the list already contains this id, replace; otherwise prepend
+          const list = Array.isArray(old) ? old.slice() : [];
+          if (newJob && newJob.id) {
+            const idx = list.findIndex((d: any) => Number(d.id) === Number(newJob.id));
+            if (idx >= 0) {
+              list[idx] = newJob;
+            } else {
+              list.unshift(newJob);
+            }
+          }
+          return list;
+        });
+      } catch (e) {
+        console.error('Failed to update deployments cache optimistically', e);
+      }
+
+      // ensure canonical lists are refetched as a fallback
       queryClient.invalidateQueries({ queryKey: ['/api/policy-deployments'] });
+      queryClient.invalidateQueries({ queryKey: ['agent-deployment-jobs'] });
       savingToastRef.current = null;
     },
     onError: (err: any) => {
