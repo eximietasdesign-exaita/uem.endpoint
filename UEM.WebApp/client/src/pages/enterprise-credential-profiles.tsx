@@ -147,27 +147,23 @@ export default function EnterpriseCredentialProfilesPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
 
-  // Fetch credential profiles from API
+  // Fetch credential profiles (use apiRequest so requests go to configured backend + tenant headers)
   const { data: profiles = [], isLoading, error } = useQuery({
     queryKey: ['/api/credential-profiles'],
     queryFn: async () => {
-      const response = await fetch('/api/credential-profiles');
-      if (!response.ok) throw new Error('Failed to fetch credential profiles');
-      return response.json();
-    },
+  const res = await apiRequest('GET', '/api/credential-profiles');
+  const data = await res.json();
+  return data;
+ },
+    staleTime: 30_000,
   });
 
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (profile: any) => {
-      const response = await fetch('/api/credential-profiles', {
-        method: 'POST',
-        body: JSON.stringify(profile),
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (!response.ok) throw new Error('Failed to create profile');
-      return response.json();
-    },
+  const res = await apiRequest('POST', '/api/credential-profiles', profile);
+  return await res.json();
+},
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/credential-profiles'] });
       toast({
@@ -189,14 +185,9 @@ export default function EnterpriseCredentialProfilesPage() {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...updates }: { id: number } & any) => {
-      const response = await fetch(`/api/credential-profiles/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(updates),
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (!response.ok) throw new Error('Failed to update profile');
-      return response.json();
-    },
+  const res = await apiRequest('PATCH', `/api/credential-profiles/${id}`, updates);
+  return await res.json();
+},
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/credential-profiles'] });
       toast({
@@ -217,11 +208,9 @@ export default function EnterpriseCredentialProfilesPage() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const response = await fetch(`/api/credential-profiles/${id}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) throw new Error('Failed to delete profile');
-    },
+  const res = await apiRequest('DELETE', `/api/credential-profiles/${id}`);
+  return await res.json();
+},
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/credential-profiles'] });
       toast({
