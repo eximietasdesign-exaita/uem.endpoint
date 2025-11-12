@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -272,18 +272,55 @@ export default function AgentlessJobsPage() {
     },
   });
 
-  // Mock satellite servers and regions for filtering
-  const mockSatelliteServers = [
-    { id: 1, name: "Enterprise-Server-01", region: "North America", location: "New York DC" },
-    { id: 2, name: "Enterprise-Server-02", region: "North America", location: "Los Angeles DC" },
-    { id: 3, name: "Enterprise-Server-03", region: "Europe", location: "London DC" },
-    { id: 4, name: "Enterprise-Server-04", region: "Asia-Pacific", location: "Tokyo DC" },
-    { id: 5, name: "Enterprise-Server-05", region: "Europe", location: "Frankfurt DC" }
-  ];
+  // Fetch real satellite servers (probes) from backend
+  const { data: satelliteServers = [], isLoading: serversLoading } = useQuery<any[]>({
+    queryKey: ['/api/discovery-probes'],
+    queryFn: async () => {
+      const res = await apiRequest('GET', '/api/discovery-probes');
+      if (!res.ok) return [];
+      return await res.json();
+    },
+    staleTime: 30_000,
+  });
 
-  const mockRegions = ["North America", "Europe", "Asia-Pacific", "South America", "Africa"];
-  const mockCreators = ["admin", "operator", "john.doe", "jane.smith", "system"];
-  const mockPriorities = ["High", "Medium", "Low", "Critical"];
+  // derive regions from servers
+  const regions = useMemo(() => {
+    return Array.from(new Set((satelliteServers || []).map(s => s.region).filter(Boolean)));
+  }, [satelliteServers]);
+
+  // Fetch creators (users) from backend
+  const { data: creators = [], isLoading: creatorsLoading } = useQuery<any[]>({
+    queryKey: ['/api/users'],
+    queryFn: async () => {
+      try {
+        const res = await apiRequest('GET', '/api/users');
+        if (!res.ok) return [];
+        return await res.json();
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 60_000,
+  });
+
+  // Fetch priorities from backend (fallback to sensible defaults)
+  const { data: prioritiesFromApi = [] } = useQuery<string[]>({
+    queryKey: ['/api/job-priorities'],
+    queryFn: async () => {
+      try {
+        const res = await apiRequest('GET', '/api/job-priorities');
+        if (!res.ok) return [];
+        return await res.json();
+      } catch {
+        return [];
+      }
+    },
+    enabled: true,
+    staleTime: 60_000,
+  });
+  const priorityOptions = (Array.isArray(prioritiesFromApi) && prioritiesFromApi.length > 0)
+    ? prioritiesFromApi
+    : ["High", "Medium", "Low", "Critical"];
 
   // Enhanced filtering logic
   const filteredJobs = jobs.filter((job: AgentlessDiscoveryJob) => {
@@ -297,7 +334,7 @@ export default function AgentlessJobsPage() {
       job.probeId?.toString() === filters.satelliteServer;
     
     const matchesRegion = filters.region === 'all' || !filters.region || 
-      mockSatelliteServers.find(s => s.id === job.probeId)?.region === filters.region;
+      satelliteServers.find(s => s.id === job.probeId)?.region === filters.region;
     
     const matchesCreatedBy = filters.createdBy === 'all' || !filters.createdBy || 
       job.createdBy?.toString() === filters.createdBy;
@@ -638,7 +675,7 @@ export default function AgentlessJobsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Servers</SelectItem>
-                      {mockSatelliteServers.map((server) => (
+                      {satelliteServers.map((server) => (
                         <SelectItem key={server.id} value={server.id.toString()}>
                           <div className="flex items-center space-x-2">
                             <Server className="w-4 h-4" />
@@ -662,7 +699,7 @@ export default function AgentlessJobsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Regions</SelectItem>
-                      {mockRegions.map((region) => (
+                      {regions.map((region) => (
                         <SelectItem key={region} value={region}>
                           <div className="flex items-center space-x-2">
                             <MapPin className="w-4 h-4" />
@@ -685,7 +722,7 @@ export default function AgentlessJobsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Priorities</SelectItem>
-                      {mockPriorities.map((priority) => (
+                      {priorityOptions.map((priority) => (
                         <SelectItem key={priority} value={priority}>
                           <div className="flex items-center space-x-2">
                             <Shield className="w-4 h-4" />
@@ -720,7 +757,7 @@ export default function AgentlessJobsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Users</SelectItem>
-                      {mockCreators.map((creator) => (
+                      {creators.map((creator) => (
                         <SelectItem key={creator} value={creator}>
                           <div className="flex items-center space-x-2">
                             <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs">
@@ -742,7 +779,7 @@ export default function AgentlessJobsPage() {
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Active Filters:</span>
                 {filters.search && <Badge variant="secondary">Search: {filters.search}</Badge>}
                 {filters.status && <Badge variant="secondary">Status: {filters.status}</Badge>}
-                {filters.satelliteServer && <Badge variant="secondary">Server: {mockSatelliteServers.find(s => s.id.toString() === filters.satelliteServer)?.name}</Badge>}
+                {filters.satelliteServer && <Badge variant="secondary">Server: {satelliteServers.find(s => s.id.toString() === filters.satelliteServer)?.name}</Badge>}
                 {filters.region && <Badge variant="secondary">Region: {filters.region}</Badge>}
                 {filters.createdBy && <Badge variant="secondary">Creator: {filters.createdBy}</Badge>}
                 {filters.priority && <Badge variant="secondary">Priority: {filters.priority}</Badge>}
@@ -911,10 +948,10 @@ export default function AgentlessJobsPage() {
                             <Server className="w-4 h-4 text-blue-500" />
                             <div>
                               <div className="text-sm font-medium">
-                                {mockSatelliteServers.find(s => s.id === job.probeId)?.name || `Server-${job.probeId}`}
+                                {satelliteServers.find(s => s.id === job.probeId)?.name || `Server-${job.probeId}`}
                               </div>
                               <div className="text-xs text-gray-500">
-                                {mockSatelliteServers.find(s => s.id === job.probeId)?.location || 'Unknown Location'}
+                                {satelliteServers.find(s => s.id === job.probeId)?.location || 'Unknown Location'}
                               </div>
                             </div>
                           </div>
