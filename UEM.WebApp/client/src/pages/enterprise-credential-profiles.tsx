@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -105,44 +105,223 @@ const accessLevels = [
 
 export default function EnterpriseCredentialProfilesPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [selectedProfile, setSelectedProfile] = useState<CredentialProfile | null>(null);
+  // vault provider specific config state
+      type InternalConfig = {
+        baseApiUrl: string;
+        secretPath: string;
+        authToken: string;
+        environmentContext: string;
+        responseFormat: 'json' | 'text';
+      };
+  
+      type HashicorpConfig = {
+        vaultUrl: string;
+        secretEnginePath: string;
+        authMethod: 'Token' | 'AppRole' | 'Kubernetes';
+        token: string;
+        roleId: string;
+        secretId: string;
+        k8sRole: string;
+        serviceAccountTokenPath: string;
+        fieldSelector: string;
+      };
+  
+      type AzureConfig = {
+        vaultName: string;
+        vaultUrl: string;
+        secretName: string;
+        tenantId: string;
+        clientId: string;
+        clientSecret: string;
+        apiVersion: string;
+        secretVersion: string;
+      };
+  
+      type AwsConfig = {
+        secretNameOrArn: string;
+        region: string;
+        accessKeyId: string;
+        secretAccessKey: string;
+        sessionToken: string;
+        versionStage: string;
+        decryptionOption: string;
+      };
+  
+      type CyberarkConfig = {
+        apiEndpoint: string;
+        safeName: string;
+        objectName: string;
+        appId: string;
+        authType: string;
+        policyId: string;
+        returnFormat: string;
+      };
+  
+      type VaultConfig = {
+        internal: InternalConfig;
+        hashicorp: HashicorpConfig;
+        azure: AzureConfig;
+        aws: AwsConfig;
+        cyberark: CyberarkConfig;
+      };
+  
+      const [vaultConfig, setVaultConfig] = useState<VaultConfig>({
+        internal: { baseApiUrl: "", secretPath: "", authToken: "", environmentContext: "", responseFormat: "json" },
+        hashicorp: { vaultUrl: "", secretEnginePath: "", authMethod: "Token", token: "", roleId: "", secretId: "", k8sRole: "", serviceAccountTokenPath: "", fieldSelector: "" },
+        azure: { vaultName: "", vaultUrl: "", secretName: "", tenantId: "", clientId: "", clientSecret: "", apiVersion: "7.3", secretVersion: "" },
+        aws: { secretNameOrArn: "", region: "us-east-1", accessKeyId: "", secretAccessKey: "", sessionToken: "", versionStage: "AWSCURRENT", decryptionOption: "default" },
+        cyberark: { apiEndpoint: "", safeName: "", objectName: "", appId: "", authType: "CyberArk User", policyId: "", returnFormat: "text" }
+      });
+    
+    // Move newProfile state above currentVaultErrors so it can be referenced safely
+    const [newProfile, setNewProfile] = useState({
+      name: '',
+      description: '',
+      category: 'general',
+      encryptionLevel: 'aes256',
+      complianceLevel: 'standard',
+      accessLevel: 'standard',
+      vaultProvider: 'internal',
+      storageType: 'encrypted',
+      localEncryption: true,
+      monitoringEnabled: true,
+      alertingEnabled: false,
+      tags: [] as string[],
+      environments: [] as string[],
+      rotationPolicy: {
+        enabled: false,
+        intervalDays: 90,
+        autoRotate: false,
+        notifyBefore: 7,
+        backupPrevious: true
+      },
+      accessRestrictions: {
+        ipWhitelist: [] as string[],
+        timeRestrictions: {
+          allowedHours: '9-17',
+          timezone: 'UTC'
+        },
+        maxConcurrentUsers: 10,
+        requireApproval: false,
+        approvers: [] as string[]
+      }
+    });
+  
+  // Compute validation errors for the selected vault provider configuration
+  const currentVaultErrors = useMemo(() => {
+    const errors: Record<string, string> = {};
+    const provider = newProfile.vaultProvider;
+
+    if (provider === "internal") {
+      if (!vaultConfig.internal.baseApiUrl) errors.baseApiUrl = "Base API URL is required";
+      if (!vaultConfig.internal.secretPath) errors.secretPath = "Secret Path is required";
+      if (!vaultConfig.internal.authToken) errors.authToken = "Auth Token is required";
+      if (!vaultConfig.internal.environmentContext) errors.environmentContext = "Environment Context is required";
+      if (!['json','text'].includes((vaultConfig.internal.responseFormat || '').toLowerCase())) errors.responseFormat = "Response format must be 'json' or 'text'";
+    }
+
+    if (provider === "hashicorp") {
+      if (!vaultConfig.hashicorp.vaultUrl) errors.vaultUrl = "Vault URL is required";
+      if (!vaultConfig.hashicorp.secretEnginePath) errors.secretEnginePath = "Secret Engine Path is required";
+      if (vaultConfig.hashicorp.authMethod === "Token" && !vaultConfig.hashicorp.token) errors.token = "Token is required";
+      if (vaultConfig.hashicorp.authMethod === "AppRole") {
+        if (!vaultConfig.hashicorp.roleId) errors.roleId = "Role ID is required";
+        if (!vaultConfig.hashicorp.secretId) errors.secretId = "Secret ID is required";
+      }
+      if (vaultConfig.hashicorp.authMethod === "Kubernetes" && !vaultConfig.hashicorp.k8sRole) errors.k8sRole = "K8s Role is required";
+    }
+
+    if (provider === "azure") {
+      if (!vaultConfig.azure.vaultName) errors.vaultName = "Vault Name is required";
+      if (!vaultConfig.azure.vaultUrl) errors.azureVaultUrl = "Vault URL is required";
+      if (!vaultConfig.azure.secretName) errors.secretName = "Secret Name is required";
+      if (!vaultConfig.azure.tenantId) errors.tenantId = "Tenant ID is required";
+      if (!vaultConfig.azure.clientId) errors.clientId = "Client ID is required";
+      if (!vaultConfig.azure.clientSecret) errors.clientSecret = "Client Secret is required";
+    }
+
+    if (provider === "aws") {
+      if (!vaultConfig.aws.secretNameOrArn) errors.secretNameOrArn = "Secret Name/ARN is required";
+      if (!vaultConfig.aws.region) errors.region = "Region is required";
+      if (!vaultConfig.aws.accessKeyId) errors.accessKeyId = "Access Key ID is required";
+      if (!vaultConfig.aws.secretAccessKey) errors.secretAccessKey = "Secret Access Key is required";
+      if (!vaultConfig.aws.versionStage) errors.versionStage = "Version Stage is required";
+    }
+
+    if (provider === "cyberark") {
+      if (!vaultConfig.cyberark.apiEndpoint) errors.apiEndpoint = "API Endpoint is required";
+      if (!vaultConfig.cyberark.safeName) errors.safeName = "Safe Name is required";
+      if (!vaultConfig.cyberark.objectName) errors.objectName = "Object/Secret Name is required";
+      if (!vaultConfig.cyberark.appId) errors.appId = "App ID is required";
+    }
+
+    return errors;
+  }, [vaultConfig, newProfile]);
+
+  const hasVaultErrors = Object.keys(currentVaultErrors).length > 0;
+
+  // Helper to render a Label with a red superscript star when validation error exists for the field
+  const fieldDisplayNames: Record<string,string> = {
+    // Internal
+    baseApiUrl: "Base API URL",
+    secretPath: "Secret Path / Key",
+    authToken: "Auth Token / API Key",
+    environmentContext: "Environment Context",
+    responseFormat: "Response Format",
+    // Hashicorp
+    vaultUrl: "Vault URL",
+    secretEnginePath: "Secret Engine Path",
+    authMethod: "Authentication Method",
+    token: "Token",
+    roleId: "Role ID",
+    secretId: "Secret ID",
+    k8sRole: "K8s Role",
+    serviceAccountTokenPath: "Service Account Token Path",
+    // Azure
+    vaultName: "Vault Name",
+    azureVaultUrl: "Vault URL",
+    secretName: "Secret Name",
+    tenantId: "Tenant ID",
+    clientId: "Client ID",
+    clientSecret: "Client Secret",
+    // AWS
+    secretNameOrArn: "Secret Name / ARN",
+    region: "Region",
+    accessKeyId: "Access Key ID",
+    secretAccessKey: "Secret Access Key",
+    versionStage: "Version Stage",
+    // CyberArk
+    apiEndpoint: "API Endpoint",
+    safeName: "Safe Name",
+    objectName: "Object / Secret Name",
+    appId: "App ID / Client ID",
+    returnFormat: "Return Format"
+  };
+
+  const FieldLabel = ({ field, children }: { field: string; children: React.ReactNode }) => {
+    const error = currentVaultErrors[field];
+    return (
+      <Label>
+        {children}
+        {error && (
+          <sup
+            className="text-red-500 ml-1"
+            aria-hidden="true"
+            title={error}
+          >
+            *
+          </sup>
+        )}
+      </Label>
+    );
+  };
+  
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
-  
-  const [newProfile, setNewProfile] = useState({
-    name: '',
-    description: '',
-    category: 'general',
-    encryptionLevel: 'aes256',
-    complianceLevel: 'standard',
-    accessLevel: 'standard',
-    vaultProvider: 'internal',
-    storageType: 'encrypted',
-    localEncryption: true,
-    monitoringEnabled: true,
-    alertingEnabled: false,
-    tags: [] as string[],
-    environments: [] as string[],
-    rotationPolicy: {
-      enabled: false,
-      intervalDays: 90,
-      autoRotate: false,
-      notifyBefore: 7,
-      backupPrevious: true
-    },
-    accessRestrictions: {
-      ipWhitelist: [] as string[],
-      timeRestrictions: {
-        allowedHours: '9-17',
-        timezone: 'UTC'
-      },
-      maxConcurrentUsers: 10,
-      requireApproval: false,
-      approvers: [] as string[]
-    }
-  });
+
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedProfile, setSelectedProfile] = useState<CredentialProfile | null>(null);
 
   const { toast } = useToast();
   const { t } = useLanguage();
@@ -834,7 +1013,9 @@ export default function EnterpriseCredentialProfilesPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Vault Provider</Label>
-                  <Select value={newProfile.vaultProvider} onValueChange={(value) => setNewProfile(prev => ({ ...prev, vaultProvider: value }))}>
+                  <Select value={newProfile.vaultProvider} onValueChange={(value) => {
+                    setNewProfile(prev => ({ ...prev, vaultProvider: value }));
+                  }}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -850,7 +1031,6 @@ export default function EnterpriseCredentialProfilesPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                
                 <div>
                   <Label>Storage Type</Label>
                   <Select value={newProfile.storageType} onValueChange={(value) => setNewProfile(prev => ({ ...prev, storageType: value }))}>
@@ -866,46 +1046,217 @@ export default function EnterpriseCredentialProfilesPage() {
                 </div>
               </div>
 
-              {/* Rotation Policy */}
-              <div className="space-y-4 p-4 border rounded-lg">
-                <div className="flex items-center justify-between">
-                  <Label className="text-base font-medium">Credential Rotation Policy</Label>
-                  <Switch
-                    checked={newProfile.rotationPolicy.enabled}
-                    onCheckedChange={(enabled) => setNewProfile(prev => ({
-                      ...prev,
-                      rotationPolicy: { ...prev.rotationPolicy, enabled }
-                    }))}
-                  />
-                </div>
-                
-                {newProfile.rotationPolicy.enabled && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Rotation Interval (days)</Label>
-                      <Input
-                        type="number"
-                        value={newProfile.rotationPolicy.intervalDays}
-                        onChange={(e) => setNewProfile(prev => ({
-                          ...prev,
-                          rotationPolicy: { ...prev.rotationPolicy, intervalDays: parseInt(e.target.value) || 90 }
-                        }))}
-                      />
+              {/* Provider-specific security configuration */}
+              <div className="mt-4 p-4 border rounded-lg bg-surface">
+                {newProfile.vaultProvider === "internal" && (
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <FieldLabel field="baseApiUrl">Base API URL</FieldLabel>
+                      <Input value={vaultConfig.internal.baseApiUrl} onChange={(e) => setVaultConfig(prev => ({ ...prev, internal: { ...prev.internal, baseApiUrl: e.target.value } }))} placeholder="https://internal-vault/api/v1/" />
                     </div>
-                    <div>
-                      <Label>Notify Before (days)</Label>
-                      <Input
-                        type="number"
-                        value={newProfile.rotationPolicy.notifyBefore}
-                        onChange={(e) => setNewProfile(prev => ({
-                          ...prev,
-                          rotationPolicy: { ...prev.rotationPolicy, notifyBefore: parseInt(e.target.value) || 7 }
-                        }))}
-                      />
+
+                    <div className="space-y-1">
+                      <FieldLabel field="secretPath">Secret Path / Key</FieldLabel>
+                      <Input value={vaultConfig.internal.secretPath} onChange={(e) => setVaultConfig(prev => ({ ...prev, internal: { ...prev.internal, secretPath: e.target.value } }))} placeholder="app/config/db_password" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="authToken">Auth Token / API Key</FieldLabel>
+                      <Input value={vaultConfig.internal.authToken} onChange={(e) => setVaultConfig(prev => ({ ...prev, internal: { ...prev.internal, authToken: e.target.value } }))} placeholder="abc123xyz890" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="environmentContext">Environment Context</FieldLabel>
+                      <Input value={vaultConfig.internal.environmentContext} onChange={(e) => setVaultConfig(prev => ({ ...prev, internal: { ...prev.internal, environmentContext: e.target.value } }))} placeholder="production" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="responseFormat">Response Format</FieldLabel>
+                      <Select value={vaultConfig.internal.responseFormat} onValueChange={(value) => setVaultConfig(prev => ({ ...prev, internal: { ...prev.internal, responseFormat: value as InternalConfig['responseFormat'] } }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="json">JSON</SelectItem>
+                          <SelectItem value="text">Text</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 )}
+
+                {newProfile.vaultProvider === "hashicorp" && (
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <FieldLabel field="vaultUrl">Vault URL</FieldLabel>
+                      <Input value={vaultConfig.hashicorp.vaultUrl} onChange={(e) => setVaultConfig(prev => ({ ...prev, hashicorp: { ...prev.hashicorp, vaultUrl: e.target.value } }))} placeholder="https://vault.company.com:8200/v1" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="secretEnginePath">Secret Engine Path</FieldLabel>
+                      <Input value={vaultConfig.hashicorp.secretEnginePath} onChange={(e) => setVaultConfig(prev => ({ ...prev, hashicorp: { ...prev.hashicorp, secretEnginePath: e.target.value } }))} placeholder="secret/data/application/config" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="authMethod">Authentication Method</FieldLabel>
+                      <Select value={vaultConfig.hashicorp.authMethod} onValueChange={(value) => setVaultConfig(prev => ({ ...prev, hashicorp: { ...prev.hashicorp, authMethod: value as HashicorpConfig['authMethod'] } }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Token">Token</SelectItem>
+                          <SelectItem value="AppRole">AppRole</SelectItem>
+                          <SelectItem value="Kubernetes">Kubernetes</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {vaultConfig.hashicorp.authMethod === "Token" && (
+                      <div className="space-y-1">
+                        <FieldLabel field="token">Token</FieldLabel>
+                        <Input value={vaultConfig.hashicorp.token} onChange={(e) => setVaultConfig(prev => ({ ...prev, hashicorp: { ...prev.hashicorp, token: e.target.value } }))} placeholder="s.123456789abcdef" />
+                      </div>
+                    )}
+
+                    {vaultConfig.hashicorp.authMethod === "AppRole" && (
+                      <div className="space-y-1">
+                        <FieldLabel field="roleId">Role ID</FieldLabel>
+                        <Input value={vaultConfig.hashicorp.roleId} onChange={(e) => setVaultConfig(prev => ({ ...prev, hashicorp: { ...prev.hashicorp, roleId: e.target.value } }))} placeholder="abcd1234-efgh5678" />
+                        <FieldLabel field="secretId">Secret ID</FieldLabel>
+                        <Input value={vaultConfig.hashicorp.secretId} onChange={(e) => setVaultConfig(prev => ({ ...prev, hashicorp: { ...prev.hashicorp, secretId: e.target.value } }))} placeholder="xyz9876-lmn5432" />
+                      </div>
+                    )}
+
+                    {vaultConfig.hashicorp.authMethod === "Kubernetes" && (
+                      <div className="space-y-1">
+                        <FieldLabel field="k8sRole">K8s Role</FieldLabel>
+                        <Input value={vaultConfig.hashicorp.k8sRole} onChange={(e) => setVaultConfig(prev => ({ ...prev, hashicorp: { ...prev.hashicorp, k8sRole: e.target.value } }))} placeholder="vault-reader-role" />
+                        <FieldLabel field="serviceAccountTokenPath">Service Account Token Path</FieldLabel>
+                        <Input value={vaultConfig.hashicorp.serviceAccountTokenPath} onChange={(e) => setVaultConfig(prev => ({ ...prev, hashicorp: { ...prev.hashicorp, serviceAccountTokenPath: e.target.value } }))} placeholder="/var/run/secrets/kubernetes.io/serviceaccount/token" />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {newProfile.vaultProvider === "azure" && (
+                  <div className="space-y-4">
+
+                    <div className="space-y-1">
+                      <FieldLabel field="vaultName">Vault Name</FieldLabel>
+                      <Input required aria-required="true" value={vaultConfig.azure.vaultName} onChange={(e) => setVaultConfig(prev => ({ ...prev, azure: { ...prev.azure, vaultName: e.target.value } }))} placeholder="myapp-kv-prod" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="azureVaultUrl">Vault URL</FieldLabel>
+                      <Input required aria-required="true" value={vaultConfig.azure.vaultUrl} onChange={(e) => setVaultConfig(prev => ({ ...prev, azure: { ...prev.azure, vaultUrl: e.target.value } }))} placeholder="https://myapp-kv-prod.vault.azure.net/" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="secretName">Secret Name</FieldLabel>
+                      <Input required aria-required="true" value={vaultConfig.azure.secretName} onChange={(e) => setVaultConfig(prev => ({ ...prev, azure: { ...prev.azure, secretName: e.target.value } }))} placeholder="DbConnectionString" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="tenantId">Tenant ID</FieldLabel>
+                      <Input required aria-required="true" value={vaultConfig.azure.tenantId} onChange={(e) => setVaultConfig(prev => ({ ...prev, azure: { ...prev.azure, tenantId: e.target.value } }))} placeholder="00000000-0000-0000-0000-000000000000" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="clientId">Client ID</FieldLabel>
+                      <Input required aria-required="true" value={vaultConfig.azure.clientId} onChange={(e) => setVaultConfig(prev => ({ ...prev, azure: { ...prev.azure, clientId: e.target.value } }))} placeholder="11111111-1111-1111-1111-111111111111" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="clientSecret">Client Secret</FieldLabel>
+                      <Input required aria-required="true" value={vaultConfig.azure.clientSecret} onChange={(e) => setVaultConfig(prev => ({ ...prev, azure: { ...prev.azure, clientSecret: e.target.value } }))} placeholder="••••••••" type="password" />
+                    </div>
+                  </div>
+                )}
+ 
+                {newProfile.vaultProvider === "aws" && (
+                  <div className="space-y-4">
+
+                    <div className="space-y-1">
+                      <FieldLabel field="secretNameOrArn">Secret Name / ARN</FieldLabel>
+                      <Input required aria-required="true" value={vaultConfig.aws.secretNameOrArn} onChange={(e) => setVaultConfig(prev => ({ ...prev, aws: { ...prev.aws, secretNameOrArn: e.target.value } }))} placeholder="arn:aws:secretsmanager:us-east-1:1234567890:secret:myapp/dbpass-abc123" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="region">Region</FieldLabel>
+                      <Input required aria-required="true" value={vaultConfig.aws.region} onChange={(e) => setVaultConfig(prev => ({ ...prev, aws: { ...prev.aws, region: e.target.value } }))} placeholder="us-east-1" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="accessKeyId">Access Key ID</FieldLabel>
+                      <Input required aria-required="true" value={vaultConfig.aws.accessKeyId} onChange={(e) => setVaultConfig(prev => ({ ...prev, aws: { ...prev.aws, accessKeyId: e.target.value } }))} placeholder="AKIAIOSFODNN7EXAMPLE" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="secretAccessKey">Secret Access Key</FieldLabel>
+                      <Input required aria-required="true" value={vaultConfig.aws.secretAccessKey} onChange={(e) => setVaultConfig(prev => ({ ...prev, aws: { ...prev.aws, secretAccessKey: e.target.value } }))} placeholder="••••••••" type="password" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="versionStage">Version Stage</FieldLabel>
+                      <Select value={vaultConfig.aws.versionStage} onValueChange={(value) => setVaultConfig(prev => ({ ...prev, aws: { ...prev.aws, versionStage: value } }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="AWSCURRENT">AWSCURRENT</SelectItem>
+                          <SelectItem value="AWSPREVIOUS">AWSPREVIOUS</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+ 
+                {newProfile.vaultProvider === "cyberark" && (
+                  <div className="space-y-4">
+
+                    <div className="space-y-1">
+                      <FieldLabel field="apiEndpoint">API Endpoint</FieldLabel>
+                      <Input required aria-required="true" value={vaultConfig.cyberark.apiEndpoint} onChange={(e) => setVaultConfig(prev => ({ ...prev, cyberark: { ...prev.cyberark, apiEndpoint: e.target.value } }))} placeholder="https://cyberark.company.com/AIMWebService/api/Accounts" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="safeName">Safe Name</FieldLabel>
+                      <Input required aria-required="true" value={vaultConfig.cyberark.safeName} onChange={(e) => setVaultConfig(prev => ({ ...prev, cyberark: { ...prev.cyberark, safeName: e.target.value } }))} placeholder="ProdAppSecrets" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="objectName">Object / Secret Name</FieldLabel>
+                      <Input required aria-required="true" value={vaultConfig.cyberark.objectName} onChange={(e) => setVaultConfig(prev => ({ ...prev, cyberark: { ...prev.cyberark, objectName: e.target.value } }))} placeholder="DatabaseAdminPassword" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="appId">App ID / Client ID</FieldLabel>
+                      <Input required aria-required="true" value={vaultConfig.cyberark.appId} onChange={(e) => setVaultConfig(prev => ({ ...prev, cyberark: { ...prev.cyberark, appId: e.target.value } }))} placeholder="myapp-prod" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <FieldLabel field="returnFormat">Return Format</FieldLabel>
+                      <Select value={vaultConfig.cyberark.returnFormat} onValueChange={(value) => setVaultConfig(prev => ({ ...prev, cyberark: { ...prev.cyberark, returnFormat: value } }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="text">Text</SelectItem>
+                          <SelectItem value="json">JSON</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+ 
+                {/* show summary of missing/invalid fields - friendly names + messages, consistent spacing */}
+                {hasVaultErrors && (
+                  <div className="mt-6 p-4 bg-red-50 border border-red-100 rounded">
+                    <p className="text-sm font-medium text-red-700 mb-3">Vault configuration has issues:</p>
+                    <ul className="text-sm text-red-600 list-disc ml-5 space-y-3">
+                      {Object.keys(currentVaultErrors).map((k) => (
+                        <li key={k}>
+                          <div className="font-medium text-red-700">{fieldDisplayNames[k] ?? k}</div>
+                          <div className="text-xs text-red-600 mt-1">{currentVaultErrors[k]}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
+              {/* end provider-specific */}
             </TabsContent>
             
             <TabsContent value="access" className="space-y-4">
@@ -1012,18 +1363,18 @@ export default function EnterpriseCredentialProfilesPage() {
             </Button>
             <Button 
               onClick={isCreateDialogOpen ? handleCreateProfile : handleUpdateProfile}
-              disabled={createMutation.isPending || updateMutation.isPending}
-              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-            >
-              {createMutation.isPending || updateMutation.isPending ? (
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Shield className="w-4 h-4 mr-2" />
-              )}
-              {isCreateDialogOpen ? 'Create Profile' : 'Update Profile'}
-            </Button>
-          </div>
-        </DialogContent>
+              disabled={createMutation.isPending || updateMutation.isPending || hasVaultErrors}
+               className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+             >
+               {createMutation.isPending || updateMutation.isPending ? (
+                 <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+               ) : (
+                 <Shield className="w-4 h-4 mr-2" />
+               )}
+               {isCreateDialogOpen ? 'Create Profile' : 'Update Profile'}
+             </Button>
+           </div>
+         </DialogContent>
       </Dialog>
 
       {/* View Profile Dialog */}
