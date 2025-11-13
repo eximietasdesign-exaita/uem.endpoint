@@ -184,38 +184,14 @@ sealed class AgentWorker : BackgroundService
 
                 _log.LogInformation("Enterprise Agent {AgentId} connecting to {BaseUrl}", agentId, baseUrl);
 
-                // Connect to command channel
+                // Connect to command channel (hostname-based commands are processed directly in SignalR handler)
                 await _commandChannel.ConnectAsync(baseUrl, agentId, jwt, stoppingToken);
 
-                var handler = new CommandHandler(baseUrl, agentId);
+                _log.LogInformation("Agent {AgentId} ready - hostname-based command execution enabled", agentId);
 
-                // Process incoming commands
-                await foreach (var cmd in _commandChannel.ReadCommandsAsync(stoppingToken))
-                {
-                    _ = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            // Handle special discovery commands
-                            if (cmd.Type == "trigger-discovery")
-                            {
-                                _log.LogInformation("Triggering manual discovery via command");
-                                await _discoveryOrchestrator.TriggerDiscoveryAsync(stoppingToken);
-                            }
-                            else
-                            {
-                                // Handle other commands
-                                await handler.HandleAsync(cmd, stoppingToken);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _log.LogError(ex, "Error handling command {CommandId} of type {CommandType}", cmd.Id, cmd.Type);
-                        }
-                    }, stoppingToken);
-                }
-
-                // If the foreach exits, reconnect after a short delay
+                // Keep connection alive - commands are processed via SignalR "command" event handler
+                // (See CommandChannel.cs ConnectAsync method for hostname matching and execution logic)
+                await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
             }
             catch (Exception ex)
             {

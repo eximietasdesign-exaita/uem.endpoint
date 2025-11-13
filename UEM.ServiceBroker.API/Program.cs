@@ -1,7 +1,17 @@
+using UEM.ServiceBroker.API.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
+
+// Register stream bus for SSE
+builder.Services.AddSingleton<UEM.ServiceBroker.API.Controllers.IStreamBus, UEM.ServiceBroker.API.Controllers.StreamBus>();
+
+// Register Kafka services
+builder.Services.AddSingleton<KafkaCommandPublisher>();
+builder.Services.AddHostedService<KafkaTopicProvisioner>();
+builder.Services.AddHostedService<KafkaResponseConsumerDelayed>();
 
 // CORS for UI
 builder.Services.AddCors(opt => {

@@ -19,7 +19,7 @@ public sealed class KafkaCommandConsumer : IHostedService
     public KafkaCommandConsumer(ILogger<KafkaCommandConsumer> log, IConfiguration cfg, IHubContext<AgentHub> hub)
     { _log = log; _cfg = cfg; _hub = hub; }
 
-    private sealed record Envelope(string id, string type, JsonElement payload, int ttl);
+    private sealed record Envelope(string executionId, string commandId, string hostnameFilter, string commandType, int ttl, DateTime issuedAt, DateTime expiresAt);
 
     public Task StartAsync(CancellationToken ct)
     {
@@ -52,21 +52,34 @@ public sealed class KafkaCommandConsumer : IHostedService
                     var cr = consumer.Consume(lct);
                     if (cr is null) continue;
 
-                    var key = cr.Message.Key ?? "all";
+                    var key = cr.Message.Key ?? "broadcast";
                     var env = JsonSerializer.Deserialize<Envelope>(cr.Message.Value);
                     if (env is null) continue;
 
-                    var payloadJson = env.payload.GetRawText();
-
-                    if (key == "all")
+                    // Forward minimal payload to all agents
+                    var minimalPayload = new
                     {
-                        await _hub.Clients.All.SendAsync("command", env.id, env.type, payloadJson, env.ttl, lct);
-                        _log.LogInformation("Dispatched broadcast command id={Id} type={Type}", env.id, env.type);
+                        env.executionId,
+                        env.commandId,
+                        env.hostnameFilter,
+                        env.commandType,
+                        env.ttl,
+                        env.issuedAt,
+                        env.expiresAt
+                    };
+
+                    var payloadJson = JsonSerializer.Serialize(minimalPayload);
+
+                    if (key == "broadcast" || key == "all")
+                    {
+                        await _hub.Clients.All.SendAsync("command", env.executionId, env.commandType, payloadJson, env.ttl, lct);
+                        _log.LogInformation("Dispatched broadcast command executionId={ExecutionId} hostnameFilter={HostnameFilter}", 
+                            env.executionId, env.hostnameFilter);
                     }
                     else
                     {
-                        await _hub.Clients.Group($"agent:{key}").SendAsync("command", env.id, env.type, payloadJson, env.ttl, lct);
-                        _log.LogInformation("Dispatched command id={Id} to agent={Agent}", env.id, key);
+                        await _hub.Clients.Group($"agent:{key}").SendAsync("command", env.executionId, env.commandType, payloadJson, env.ttl, lct);
+                        _log.LogInformation("Dispatched command executionId={ExecutionId} to agent={Agent}", env.executionId, key);
                     }
                 }
                 catch (OperationCanceledException) when (lct.IsCancellationRequested) { break; }

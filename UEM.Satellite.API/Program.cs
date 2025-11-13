@@ -8,6 +8,7 @@ using UEM.Satellite.API.Services;
 using UEM.Satellite.API.Store;
 using Serilog;
 
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Configure Serilog
@@ -23,6 +24,10 @@ builder.Host.UseSerilog((context, configuration) =>
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+
+// Add SignalR for real-time agent communication
+builder.Services.AddSignalR();
+
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { 
@@ -55,6 +60,12 @@ builder.Services.AddScoped<IEnhancedHeartbeatRepository, EnhancedHeartbeatReposi
 // Agent simulation service for testing
 builder.Services.AddHostedService<UEM.Satellite.API.Services.AgentSimulationService>();
 
+// Register Kafka services
+builder.Services.AddHostedService<KafkaTopicProvisioner>();
+builder.Services.AddHostedService<KafkaCommandConsumer>();
+builder.Services.AddSingleton<KafkaCommandPublisher>();
+builder.Services.AddSingleton<KafkaResponseProducer>();
+
 // Dapper factory for legacy repository compatibility
 builder.Services.AddSingleton<IDbFactory>(provider => new DbFactory(builder.Configuration));
 
@@ -66,21 +77,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SecretKey"] ?? "your-super-secret-jwt-key-here")),
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SigningKey"] ?? "ThisIsA32+ByteMinimumDemoSigningKey!!!")),
             ValidateIssuer = false,
             ValidateAudience = false
         };
     });
 
 // CORS for UI
-builder.Services.AddCors(options => {
-    options.AddPolicy("AllowAnyOrigin", policy => { // Renamed policy for clarity
-        policy
-            .AllowAnyOrigin()      // Allows any origin
-            .AllowAnyHeader()
-            .AllowAnyMethod();
-    });
-});
+// builder.Services.AddCors(options => {
+//     options.AddPolicy("AllowAnyOrigin", policy => { // Renamed policy for clarity
+//         policy
+//             .AllowAnyOrigin()      // Allows any origin
+//             .AllowAnyHeader()
+//             .AllowAnyMethod();
+//     });
+// });
 
 // Add CORS configuration before adding controllers
 builder.Services.AddCors(options =>
@@ -109,6 +120,9 @@ builder.Services.AddScoped<DiscoveryScriptPopulationService>();
 // Policy deployment services
 builder.Services.AddScoped<IPolicyDeploymentService, PolicyDeploymentService>();
 builder.Services.AddScoped<IAgentStatusService, AgentStatusService>();
+
+// Command execution services
+builder.Services.AddScoped<ICommandExecutionService, CommandExecutionService>();
 
 // Health checks
 builder.Services.AddHealthChecks();
@@ -142,6 +156,10 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 app.MapControllers();
+
+// Map SignalR hub
+app.MapHub<AgentHub>("/agent-hub");
+
 app.MapHealthChecks("/health");
 
 // Serve index.html for SPA routes (everything that's not API or static files)
@@ -225,4 +243,9 @@ app.Use(async (context, next) => {
 });
 
 // Start the application (respects --urls command-line parameter)
-app.Run();
+app.Run();app.Run();
+
+// Minimal SignalR hub for agent communication
+public class AgentHub : Microsoft.AspNetCore.SignalR.Hub
+{
+}
