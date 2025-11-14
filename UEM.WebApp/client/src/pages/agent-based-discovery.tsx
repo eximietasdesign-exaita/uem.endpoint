@@ -67,7 +67,48 @@ const parseJsonbArray = (value: any): number[] => {
   return [];
 };
 
+/**
+ * Basic validators used by the wizard step validation.
+ * These are intentionally simple and permissive for UI-level checks.
+ */
+const isValidIpv4 = (ip: string): boolean => {
+  if (!ip || typeof ip !== 'string') return false;
+  const re = /^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)){3}$/;
+  return re.test(ip.trim());
+};
+
+const isValidIpRange = (range: string): boolean => {
+  if (!range || typeof range !== 'string') return false;
+  const parts = range.split('-').map(s => s.trim());
+  if (parts.length !== 2) return false;
+  const [start, end] = parts;
+  if (!isValidIpv4(start) || !isValidIpv4(end)) return false;
+  // ensure numeric ordering: start <= end
+  const toNum = (ip: string) => ip.split('.').reduce((acc, oct) => acc * 256 + Number(oct), 0);
+  return toNum(start) <= toNum(end);
+};
+
+const isValidCidr = (cidr: string): boolean => {
+  if (!cidr || typeof cidr !== 'string') return false;
+  const parts = cidr.split('/').map(s => s.trim());
+  if (parts.length !== 2) return false;
+  const [ip, maskStr] = parts;
+  if (!isValidIpv4(ip)) return false;
+  const mask = Number(maskStr);
+  return Number.isInteger(mask) && mask >= 0 && mask <= 32;
+};
+
+const isValidHostname = (hostname: string): boolean => {
+  if (!hostname || typeof hostname !== 'string') return false;
+  if (hostname.length > 253) return false;
+  const re = /^(?=.{1,253}$)([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)(?:\.([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?))*$/;
+  return re.test(hostname.trim());
+};
+
 export default function AgentBasedDiscovery() {
+  // validation errors per wizard step
+  const [stepErrors, setStepErrors] = useState<Record<number, string[]>>({});
+
   const [activeTab, setActiveTab] = useState('deployments');
   const [showDeploymentWizard, setShowDeploymentWizard] = useState(false);
   const [isAIOrchestratorOpen, setIsAIOrchestratorOpen] = useState(false);
@@ -445,9 +486,85 @@ export default function AgentBasedDiscovery() {
     }
   };
 
+  // pure check (no state mutation) used to enable/disable Next button
+  const isStepValid = (step: number): boolean => {
+    switch (step) {
+      case 1:
+        return wizardData.name.trim() !== '' && wizardData.description.trim() !== '';
+      case 2:
+        return Array.isArray(wizardData.selectedPolicyIds) && wizardData.selectedPolicyIds.length > 0;
+      case 3: {
+        const t = wizardData.targets;
+        const hasAny = (t.ipRanges && t.ipRanges.length > 0) || (t.hostnames && t.hostnames.length > 0) || (t.ouPaths && t.ouPaths.length > 0) || (t.ipSegments && t.ipSegments.length > 0);
+        if (!hasAny) return false;
+        // validate entries if present
+        if (t.ipRanges && t.ipRanges.some(r => !isValidIpRange(String(r)))) return false;
+        if (t.hostnames && t.hostnames.some(h => !isValidHostname(String(h)))) return false;
+        if (t.ouPaths && t.ouPaths.some(p => !String(p).trim())) return false;
+        if (t.ipSegments && t.ipSegments.some(s => !isValidCidr(String(s)))) return false;
+        return true;
+      }
+      case 4:
+        return wizardData.credentialProfileId !== null && Array.isArray(wizardData.selectedProbeIds) && wizardData.selectedProbeIds.length > 0;
+      case 5:
+        if (!wizardData.schedule || wizardData.schedule.type === 'now') return true;
+        // scheduled: frequency and time required
+        const freq = wizardData.schedule.frequency ?? '';
+        const time = wizardData.schedule.time ?? '';
+        return ['daily', 'weekly', 'monthly'].includes(freq) && /^\d{2}:\d{2}$/.test(time);
+      case 6:
+        return true;
+      default:
+        return false;
+    }
+  };
+
+  // validator that sets stepErrors and returns boolean — used when trying to move forward
+  const validateAndSetErrors = (step: number): boolean => {
+    const errors: string[] = [];
+    switch (step) {
+      case 1:
+        if (wizardData.name.trim() === '') errors.push('Deployment name is required.');
+        if (wizardData.description.trim() === '') errors.push('Deployment description is required.');
+        break;
+      case 2:
+        if (!Array.isArray(wizardData.selectedPolicyIds) || wizardData.selectedPolicyIds.length === 0) errors.push('Select at least one discovery policy.');
+        break;
+      case 3: {
+        const t = wizardData.targets;
+        const hasAny = (t.ipRanges && t.ipRanges.length > 0) || (t.hostnames && t.hostnames.length > 0) || (t.ouPaths && t.ouPaths.length > 0) || (t.ipSegments && t.ipSegments.length > 0);
+        if (!hasAny) errors.push('Specify at least one target (IP Range, Hostname, OU Path or IP Segment).');
+        (t.ipRanges || []).forEach((r, i) => { if (!isValidIpRange(String(r))) errors.push(`IP Range #${i+1} is invalid.`); });
+        (t.hostnames || []).forEach((h, i) => { if (!isValidHostname(String(h))) errors.push(`Hostname #${i+1} is invalid.`); });
+        (t.ouPaths || []).forEach((p, i) => { if (!String(p).trim()) errors.push(`OU Path #${i+1} is required.`); });
+        (t.ipSegments || []).forEach((s, i) => { if (!isValidCidr(String(s))) errors.push(`IP Segment (CIDR) #${i+1} is invalid.`); });
+        break;
+      }
+      case 4:
+        if (wizardData.credentialProfileId === null) errors.push('Choose a credential profile.');
+        if (!Array.isArray(wizardData.selectedProbeIds) || wizardData.selectedProbeIds.length === 0) errors.push('Select at least one satellite server (probe).');
+        break;
+      case 5:
+        if (!wizardData.schedule) break;
+        if (wizardData.schedule.type === 'later') {
+          const freqValue = String(wizardData.schedule.frequency ?? '');
+          if (!['daily','weekly','monthly'].includes(freqValue)) errors.push('Schedule frequency is required (daily/weekly/monthly).');
+          if (!/^\d{2}:\d{2}$/.test(wizardData.schedule.time ?? '')) errors.push('Schedule time must be provided in HH:MM format.');
+        }
+        break;
+      default:
+        break;
+    }
+    setStepErrors(prev => ({ ...prev, [step]: errors }));
+    return errors.length === 0;
+  };
+
   const handleNextStep = () => {
-    if (validateCurrentStep()) {
+    // run validation and set errors for UI feedback
+    if (validateAndSetErrors(currentWizardStep)) {
       setCurrentWizardStep(prev => Math.min(prev + 1, 6));
+      // clear next step errors proactively
+      setStepErrors(prev => ({ ...prev, [currentWizardStep + 1]: [] }));
     }
   };
 
@@ -915,98 +1032,108 @@ export default function AgentBasedDiscovery() {
                     Provide basic information for your agent deployment
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label htmlFor="deployment-name">Deployment Name *</Label>
-                    <Input
-                      id="deployment-name"
-                      placeholder="Enter deployment name..."
-                      value={wizardData.name}  
-                      onChange={(e) => updateWizardData('name', e.target.value)}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="deployment-description">Description *</Label>
-                    <Textarea
-                      id="deployment-description"
-                      placeholder="Describe the purpose and scope of this deployment..."
-                      value={wizardData.description}
-                      onChange={(e) => updateWizardData('description', e.target.value)}
-                      className="mt-1"
-                      rows={3}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+    <CardContent className="space-y-4">
+      <div>
+        <Label htmlFor="deployment-name">Deployment Name *</Label>
+        <Input
+          id="deployment-name"
+          placeholder="Enter deployment name..."
+          value={wizardData.name}  
+          onChange={(e) => updateWizardData('name', e.target.value)}
+          className="mt-1"
+        />
+      </div>
+      <div>
+        <Label htmlFor="deployment-description">Description *</Label>
+        <Textarea
+          id="deployment-description"
+          placeholder="Describe the purpose and scope of this deployment..."
+          value={wizardData.description}
+          onChange={(e) => updateWizardData('description', e.target.value)}
+          className="mt-1"
+          rows={3}
+        />
+      </div>
+    </CardContent>
+    {stepErrors[1] && stepErrors[1].length > 0 && (
+      <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+        {stepErrors[1].map((m, idx) => <div key={idx}>• {m}</div>)}
+      </div>
+    )}
+   </Card>
+ )}
 
             {/* Step 2: Policy Selection */}
             {currentWizardStep === 2 && (
-              <Card>
+               <Card>
                 <CardHeader>
                   <CardTitle>Step 2: Select Discovery Policies</CardTitle>
                   <CardDescription>
                     Choose the policies to deploy to agent-based endpoints
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  {policiesLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                      <span className="ml-2">Loading policies...</span>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {(effectivePolicies as ScriptPolicy[]).map(policy => (
-                        <div
-                          key={policy.id}
-                          className={cn(
-                            "border-2 rounded-lg p-4 cursor-pointer transition-all",
-                            wizardData.selectedPolicyIds.includes(policy.id)
-                              ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                              : "border-gray-200 hover:border-blue-300"
-                          )}
-                          onClick={() => {
-                            const newIds = wizardData.selectedPolicyIds.includes(policy.id)
-                              ? wizardData.selectedPolicyIds.filter(id => id !== policy.id)
-                              : [...wizardData.selectedPolicyIds, policy.id];
-                            updateWizardData('selectedPolicyIds', newIds);
-                          }}
-                        >
-                          <div className="flex items-start space-x-3">
-                            <Checkbox
-                              checked={wizardData.selectedPolicyIds.includes(policy.id)}
-                              className="mt-1"
-                            />
-                            <div className="flex-1">
-                              <h4 className="font-medium text-gray-900 dark:text-white">{policy.name}</h4>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{policy.description}</p>
-                              <div className="flex items-center space-x-2 mt-2">
-                                <Badge variant="secondary" className="text-xs">{policy.targetOs}</Badge>
-                                <Badge variant="outline" className="text-xs">{policy.publishStatus}</Badge>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {wizardData.selectedPolicyIds.length > 0 && (
-                    <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <p className="text-sm font-medium text-green-800">
-                        Selected {wizardData.selectedPolicyIds.length} policies for deployment
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+    <CardContent className="space-y-4">
+      {policiesLoading ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <span className="ml-2">Loading policies...</span>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {(effectivePolicies as ScriptPolicy[]).map(policy => (
+            <div
+              key={policy.id}
+              className={cn(
+                "border-2 rounded-lg p-4 cursor-pointer transition-all",
+                wizardData.selectedPolicyIds.includes(policy.id)
+                  ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                  : "border-gray-200 hover:border-blue-300"
+              )}
+              onClick={() => {
+                const newIds = wizardData.selectedPolicyIds.includes(policy.id)
+                  ? wizardData.selectedPolicyIds.filter(id => id !== policy.id)
+                  : [...wizardData.selectedPolicyIds, policy.id];
+                updateWizardData('selectedPolicyIds', newIds);
+              }}
+            >
+              <div className="flex items-start space-x-3">
+                <Checkbox
+                  checked={wizardData.selectedPolicyIds.includes(policy.id)}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <h4 className="font-medium text-gray-900 dark:text-white">{policy.name}</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{policy.description}</p>
+                  <div className="flex items-center space-x-2 mt-2">
+                    <Badge variant="secondary" className="text-xs">{policy.targetOs}</Badge>
+                    <Badge variant="outline" className="text-xs">{policy.publishStatus}</Badge>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {wizardData.selectedPolicyIds.length > 0 && (
+        <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <p className="text-sm font-medium text-green-800">
+            Selected {wizardData.selectedPolicyIds.length} policies for deployment
+          </p>
+        </div>
+      )}
+    </CardContent>
+    {stepErrors[2] && stepErrors[2].length > 0 && (
+      <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+        {stepErrors[2].map((m, idx) => <div key={idx}>• {m}</div>)}
+      </div>
+    )}
+   </Card>
+ )}
 
             {/* Step 3: Target Configuration */}
             {currentWizardStep === 3 && (
-              <Card>
+               <Card>
                 <CardHeader>
                   <CardTitle>Step 3: Define Targets</CardTitle>
                   <CardDescription>
@@ -1525,17 +1652,17 @@ export default function AgentBasedDiscovery() {
             {currentWizardStep < 6 ? (
               <Button
                 onClick={handleNextStep}
-                disabled={!validateCurrentStep()}
+                disabled={!isStepValid(currentWizardStep)}
                 className="bg-blue-600 hover:bg-blue-700"
               >
                 Next
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             ) : (
-              <Button variant="outline" onClick={() => setShowDeploymentWizard(false)}>
-                Cancel
-              </Button>
-            )}
+               <Button variant="outline" onClick={() => setShowDeploymentWizard(false)}>
+                 Cancel
+               </Button>
+             )}
           </div>
         </DialogContent>
       </Dialog>
