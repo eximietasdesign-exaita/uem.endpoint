@@ -139,7 +139,7 @@ const isValidOuPath = (path: string): boolean => {
 
 // parse OU and match hostname <> OU bidirectionally
 const parseOuParts = (path: string) => {
-  const parts = path.split(',').map(p => p.trim()).filter(Boolean);
+  const parts = (path || '').split(',').map(p => p.trim()).filter(Boolean);
   const ous: string[] = [];
   const dcs: string[] = [];
   const compRe = /^(OU|DC)=([^,=]+)$/i;
@@ -147,7 +147,8 @@ const parseOuParts = (path: string) => {
     const m = part.match(compRe);
     if (!m) continue;
     const key = m[1].toUpperCase();
-    const value = m[2].trim().toLowerCase();
+    // preserve original case (user requested case-sensitive comparisons)
+    const value = m[2].trim();
     if (key === 'OU') ous.push(value);
     if (key === 'DC') dcs.push(value);
   }
@@ -156,30 +157,40 @@ const parseOuParts = (path: string) => {
 
 // hostname: "server01.company.com" -> hostLabel "server01", domainParts ["company","com"]
 const parseHostnameParts = (hostname: string) => {
-  const parts = (hostname || '').trim().toLowerCase().split('.').filter(Boolean);
+  const parts = (hostname || '').trim().split('.').filter(Boolean);
   if (parts.length === 0) return { hostLabel: '', domainParts: [] };
   return { hostLabel: parts[0], domainParts: parts.slice(1) };
 };
 
-// Return true if hostname and ouPath represent the same mapping:
-// - one of OU values equals hostname first label (hostLabel)
-// - DC components match the hostname domain parts in order
+/**
+ * Strict bidirectional matching (case-sensitive):
+ * - DCs in OU must exactly match hostname domain parts in same order and case.
+ * - One OU token must exactly equal the hostname label (case-sensitive).
+ *
+ * Enforces "OU=server01,DC=company,DC=com" <-> "server01.company.com" with exact case.
+ */
 const doesHostnameMatchOu = (hostname: string, ouPath: string): boolean => {
   if (!hostname || !ouPath) return false;
+
   const { hostLabel, domainParts } = parseHostnameParts(hostname);
   const { ous, dcs } = parseOuParts(ouPath);
-  if (!hostLabel || dcs.length === 0) return false;
-  // OU must include the host label (exact match)
-  const ouMatchesHost = ous.some(o => o === hostLabel);
-  if (!ouMatchesHost) return false;
-  // DC parts must match domainParts exactly (order and values)
+
+  if (!hostLabel) return false;
+  if (!Array.isArray(dcs) || dcs.length === 0) return false;
+
+  // DCs must exactly match hostname domain parts (order & case preserved)
   if (dcs.length !== domainParts.length) return false;
   for (let i = 0; i < dcs.length; i++) {
     if (dcs[i] !== domainParts[i]) return false;
   }
+
+  // Require an exact OU token match to host label (case-sensitive, trimmed)
+  const hostTrimmed = hostLabel.trim();
+  const hasExactOu = ous.some(o => o.trim() === hostTrimmed);
+  if (!hasExactOu) return false;
+
   return true;
 };
-// --- end new helpers ---
 
 export default function AgentBasedDiscovery() {
   // validation errors per wizard step
@@ -1680,7 +1691,7 @@ export default function AgentBasedDiscovery() {
                       </div>
                     </div>
 
-                    {/* Credentials & Probes */}
+                    {/* Credentials & Probes */ }                   
                     <div className="space-y-3">
                       <h4 className="font-medium text-gray-900 dark:text-white">Configuration</h4>
                       <div className="text-sm space-y-1">
