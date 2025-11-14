@@ -105,6 +105,82 @@ const isValidHostname = (hostname: string): boolean => {
   return re.test(hostname.trim());
 };
 
+// Validate Active Directory OU Path format like:
+// "OU=Servers, DC=company, DC=com" or "OU=Apps,OU=Servers,DC=company,DC=com"
+const isValidOuPath = (path: string): boolean => {
+  if (!path || typeof path !== 'string') return false;
+  const parts = path.split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length === 0) return false;
+
+  const compRe = /^(OU|DC)=([^,=]+)$/i;
+  let seenDC = false;
+  let hasDC = false;
+
+  for (const part of parts) {
+    const m = part.match(compRe);
+    if (!m) return false;
+    const key = m[1].toUpperCase();
+    const value = m[2].trim();
+    if (!value) return false;
+    if (key === 'DC') {
+      seenDC = true;
+      hasDC = true;
+    } else if (key === 'OU') {
+      // OU must appear before DCs; if we've already seen a DC, this is invalid
+      if (seenDC) return false;
+    } else {
+      return false;
+    }
+  }
+
+  // require at least one DC component (e.g. DC=company,DC=com)
+  return hasDC;
+};
+
+// parse OU and match hostname <> OU bidirectionally
+const parseOuParts = (path: string) => {
+  const parts = path.split(',').map(p => p.trim()).filter(Boolean);
+  const ous: string[] = [];
+  const dcs: string[] = [];
+  const compRe = /^(OU|DC)=([^,=]+)$/i;
+  for (const part of parts) {
+    const m = part.match(compRe);
+    if (!m) continue;
+    const key = m[1].toUpperCase();
+    const value = m[2].trim().toLowerCase();
+    if (key === 'OU') ous.push(value);
+    if (key === 'DC') dcs.push(value);
+  }
+  return { ous, dcs };
+};
+
+// hostname: "server01.company.com" -> hostLabel "server01", domainParts ["company","com"]
+const parseHostnameParts = (hostname: string) => {
+  const parts = (hostname || '').trim().toLowerCase().split('.').filter(Boolean);
+  if (parts.length === 0) return { hostLabel: '', domainParts: [] };
+  return { hostLabel: parts[0], domainParts: parts.slice(1) };
+};
+
+// Return true if hostname and ouPath represent the same mapping:
+// - one of OU values equals hostname first label (hostLabel)
+// - DC components match the hostname domain parts in order
+const doesHostnameMatchOu = (hostname: string, ouPath: string): boolean => {
+  if (!hostname || !ouPath) return false;
+  const { hostLabel, domainParts } = parseHostnameParts(hostname);
+  const { ous, dcs } = parseOuParts(ouPath);
+  if (!hostLabel || dcs.length === 0) return false;
+  // OU must include the host label (exact match)
+  const ouMatchesHost = ous.some(o => o === hostLabel);
+  if (!ouMatchesHost) return false;
+  // DC parts must match domainParts exactly (order and values)
+  if (dcs.length !== domainParts.length) return false;
+  for (let i = 0; i < dcs.length; i++) {
+    if (dcs[i] !== domainParts[i]) return false;
+  }
+  return true;
+};
+// --- end new helpers ---
+
 export default function AgentBasedDiscovery() {
   // validation errors per wizard step
   const [stepErrors, setStepErrors] = useState<Record<number, string[]>>({});
@@ -500,8 +576,19 @@ export default function AgentBasedDiscovery() {
         // validate entries if present
         if (t.ipRanges && t.ipRanges.some(r => !isValidIpRange(String(r)))) return false;
         if (t.hostnames && t.hostnames.some(h => !isValidHostname(String(h)))) return false;
-        if (t.ouPaths && t.ouPaths.some(p => !String(p).trim())) return false;
+        if (t.ouPaths && t.ouPaths.some(p => !isValidOuPath(String(p)))) return false;
         if (t.ipSegments && t.ipSegments.some(s => !isValidCidr(String(s)))) return false;
+
+        // If both hostnames and OU paths provided, ensure bidirectional match:
+        if (t.hostnames.length > 0 && t.ouPaths.length > 0) {
+          // every hostname must have at least one matching OU path
+          const hostHasMatch = t.hostnames.every(h => t.ouPaths.some(ou => doesHostnameMatchOu(String(h), String(ou))));
+          if (!hostHasMatch) return false;
+          // every OU path must have at least one matching hostname
+          const ouHasMatch = t.ouPaths.every(ou => t.hostnames.some(h => doesHostnameMatchOu(String(h), String(ou))));
+          if (!ouHasMatch) return false;
+        }
+
         return true;
       }
       case 4:
@@ -534,10 +621,24 @@ export default function AgentBasedDiscovery() {
         const t = wizardData.targets;
         const hasAny = (t.ipRanges && t.ipRanges.length > 0) || (t.hostnames && t.hostnames.length > 0) || (t.ouPaths && t.ouPaths.length > 0) || (t.ipSegments && t.ipSegments.length > 0);
         if (!hasAny) errors.push('Specify at least one target (IP Range, Hostname, OU Path or IP Segment).');
-        (t.ipRanges || []).forEach((r, i) => { if (!isValidIpRange(String(r))) errors.push(`IP Range #${i+1} is invalid.`); });
+        (t.ipRanges || []).forEach((r, i) => { if (!isValidIpRange(String(r))) errors.push(`IP Range #${i+1} is invalid (expected "start-end" with IPv4 addresses).`); });
         (t.hostnames || []).forEach((h, i) => { if (!isValidHostname(String(h))) errors.push(`Hostname #${i+1} is invalid.`); });
-        (t.ouPaths || []).forEach((p, i) => { if (!String(p).trim()) errors.push(`OU Path #${i+1} is required.`); });
-        (t.ipSegments || []).forEach((s, i) => { if (!isValidCidr(String(s))) errors.push(`IP Segment (CIDR) #${i+1} is invalid.`); });
+        (t.ouPaths || []).forEach((p, i) => { if (!isValidOuPath(String(p))) errors.push(`OU Path #${i+1} is invalid (expected format: OU=Name, DC=example, DC=com).`); });
+        (t.ipSegments || []).forEach((s, i) => { if (!isValidCidr(String(s))) errors.push(`IP Segment (CIDR) #${i+1} is invalid (expected format 10.0.0.0/24).`); });
+
+        // Cross-check hostname <-> OU matching and add descriptive errors
+        if ((t.hostnames || []).length > 0 && (t.ouPaths || []).length > 0) {
+          // hostnames without matching OU
+          (t.hostnames || []).forEach((h, i) => {
+            const hasMatch = (t.ouPaths || []).some(ou => doesHostnameMatchOu(String(h), String(ou)));
+            if (!hasMatch) errors.push(`Hostname #${i+1} ("${h}") has no matching OU Path. Expected an OU containing the host label and DCs matching the hostname domain (e.g. OU=${h.split('.')[0]},DC=example,DC=com).`);
+          });
+          // OU paths without matching hostname
+          (t.ouPaths || []).forEach((ou, i) => {
+            const hasMatch = (t.hostnames || []).some(h => doesHostnameMatchOu(String(h), String(ou)));
+            if (!hasMatch) errors.push(`OU Path #${i+1} ("${ou}") has no matching hostname. Ensure an exact host label OU and DC components that map to a hostname.`);
+          });
+        }
         break;
       }
       case 4:
